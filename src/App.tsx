@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useDaemonSocket } from './hooks/useDaemonSocket';
 import { useTabs } from './hooks/useTabs';
@@ -14,9 +14,20 @@ import type { Tab } from './hooks/useTabs';
 import './App.css';
 
 const IDLE_PHRASES = ['Watching.', 'Ready.', 'On deck.', 'Listening.', 'Standing by.'];
-const idlePhrase = IDLE_PHRASES[Math.floor(Math.random() * IDLE_PHRASES.length)];
+
+function useIdlePhrase() {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setIndex((i) => (i + 1) % IDLE_PHRASES.length);
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+  return IDLE_PHRASES[index];
+}
 
 export default function App() {
+  const idlePhrase = useIdlePhrase();
   const { tabs, activeTab, activeTabId, setActiveTabId, addTab, clearTabs } = useTabs();
 
   const handleMessage = useCallback(
