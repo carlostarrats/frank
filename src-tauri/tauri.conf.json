@@ -10,11 +10,19 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "lookyloo",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "Looky Loo",
+        "width": 440,
+        "height": 760,
+        "minWidth": 360,
+        "minHeight": 500,
+        "resizable": true,
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {

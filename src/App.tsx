@@ -1,51 +1,103 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useCallback } from 'react';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { useDaemonSocket } from './hooks/useDaemonSocket';
+import { useTabs } from './hooks/useTabs';
+import { validateSchema } from './schema/validate';
+import type { PanelMessage } from './types/messages';
+import type { Tab } from './hooks/useTabs';
+import './App.css';
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+const IDLE_PHRASES = ['Watching.', 'Ready.', 'On deck.', 'Listening.', 'Standing by.'];
+const idlePhrase = IDLE_PHRASES[Math.floor(Math.random() * IDLE_PHRASES.length)];
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+export default function App() {
+  const { tabs, activeTab, activeTabId, setActiveTabId, addTab, clearTabs } = useTabs();
+
+  const handleMessage = useCallback(
+    (msg: PanelMessage) => {
+      if (msg.type === 'clear') {
+        clearTabs();
+        return;
+      }
+
+      const result = validateSchema(msg.schema);
+      if (!result.valid) {
+        console.warn('[lookyloo] invalid schema received:', result.error);
+        return;
+      }
+
+      addTab(result.schema);
+
+      // Show the panel when a render arrives
+      getCurrentWebviewWindow()
+        .show()
+        .catch(() => {}); // Non-fatal if panel is already visible
+    },
+    [addTab, clearTabs]
+  );
+
+  useDaemonSocket(handleMessage);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="panel">
+      {tabs.length > 0 ? (
+        <>
+          <div className="tab-bar" data-tauri-drag-region>
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                className={`tab ${tab.id === activeTabId ? 'tab--active' : ''}`}
+                onClick={() => setActiveTabId(tab.id)}
+                title={tab.label}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="content">
+            {activeTab ? <TabContent tab={activeTab} /> : null}
+          </div>
+        </>
+      ) : (
+        <div className="idle" data-tauri-drag-region>
+          <span className="idle-phrase">{idlePhrase}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
-export default App;
+function TabContent({ tab }: { tab: Tab }) {
+  const ts = formatTimestamp(tab.timestamp);
+
+  return (
+    <div className="tab-content">
+      <div className="tab-content__header">
+        <span className="tab-content__label">{tab.label}</span>
+        <span className="tab-content__timestamp">{ts}</span>
+      </div>
+      {/* Wireframe renderer mounts here in step 5 */}
+      <div className="tab-content__placeholder">
+        <pre className="schema-debug">{JSON.stringify(tab.schema, null, 2)}</pre>
+      </div>
+    </div>
+  );
+}
+
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return iso;
+
+  const now = new Date();
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  if (isToday) {
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+    ', ' +
+    date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
