@@ -1,6 +1,6 @@
-// Manages two injections made on `lookyloo start` and removed on `lookyloo stop`:
+// Manages two injections made on `frank start` and removed on `frank stop`:
 //
-//   1. ~/.claude/CLAUDE.md  — instructs Claude to write schemas to /tmp/lookyloo/
+//   1. ~/.claude/CLAUDE.md  — instructs Claude to write schemas to /tmp/frank/
 //   2. ~/.claude/settings.json — registers the PostToolUse hook
 //
 // Both injections are idempotent (safe to run multiple times) and cleanly reversible.
@@ -18,11 +18,11 @@ const SETTINGS_PATH = path.join(CLAUDE_DIR, 'settings.json');
 
 const CLAUDE_MD_BLOCK = `
 ${INJECT_MARKER_START}
-## Looky Loo — Visual Rendering Companion
+## Frank — Visual Rendering Companion
 
 When you generate a UI layout, screen design, wireframe, or multi-screen flow, do the following before writing your response:
 
-1. Create a Looky Loo v1 schema JSON describing the layout
+1. Create a Frank v1 schema JSON describing the layout
 2. Write the schema to \`${SCHEMA_DIR}/render-<ISO-timestamp>.json\` using the Write tool (e.g. \`${SCHEMA_DIR}/render-2025-03-03T14-34-00.json\`)
 3. Then continue with your normal conversational response
 
@@ -87,12 +87,12 @@ For multi-screen flows: establish the full flow structure and shared design_lang
 ${INJECT_MARKER_END}
 `;
 
-const PENDING_EDIT_MARKER_START = '<!-- LOOKYLOO:EDIT:START -->';
-const PENDING_EDIT_MARKER_END = '<!-- LOOKYLOO:EDIT:END -->';
+const PENDING_EDIT_MARKER_START = '<!-- FRANK:EDIT:START -->';
+const PENDING_EDIT_MARKER_END = '<!-- FRANK:EDIT:END -->';
 
 const PENDING_EDIT_BLOCK = `
 ${PENDING_EDIT_MARKER_START}
-## Looky Loo — Pending Wireframe Edits
+## Frank — Pending Wireframe Edits
 
 At the start of each response, silently check if \`${PENDING_EDIT_PATH}\` exists using the Read tool. If it does:
 1. Read the file — it contains \`instruction\` (what to change) and \`schema\` (the current flow/screen schema).
@@ -124,29 +124,29 @@ export function injectClaudeMd(): void {
 
   if (changed) {
     fs.writeFileSync(CLAUDE_MD_PATH, updated, 'utf8');
-    console.log('[lookyloo] CLAUDE.md: injected');
+    console.log('[frank] CLAUDE.md: injected');
   } else {
-    console.log('[lookyloo] CLAUDE.md: already injected');
+    console.log('[frank] CLAUDE.md: already injected');
   }
 }
 
 export function removeClaudeMd(): void {
   const existing = readFileOrEmpty(CLAUDE_MD_PATH);
   if (!existing.includes(INJECT_MARKER_START) && !existing.includes(PENDING_EDIT_MARKER_START)) {
-    console.log('[lookyloo] CLAUDE.md: nothing to remove');
+    console.log('[frank] CLAUDE.md: nothing to remove');
     return;
   }
   let updated = removeBlock(existing, INJECT_MARKER_START, INJECT_MARKER_END);
   updated = removeBlock(updated, PENDING_EDIT_MARKER_START, PENDING_EDIT_MARKER_END);
   fs.writeFileSync(CLAUDE_MD_PATH, updated, 'utf8');
-  console.log('[lookyloo] CLAUDE.md: removed');
+  console.log('[frank] CLAUDE.md: removed');
 }
 
 // ─── settings.json ────────────────────────────────────────────────────────────
 
 const HOOK_ENTRY = {
   type: 'command',
-  command: `lookyloo hook # ${SETTINGS_HOOK_MARKER}`,
+  command: `frank hook # ${SETTINGS_HOOK_MARKER}`,
   timeout: 10,
 };
 
@@ -171,12 +171,12 @@ export function injectSettingsHook(): void {
           typeof entry === 'object' &&
           entry !== null &&
           (entry as Record<string, unknown>)['command'] ===
-            `lookyloo hook # ${SETTINGS_HOOK_MARKER}`
+            `frank hook # ${SETTINGS_HOOK_MARKER}`
       )
   );
 
   if (alreadyPresent) {
-    console.log('[lookyloo] settings.json: hook already registered');
+    console.log('[frank] settings.json: hook already registered');
     return;
   }
 
@@ -187,7 +187,7 @@ export function injectSettingsHook(): void {
 
   settings['hooks'] = { ...hooksSection, PostToolUse: [...existingHooks, newEntry] };
   writeSettingsJson(settings);
-  console.log('[lookyloo] settings.json: hook registered');
+  console.log('[frank] settings.json: hook registered');
 }
 
 export function removeSettingsHook(): void {
@@ -206,7 +206,7 @@ export function removeSettingsHook(): void {
         typeof hook === 'object' &&
         hook !== null &&
         (hook as Record<string, unknown>)['command'] ===
-          `lookyloo hook # ${SETTINGS_HOOK_MARKER}`
+          `frank hook # ${SETTINGS_HOOK_MARKER}`
     );
     return ours.length === 0; // Keep blocks that don't contain our hook
   });
@@ -223,7 +223,7 @@ export function removeSettingsHook(): void {
   }
 
   writeSettingsJson(settings);
-  console.log('[lookyloo] settings.json: hook removed');
+  console.log('[frank] settings.json: hook removed');
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────

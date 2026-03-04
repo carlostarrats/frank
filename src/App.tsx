@@ -65,7 +65,7 @@ export default function App() {
 
       const result = validateSchema(msg.schema);
       if (!result.valid) {
-        console.warn('[lookyloo] invalid schema received:', result.error);
+        console.warn('[frank] invalid schema received:', result.error);
         return;
       }
 
@@ -215,7 +215,7 @@ function TabContent({ tab, onNavigate, sendToDaemon }: TabContentProps) {
     try {
       const bytes = await capturePng({ label: tab.label, timestamp: tab.timestamp, element: el as HTMLElement });
       const path = await save({
-        defaultPath: `lookyloo-${slugify(tab.label)}.png`,
+        defaultPath: `frank-${slugify(tab.label)}.png`,
         filters: [{ name: 'PNG Image', extensions: ['png'] }],
       });
       if (path) {
@@ -223,7 +223,7 @@ function TabContent({ tab, onNavigate, sendToDaemon }: TabContentProps) {
         flash('Saved PNG');
       }
     } catch (e) {
-      console.error('[lookyloo] PNG export error:', e);
+      console.error('[frank] PNG export error:', e);
       flash('PNG failed');
     }
   }

@@ -1,5 +1,5 @@
 // Hook handler — called by Claude Code as a PostToolUse hook.
-// Reads JSON from stdin, checks if it's a Looky Loo schema write,
+// Reads JSON from stdin, checks if it's a Frank schema write,
 // sends the schema to the daemon via Unix socket, exits immediately.
 //
 // Must be fast: hooks run synchronously and block Claude Code's next action.
@@ -29,7 +29,7 @@ export async function runHook(): Promise<void> {
     return;
   }
 
-  if (!isLookyLooWrite(payload)) return;
+  if (!isFrankWrite(payload)) return;
 
   const content = payload.tool_input?.content;
   if (!content) return;
@@ -48,7 +48,7 @@ export async function runHook(): Promise<void> {
   await sendToDaemon(schema);
 }
 
-function isLookyLooWrite(payload: PostToolUsePayload): boolean {
+function isFrankWrite(payload: PostToolUsePayload): boolean {
   if (payload.tool_name !== 'Write') return false;
   const path = payload.tool_input?.file_path ?? '';
   return path.startsWith(SCHEMA_DIR + '/') && path.endsWith('.json');

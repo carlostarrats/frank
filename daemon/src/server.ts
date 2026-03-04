@@ -1,4 +1,4 @@
-// Daemon server — persistent process started by `lookyloo start`.
+// Daemon server — persistent process started by `frank start`.
 //
 // Two servers run simultaneously:
 //   1. Unix domain socket at SOCKET_PATH — receives schemas from the hook handler
@@ -75,9 +75,9 @@ export function startServer(): void {
   startUnixSocketServer();
   startWebSocketServer();
 
-  console.log(`[lookyloo] daemon started`);
-  console.log(`[lookyloo] hook socket: ${SOCKET_PATH}`);
-  console.log(`[lookyloo] panel port:  ws://localhost:${WEBSOCKET_PORT}`);
+  console.log(`[frank] daemon started`);
+  console.log(`[frank] hook socket: ${SOCKET_PATH}`);
+  console.log(`[frank] panel port:  ws://localhost:${WEBSOCKET_PORT}`);
 }
 
 // ─── Unix socket (receives from hook handler) ─────────────────────────────────
@@ -101,11 +101,11 @@ function startUnixSocketServer(): void {
   });
 
   server.listen(SOCKET_PATH, () => {
-    console.log(`[lookyloo] listening on ${SOCKET_PATH}`);
+    console.log(`[frank] listening on ${SOCKET_PATH}`);
   });
 
   server.on('error', (err) => {
-    console.error(`[lookyloo] socket error:`, err.message);
+    console.error(`[frank] socket error:`, err.message);
   });
 }
 
@@ -141,7 +141,7 @@ function startWebSocketServer(): void {
 
   wss.on('connection', (ws) => {
     panelClients.add(ws);
-    console.log(`[lookyloo] panel connected (${panelClients.size} total)`);
+    console.log(`[frank] panel connected (${panelClients.size} total)`);
 
     ws.on('message', (data) => {
       try {
@@ -150,13 +150,13 @@ function startWebSocketServer(): void {
           applyEdit(msg.prompt);
         }
       } catch (e) {
-        console.warn('[lookyloo] message error:', e);
+        console.warn('[frank] message error:', e);
       }
     });
 
     ws.on('close', () => {
       panelClients.delete(ws);
-      console.log(`[lookyloo] panel disconnected (${panelClients.size} remaining)`);
+      console.log(`[frank] panel disconnected (${panelClients.size} remaining)`);
     });
 
     ws.on('error', () => {
@@ -165,7 +165,7 @@ function startWebSocketServer(): void {
   });
 
   wss.on('error', (err) => {
-    console.error(`[lookyloo] websocket error:`, err.message);
+    console.error(`[frank] websocket error:`, err.message);
   });
 }
 
@@ -176,7 +176,7 @@ function broadcast(message: PanelMessage): void {
       client.send(payload);
     }
   }
-  console.log(`[lookyloo] broadcast ${message.type} to ${panelClients.size} panel(s)`);
+  console.log(`[frank] broadcast ${message.type} to ${panelClients.size} panel(s)`);
 }
 
 
@@ -198,7 +198,7 @@ const CLAUDE_BIN = findClaude();
 
 function applyEdit(instruction: string): void {
   if (!CLAUDE_BIN) {
-    console.warn('[lookyloo] claude binary not found — cannot apply edit');
+    console.warn('[frank] claude binary not found — cannot apply edit');
     return;
   }
 
@@ -209,7 +209,7 @@ function applyEdit(instruction: string): void {
     : '';
 
   const prompt =
-    `You are applying a Looky Loo wireframe edit. Apply the change below to the schema ` +
+    `You are applying a Frank wireframe edit. Apply the change below to the schema ` +
     `and write the updated schema to ${outPath} using the Write tool. ` +
     `If the changed section type (e.g. header, bottom-nav, footer) appears on multiple screens, update it on ALL screens. ` +
     `Do not explain anything, just write the file.\n\n` +
@@ -230,7 +230,7 @@ function applyEdit(instruction: string): void {
     stdio: 'ignore',
   });
   child.unref();
-  console.log(`[lookyloo] applying edit via claude: "${instruction.slice(0, 80)}"`);
+  console.log(`[frank] applying edit via claude: "${instruction.slice(0, 80)}"`);
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────

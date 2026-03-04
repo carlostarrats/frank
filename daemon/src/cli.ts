@@ -2,9 +2,9 @@
 // Looky Loo CLI entry point.
 //
 // Commands:
-//   lookyloo start   — inject hooks, start daemon, start panel
-//   lookyloo stop    — remove hooks, stop daemon
-//   lookyloo hook    — hook handler (called by Claude Code, reads stdin)
+//   frank start   — inject hooks, start daemon, start panel
+//   frank stop    — remove hooks, stop daemon
+//   frank hook    — hook handler (called by Claude Code, reads stdin)
 
 import fs from 'fs';
 import { execFile } from 'child_process';
@@ -26,17 +26,17 @@ switch (command) {
     break;
 
   default:
-    console.log('Looky Loo');
+    console.log('Frank');
     console.log('');
     console.log('Usage:');
-    console.log('  lookyloo start   Start the daemon and inject Claude Code hooks');
-    console.log('  lookyloo stop    Stop the daemon and remove hooks');
-    console.log('  lookyloo hook    Hook handler (called automatically by Claude Code)');
+    console.log('  frank start   Start the daemon and inject Claude Code hooks');
+    console.log('  frank stop    Stop the daemon and remove hooks');
+    console.log('  frank hook    Hook handler (called automatically by Claude Code)');
     process.exit(0);
 }
 
 async function runStart(): Promise<void> {
-  console.log('[lookyloo] starting...');
+  console.log('[frank] starting...');
 
   // Ensure schema temp dir exists
   fs.mkdirSync(SCHEMA_DIR, { recursive: true });
@@ -50,11 +50,11 @@ async function runStart(): Promise<void> {
 
   launchPanel();
 
-  console.log('[lookyloo] ready — open a new Claude Code session to begin');
+  console.log('[frank] ready — open a new Claude Code session to begin');
 
   // Keep process alive
   process.on('SIGINT', async () => {
-    console.log('\n[lookyloo] shutting down...');
+    console.log('\n[frank] shutting down...');
     await runStop();
     process.exit(0);
   });
@@ -69,18 +69,18 @@ async function runStop(): Promise<void> {
   const { removeClaudeMd, removeSettingsHook } = await import('./inject.js');
   removeClaudeMd();
   removeSettingsHook();
-  console.log('[lookyloo] stopped');
+  console.log('[frank] stopped');
 }
 
 function launchPanel(): void {
   const appPath = PANEL_APP_CANDIDATES.find(p => fs.existsSync(p));
   if (!appPath) {
-    console.warn('[lookyloo] panel app not found — run: npm run tauri build');
+    console.warn('[frank] panel app not found — run: npm run tauri build');
     return;
   }
   execFile('open', [appPath], (err) => {
-    if (err) console.warn('[lookyloo] could not launch panel:', err.message);
-    else console.log(`[lookyloo] panel launched: ${appPath}`);
+    if (err) console.warn('[frank] could not launch panel:', err.message);
+    else console.log(`[frank] panel launched: ${appPath}`);
   });
 }
 

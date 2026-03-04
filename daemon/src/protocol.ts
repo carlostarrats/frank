@@ -15,7 +15,7 @@ export type HookMessage = SchemaMessage;
 
 export interface RenderMessage {
   type: 'render';
-  schema: unknown; // Validated LookyLooSchema
+  schema: unknown; // Validated FrankSchema
 }
 
 export interface ClearMessage {
@@ -26,21 +26,21 @@ export type PanelMessage = RenderMessage | ClearMessage;
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
-export const SOCKET_PATH = '/tmp/lookyloo-daemon.sock';
+export const SOCKET_PATH = '/tmp/frank-daemon.sock';
 export const WEBSOCKET_PORT = 42069;
-export const SCHEMA_DIR = '/tmp/lookyloo';
-export const PENDING_EDIT_PATH = '/tmp/lookyloo/pending-edit.json';
+export const SCHEMA_DIR = '/tmp/frank';
+export const PENDING_EDIT_PATH = '/tmp/frank/pending-edit.json';
 
 // Panel app locations — checked in order, first found wins
 export const PANEL_APP_CANDIDATES = [
-  '/Applications/lookyloo.app',
-  `${process.env.HOME}/Applications/lookyloo.app`,
+  '/Applications/frank.app',
+  `${process.env.HOME}/Applications/frank.app`,
   // Dev build fallback
-  `${process.env.HOME}/Documents/lookyloo/src-tauri/target/release/bundle/macos/lookyloo.app`,
+  `${process.env.HOME}/Documents/lookyloo/src-tauri/target/release/bundle/macos/frank.app`,
 ];
 
 
 // Marker used in CLAUDE.md and settings.json to identify our injected blocks
-export const INJECT_MARKER_START = '<!-- LOOKYLOO:START -->';
-export const INJECT_MARKER_END = '<!-- LOOKYLOO:END -->';
-export const SETTINGS_HOOK_MARKER = '__lookyloo__';
+export const INJECT_MARKER_START = '<!-- FRANK:START -->';
+export const INJECT_MARKER_END = '<!-- FRANK:END -->';
+export const SETTINGS_HOOK_MARKER = '__frank__';
