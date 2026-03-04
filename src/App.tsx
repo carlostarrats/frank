@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useDaemonSocket } from './hooks/useDaemonSocket';
 import { useTabs } from './hooks/useTabs';
+import { useInstalledPlugins } from './hooks/useInstalledPlugins';
+import type { KnownPlugin } from './hooks/useInstalledPlugins';
 import { validateSchema } from './schema/validate';
 import { isScreenSchema, isFlowSchema } from './schema/types';
 import type { ScreenSchema } from './schema/types';
@@ -9,6 +11,8 @@ import { SkeletonScreen } from './components/SkeletonScreen';
 import { WireframeScreen } from './components/wireframe/WireframeScreen';
 import { exportToPng } from './exports/png';
 import { copyAsContext } from './exports/context';
+import { copyAsFigmaPrompt } from './exports/figma';
+import { copyAsGithubMarkdown } from './exports/github';
 import type { PanelMessage } from './types/messages';
 import type { Tab } from './hooks/useTabs';
 import './App.css';
@@ -29,6 +33,7 @@ function useIdlePhrase() {
 export default function App() {
   const idlePhrase = useIdlePhrase();
   const { tabs, activeTab, activeTabId, setActiveTabId, addTab, clearTabs } = useTabs();
+  const installedPlugins = useInstalledPlugins();
 
   const handleMessage = useCallback(
     (msg: PanelMessage) => {
@@ -95,7 +100,7 @@ export default function App() {
             ))}
           </div>
           <div className="content">
-            {activeTab ? <TabContent tab={activeTab} /> : null}
+            {activeTab ? <TabContent tab={activeTab} installedPlugins={installedPlugins} /> : null}
           </div>
         </>
       ) : (
@@ -107,15 +112,20 @@ export default function App() {
   );
 }
 
-function TabContent({ tab }: { tab: Tab }) {
+function TabContent({ tab, installedPlugins }: { tab: Tab; installedPlugins: Set<KnownPlugin> }) {
   const wireframeRef = useRef<HTMLDivElement>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   if (tab.status === 'loading') {
     return <SkeletonScreen platform={tab.platform} />;
   }
 
   const ts = formatTimestamp(tab.timestamp);
+
+  function markCopied(key: string) {
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  }
 
   async function handleExportPng() {
     if (!wireframeRef.current || !tab.schema) return;
@@ -127,8 +137,19 @@ function TabContent({ tab }: { tab: Tab }) {
   async function handleCopyContext() {
     if (!tab.schema) return;
     await copyAsContext(tab.schema);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    markCopied('context');
+  }
+
+  async function handleCopyFigma() {
+    if (!tab.schema) return;
+    await copyAsFigmaPrompt(tab.schema);
+    markCopied('figma');
+  }
+
+  async function handleCopyGithub() {
+    if (!tab.schema) return;
+    await copyAsGithubMarkdown(tab.schema);
+    markCopied('github');
   }
 
   return (
@@ -140,8 +161,18 @@ function TabContent({ tab }: { tab: Tab }) {
         </div>
         <div className="tab-content__actions">
           <button className="export-btn" onClick={handleCopyContext} title="Copy schema as context">
-            {copied ? 'Copied!' : 'Copy'}
+            {copiedKey === 'context' ? 'Copied!' : 'Copy'}
           </button>
+          {installedPlugins.has('figma') && (
+            <button className="export-btn" onClick={handleCopyFigma} title="Copy Figma MCP prompt">
+              {copiedKey === 'figma' ? 'Copied!' : 'Figma'}
+            </button>
+          )}
+          {installedPlugins.has('github') && (
+            <button className="export-btn" onClick={handleCopyGithub} title="Copy as GitHub markdown">
+              {copiedKey === 'github' ? 'Copied!' : 'GitHub'}
+            </button>
+          )}
           <button className="export-btn" onClick={handleExportPng} title="Save as PNG">
             PNG
           </button>
