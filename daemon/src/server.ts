@@ -1,17 +1,15 @@
 // Daemon server — persistent process started by `frank start`.
 //
-// Two servers run simultaneously:
-//   1. Unix domain socket at SOCKET_PATH — receives schemas from the hook handler
-//   2. WebSocket server on WEBSOCKET_PORT — connected to by the Tauri panel
-//
-// When a schema arrives from the hook: validate minimally, broadcast to all panel connections.
+// Watches SCHEMA_DIR for new JSON files written by Claude.
+// When a schema file appears, validates it and broadcasts to all panel connections via WebSocket.
+// No hook spawning — FSEvents fires in ~10-50ms, vs ~200ms for a Node.js process startup.
 
-import net from 'net';
 import fs from 'fs';
+import path from 'path';
 import { spawn } from 'child_process';
 import { execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
-import { SOCKET_PATH, WEBSOCKET_PORT, SCHEMA_DIR, type PanelMessage } from './protocol.js';
+import { WEBSOCKET_PORT, SCHEMA_DIR, type PanelMessage } from './protocol.js';
 
 const panelClients = new Set<WebSocket>();
 let lastSchema: unknown = null;
@@ -71,60 +69,61 @@ const DEFAULT_TOKENS = {
 };
 
 export function startServer(): void {
-  ensureSocketClean();
-  startUnixSocketServer();
+  startFileWatcher();
   startWebSocketServer();
 
   console.log(`[frank] daemon started`);
-  console.log(`[frank] hook socket: ${SOCKET_PATH}`);
+  console.log(`[frank] watching:    ${SCHEMA_DIR}`);
   console.log(`[frank] panel port:  ws://localhost:${WEBSOCKET_PORT}`);
 }
 
-// ─── Unix socket (receives from hook handler) ─────────────────────────────────
+// ─── File watcher (replaces hook handler) ────────────────────────────────────
+// Watches SCHEMA_DIR for new schema JSON files. FSEvents fires in ~10-50ms.
+// Deduplicated per filename to handle double-fire from some editors/tools.
 
-function startUnixSocketServer(): void {
-  const server = net.createServer((socket) => {
-    let buffer = '';
+function startFileWatcher(): void {
+  fs.mkdirSync(SCHEMA_DIR, { recursive: true });
 
-    socket.on('data', (chunk) => {
-      buffer += chunk.toString();
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? ''; // Keep incomplete last line in buffer
+  const daemonStartTime = Date.now();
+  const recentlyProcessed = new Set<string>();
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        handleHookMessage(line.trim());
+  fs.watch(SCHEMA_DIR, (_eventType, filename) => {
+    if (!filename || !filename.endsWith('.json')) return;
+    if (filename === 'pending-edit.json') return;
+    if (recentlyProcessed.has(filename)) return;
+
+    recentlyProcessed.add(filename);
+    setTimeout(() => recentlyProcessed.delete(filename), 2000);
+
+    // Small delay to ensure file is fully flushed before reading
+    setTimeout(() => {
+      const filePath = path.join(SCHEMA_DIR, filename);
+      try {
+        const stat = fs.statSync(filePath);
+        // Skip stale files that existed before the daemon started
+        if (stat.mtimeMs < daemonStartTime - 1000) return;
+        const content = fs.readFileSync(filePath, 'utf8');
+        handleSchemaFile(content);
+      } catch {
+        // File may have been deleted or is unreadable — ignore
       }
-    });
-
-    socket.on('error', () => {}); // Ignore hook handler disconnects
+    }, 40);
   });
 
-  server.listen(SOCKET_PATH, () => {
-    console.log(`[frank] listening on ${SOCKET_PATH}`);
-  });
-
-  server.on('error', (err) => {
-    console.error(`[frank] socket error:`, err.message);
-  });
+  console.log(`[frank] file watcher active`);
 }
 
-function handleHookMessage(raw: string): void {
-  let msg: { type: string; payload?: unknown };
+function handleSchemaFile(content: string): void {
+  let schema: Record<string, unknown>;
   try {
-    msg = JSON.parse(raw) as { type: string; payload?: unknown };
+    schema = JSON.parse(content) as Record<string, unknown>;
   } catch {
     return;
   }
 
-  if (msg.type !== 'schema' || !msg.payload) return;
-
-  // Minimal validation — just check it looks like a schema
-  const schema = msg.payload as Record<string, unknown>;
   if (schema.schema !== 'v1') return;
   if (schema.type !== 'screen' && schema.type !== 'flow') return;
 
-  // Stamp with current time and default tokens (preserve any custom tokens Claude included)
   const stamped = {
     ...schema,
     timestamp: new Date().toISOString(),
@@ -214,7 +213,6 @@ function applyEdit(instruction: string): void {
     `Edit: "${instruction}"` +
     schemaBlock;
 
-  // Remove CLAUDECODE so nested-session guard doesn't block this headless invocation
   const env = { ...process.env };
   delete env['CLAUDECODE'];
 
@@ -230,14 +228,4 @@ function applyEdit(instruction: string): void {
   });
   child.unref();
   console.log(`[frank] applying edit via claude: "${instruction.slice(0, 80)}"`);
-}
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
-
-function ensureSocketClean(): void {
-  try {
-    fs.unlinkSync(SOCKET_PATH);
-  } catch {
-    // Socket didn't exist — that's fine
-  }
 }
