@@ -54,7 +54,7 @@ function useIdlePhrase() {
 
 export default function App() {
   const idlePhrase = useIdlePhrase();
-  const { tabs, activeTab, activeTabId, setActiveTabId, addTab, clearTabs } = useTabs();
+  const { tabs, activeTab, activeTabId, setActiveTabId, addTab, closeTab, clearTabs } = useTabs();
 
   const handleMessage = useCallback(
     (msg: PanelMessage) => {
@@ -102,24 +102,33 @@ export default function App() {
     <div className="panel">
       {tabs.length > 0 ? (
         <>
-          <div className="tab-bar" data-tauri-drag-region>
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={[
-                  'tab',
-                  tab.id === activeTabId ? 'tab--active' : '',
-                  tab.status === 'loading' ? 'tab--loading' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => setActiveTabId(tab.id)}
-                title={tab.label}
-              >
-                {tab.status === 'loading' && <span className="tab-spinner" aria-hidden />}
-                {tab.label}
-              </button>
-            ))}
+          <div className="tab-bar-wrap" data-tauri-drag-region>
+            <div className="tab-bar">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={[
+                    'tab',
+                    tab.id === activeTabId ? 'tab--active' : '',
+                    tab.status === 'loading' ? 'tab--loading' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => setActiveTabId(tab.id)}
+                  title={tab.label}
+                >
+                  {tab.status === 'loading' && <span className="tab-spinner" aria-hidden />}
+                  <span key={tab.flashKey} className={`tab-label${tab.flashKey > 0 ? ' tab-label--flash' : ''}`}>
+                    {tab.label}
+                  </span>
+                  <span
+                    className="tab-close"
+                    onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
+                    aria-label="Close tab"
+                  >×</span>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="content">
             <AnimatePresence mode="wait">
@@ -129,7 +138,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.12, ease: 'easeOut' }}
+                  transition={{ duration: 0.08, ease: 'easeOut' }}
                   style={{ height: '100%' }}
                 >
                   <TabContent tab={activeTab} onNavigate={handleNavigate} sendToDaemon={sendToDaemon} />
@@ -140,6 +149,7 @@ export default function App() {
         </>
       ) : (
         <div className="idle" data-tauri-drag-region>
+          <span className="idle-wordmark">frank</span>
           <span className="idle-phrase">{idlePhrase}</span>
         </div>
       )}
@@ -163,10 +173,12 @@ function TabContent({ tab, onNavigate, sendToDaemon }: TabContentProps) {
   const [editMode, setEditMode] = useState(false);
   const [editSection, setEditSection] = useState<{ section: Section; index: number; rect: DOMRect } | null>(null);
   const [isApplying, setIsApplying] = useState(false);
+  const [applyingText, setApplyingText] = useState('');
 
   // Clear applying state when a new render arrives for this tab
   useEffect(() => {
     setIsApplying(false);
+    setApplyingText('');
   }, [tab.timestamp]);
 
   if (tab.status === 'loading') {
@@ -265,6 +277,11 @@ function TabContent({ tab, onNavigate, sendToDaemon }: TabContentProps) {
         {isApplying && (
           <div className="applying-overlay">
             <span className="applying-spinner" />
+            {applyingText && (
+              <span className="applying-label">
+                {applyingText.length > 48 ? applyingText.slice(0, 48) + '…' : applyingText}
+              </span>
+            )}
           </div>
         )}
         <WireframeErrorBoundary>
@@ -301,7 +318,7 @@ function TabContent({ tab, onNavigate, sendToDaemon }: TabContentProps) {
           tabLabel={tab.label}
           anchorRect={editSection.rect}
           onClose={() => setEditSection(null)}
-          onSend={(prompt) => { setIsApplying(true); sendToDaemon({ type: 'inject', prompt }); }}
+          onSend={(prompt, displayText) => { setIsApplying(true); setApplyingText(displayText); sendToDaemon({ type: 'inject', prompt }); }}
         />
       )}
     </div>

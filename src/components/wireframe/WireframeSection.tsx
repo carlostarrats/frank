@@ -31,7 +31,7 @@ interface SectionProps {
 
 export function WireframeSection({ section, screenLabel, platform, onNavigate, editMode, onSectionClick }: SectionProps) {
   const hasNavigate = !!section.navigatesTo && !!onNavigate;
-  const ringClass = hasNavigate ? 'ring-1 ring-primary/40' : '';
+  const ringClass = hasNavigate ? 'ring-1 ring-blue-200' : '';
   const editClass = editMode ? 'cursor-pointer hover:ring-1 hover:ring-muted-foreground/30' : '';
 
   function handleClick() {
@@ -47,6 +47,7 @@ export function WireframeSection({ section, screenLabel, platform, onNavigate, e
       className={`wf-section wf-section--${section.type} ${ringClass} ${editClass}`.trim()}
       onClick={(editMode || hasNavigate) ? handleClick : undefined}
       style={(editMode || hasNavigate) ? { cursor: 'pointer' } : undefined}
+      data-prototype={hasNavigate ? 'true' : undefined}
     >
       {renderSection(section, screenLabel, platform, onNavigate)}
     </div>

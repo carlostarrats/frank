@@ -248,3 +248,12 @@
   padding: 0;
   background: var(--wf-bg);
 }
+
+/* ── Click-through prototype affordance ──────────────────────────────────── */
+/* Primary button turns blue when section has a navigatesTo target */
+
+[data-prototype="true"] button[data-slot="button"] {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+}

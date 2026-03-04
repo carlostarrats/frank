@@ -8,7 +8,7 @@ interface Props {
   tabLabel: string;
   anchorRect: DOMRect;
   onClose: () => void;
-  onSend: (prompt: string) => void;
+  onSend: (prompt: string, displayText: string) => void;
 }
 
 export function EditOverlay({ section, tabLabel, anchorRect, onClose, onSend }: Props) {
@@ -35,7 +35,7 @@ export function EditOverlay({ section, tabLabel, anchorRect, onClose, onSend }: 
   function handleSubmit() {
     if (!text.trim()) return;
     const prompt = `In the "${sectionLabel}" section of "${tabLabel}": ${text.trim()}. Preserve all other screens.`;
-    onSend(prompt);
+    onSend(prompt, text.trim());
     setFlash(true);
     setTimeout(() => {
       setFlash(false);

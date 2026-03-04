@@ -209,11 +209,9 @@ function applyEdit(instruction: string): void {
     : '';
 
   const prompt =
-    `You are applying a Frank wireframe edit. Apply the change below to the schema ` +
-    `and write the updated schema to ${outPath} using the Write tool. ` +
-    `If the changed section type (e.g. header, bottom-nav, footer) appears on multiple screens, update it on ALL screens. ` +
-    `Do not explain anything, just write the file.\n\n` +
-    `Change: "${instruction}"` +
+    `Apply this edit to the wireframe schema and write the result to ${outPath} using the Write tool. ` +
+    `If the edited section type appears on multiple screens, update it on ALL screens. No explanation.\n\n` +
+    `Edit: "${instruction}"` +
     schemaBlock;
 
   // Remove CLAUDECODE so nested-session guard doesn't block this headless invocation
@@ -222,6 +220,7 @@ function applyEdit(instruction: string): void {
 
   const child = spawn(CLAUDE_BIN, [
     '-p', prompt,
+    '--model', 'claude-haiku-4-5-20251001',
     '--permission-mode', 'bypassPermissions',
     '--allowedTools', 'Write',
   ], {

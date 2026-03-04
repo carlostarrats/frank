@@ -41,14 +41,14 @@ export function WireframeScreen({ schema, onNavigate, editMode, onSectionClick }
       <WireframeDevice platform={schema.platform}>
         {schema.sections.map((section, i) => {
           const delay = shouldAnimate
-            ? Math.min(i, MAX_STAGGER_SECTION) * 0.03
+            ? Math.min(i, MAX_STAGGER_SECTION) * 0.02
             : 0;
           return (
             <motion.div
               key={i}
-              initial={shouldAnimate ? { opacity: 0, y: 6 } : false}
+              initial={shouldAnimate ? { opacity: 0, y: 4 } : false}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay, duration: 0.1, ease: 'easeOut' }}
+              transition={{ delay, duration: 0.07, ease: 'easeOut' }}
             >
               <WireframeSection
                 section={section}
