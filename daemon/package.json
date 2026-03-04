@@ -1,0 +1,22 @@
+{
+  "name": "lookyloo-daemon",
+  "version": "0.1.0",
+  "description": "Looky Loo daemon — Claude Code hooks integration and panel server",
+  "type": "module",
+  "bin": {
+    "lookyloo": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --import tsx/esm src/cli.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.14",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
