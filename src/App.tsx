@@ -3,7 +3,8 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useDaemonSocket } from './hooks/useDaemonSocket';
 import { useTabs } from './hooks/useTabs';
 import { validateSchema } from './schema/validate';
-import { isScreenSchema } from './schema/types';
+import { isScreenSchema, isFlowSchema } from './schema/types';
+import type { ScreenSchema } from './schema/types';
 import { SkeletonScreen } from './components/SkeletonScreen';
 import { WireframeScreen } from './components/wireframe/WireframeScreen';
 import type { PanelMessage } from './types/messages';
@@ -29,7 +30,24 @@ export default function App() {
         return;
       }
 
-      addTab(result.schema);
+      if (isFlowSchema(result.schema)) {
+        // Decompose each flow screen into its own tab, inheriting flow-level
+        // platform and timestamp. Screens appear in sequence — tab order IS
+        // the flow order.
+        for (const screen of result.schema.screens) {
+          const screenSchema: ScreenSchema = {
+            schema: 'v1',
+            type: 'screen',
+            label: screen.label,
+            timestamp: result.schema.timestamp,
+            platform: screen.platform ?? result.schema.platform,
+            sections: screen.sections,
+          };
+          addTab(screenSchema);
+        }
+      } else {
+        addTab(result.schema);
+      }
 
       getCurrentWebviewWindow()
         .show()
@@ -92,7 +110,7 @@ function TabContent({ tab }: { tab: Tab }) {
       <div className="tab-content__wireframe">
         {tab.schema && isScreenSchema(tab.schema)
           ? <WireframeScreen schema={tab.schema} />
-          : <div className="flow-placeholder">Flow rendering coming in step 8.</div>
+          : null
         }
       </div>
     </div>

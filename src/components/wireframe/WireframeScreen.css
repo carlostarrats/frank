@@ -42,6 +42,21 @@
   }
 }
 
+/* ── Crossfade: skeleton → wireframe ────────────────────────────────────── */
+/* When the wireframe mounts (skeleton unmounts), fade it in smoothly.
+ * This is the deliberate moment that signals a completed render. */
+
+@keyframes wf-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ── Wireframe wrapper ───────────────────────────────────────────────────── */
 
 .wireframe {
@@ -49,6 +64,7 @@
   background: var(--bg-subtle, #f5f5f5);
   overflow-y: auto;
   height: 100%;
+  animation: wf-reveal 0.25s ease-out;
 }
 
 /* ── Device chrome ───────────────────────────────────────────────────────── */

@@ -180,9 +180,3 @@ html, body, #root {
   display: flex;
   flex-direction: column;
 }
-
-.flow-placeholder {
-  padding: 20px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
