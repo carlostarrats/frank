@@ -3,7 +3,9 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useDaemonSocket } from './hooks/useDaemonSocket';
 import { useTabs } from './hooks/useTabs';
 import { validateSchema } from './schema/validate';
+import { isScreenSchema } from './schema/types';
 import { SkeletonScreen } from './components/SkeletonScreen';
+import { WireframeScreen } from './components/wireframe/WireframeScreen';
 import type { PanelMessage } from './types/messages';
 import type { Tab } from './hooks/useTabs';
 import './App.css';
@@ -87,9 +89,11 @@ function TabContent({ tab }: { tab: Tab }) {
         <span className="tab-content__label">{tab.label}</span>
         <span className="tab-content__timestamp">{ts}</span>
       </div>
-      {/* Wireframe renderer replaces this placeholder in step 5 */}
-      <div className="tab-content__placeholder">
-        <pre className="schema-debug">{JSON.stringify(tab.schema, null, 2)}</pre>
+      <div className="tab-content__wireframe">
+        {tab.schema && isScreenSchema(tab.schema)
+          ? <WireframeScreen schema={tab.schema} />
+          : <div className="flow-placeholder">Flow rendering coming in step 8.</div>
+        }
       </div>
     </div>
   );

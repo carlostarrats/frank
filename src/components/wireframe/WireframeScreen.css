@@ -1,0 +1,166 @@
+/* Wireframe renderer — design tokens and device chrome
+ * Scoped to .wireframe to avoid bleeding into panel chrome.
+ * Low-fidelity aesthetic: Balsamiq/Whimsical style.
+ * Gray fills, 1px borders, no shadows, no polish.
+ */
+
+.wireframe {
+  /* Structural */
+  --wf-bg:            #f7f7f7;
+  --wf-section-bg:    #eeeeee;
+  --wf-chip-bg:       #d9d9d9;
+  --wf-border:        #cccccc;
+  --wf-border-strong: #aaaaaa;
+  --wf-text:          #333333;
+  --wf-text-muted:    #777777;
+
+  /* Annotation (sticky-note yellow) */
+  --wf-note-bg:       #fffbe6;
+  --wf-note-border:   #e8d84a;
+  --wf-note-text:     #5a4a00;
+
+  /* Spacing */
+  --wf-section-pad:   10px 12px;
+  --wf-chip-gap:      6px;
+  --wf-chip-pad:      4px 8px;
+  --wf-chip-radius:   3px;
+  --wf-font:          -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  .wireframe {
+    --wf-bg:            #1e1e1e;
+    --wf-section-bg:    #2a2a2a;
+    --wf-chip-bg:       #3a3a3a;
+    --wf-border:        #3e3e3e;
+    --wf-border-strong: #555555;
+    --wf-text:          #cccccc;
+    --wf-text-muted:    #888888;
+    --wf-note-bg:       #2e2b1a;
+    --wf-note-border:   #7a6800;
+    --wf-note-text:     #e8c840;
+  }
+}
+
+/* ── Wireframe wrapper ───────────────────────────────────────────────────── */
+
+.wireframe {
+  padding: 12px;
+  background: var(--bg-subtle, #f5f5f5);
+  overflow-y: auto;
+  height: 100%;
+}
+
+/* ── Device chrome ───────────────────────────────────────────────────────── */
+
+.wf-device {
+  display: flex;
+  flex-direction: column;
+  background: var(--wf-bg);
+  border: 1px solid var(--wf-border);
+  overflow: hidden;
+  font-family: var(--wf-font);
+}
+
+.wf-device--mobile {
+  width: 320px;
+  margin: 0 auto;
+  min-height: 568px;
+}
+
+.wf-device--tablet {
+  width: 380px;
+  margin: 0 auto;
+  min-height: 600px;
+}
+
+.wf-device--web {
+  width: 100%;
+  min-height: 500px;
+}
+
+/* ── Shared section wrapper ──────────────────────────────────────────────── */
+
+.wf-section {
+  position: relative;
+}
+
+/* ── Section label (type or override) ───────────────────────────────────── */
+
+.wf-section__label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--wf-text-muted);
+  margin-bottom: 6px;
+  user-select: none;
+  font-family: var(--wf-font);
+}
+
+/* ── WireframeChip ───────────────────────────────────────────────────────── */
+
+.wf-chip {
+  background: var(--wf-chip-bg);
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-chip-radius);
+  padding: var(--wf-chip-pad);
+  font-size: 10px;
+  font-family: var(--wf-font);
+  color: var(--wf-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  user-select: none;
+  display: block;
+}
+
+/* ── ChipContainer layouts ───────────────────────────────────────────────── */
+
+.wf-chips {
+  display: flex;
+  gap: var(--wf-chip-gap);
+}
+
+.wf-chips--column {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.wf-chips--row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.wf-chips--grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--wf-chip-gap);
+}
+
+/* ── SectionNote ─────────────────────────────────────────────────────────── */
+
+.wf-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--wf-note-bg);
+  border: 1px solid var(--wf-note-border);
+  border-radius: 3px;
+  padding: 4px 8px;
+  margin-top: 6px;
+  font-size: 10px;
+  font-family: var(--wf-font);
+  color: var(--wf-note-text);
+}
+
+.wf-note__marker {
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  flex-shrink: 0;
+  font-size: 9px;
+}

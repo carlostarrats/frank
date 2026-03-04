@@ -174,18 +174,15 @@ html, body, #root {
   color: var(--text-muted);
 }
 
-/* Placeholder until wireframe renderer lands in step 5 */
-.tab-content__placeholder {
+.tab-content__wireframe {
   flex: 1;
-  overflow: auto;
-  padding: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.schema-debug {
-  font-size: 10px;
-  line-height: 1.5;
+.flow-placeholder {
+  padding: 20px;
   color: var(--text-muted);
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: 'SF Mono', 'Fira Mono', monospace;
+  font-size: 12px;
 }
