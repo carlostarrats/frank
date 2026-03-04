@@ -9,6 +9,8 @@ import {
   MapPin, Navigation, Home, User, Heart, Bookmark, Clock, MessageSquare, ShoppingCart,
   Compass, BarChart2, Camera, BookOpen, TrendingUp, Star, Grid2x2, List,
   CreditCard, Wallet, Send, Phone, Video, Music, Image, FileText, LayoutDashboard,
+  MoreHorizontal, Filter, Download, Upload, Globe, Lock, Unlock, Info,
+  Check, Trash2, RefreshCw, ExternalLink, Mic, Headphones,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -256,73 +258,126 @@ function SmartItem({ label }: { label: string }) {
 function HeaderIcon({ desc }: { desc: string }) {
   const d = desc.toLowerCase();
   const p = { size: 18, strokeWidth: 1.75 } as const;
-  if (/\bback\b/.test(d))                    return <ChevronLeft {...p} />;
-  if (/\bforward\b/.test(d))                 return <ChevronRight {...p} />;
-  if (/\b(close|dismiss)\b/.test(d))         return <X {...p} />;
-  if (/\bsettings\b/.test(d))                return <Settings {...p} />;
-  if (/\bsearch\b/.test(d))                  return <Search {...p} />;
-  if (/\b(menu|hamburger)\b/.test(d))        return <Menu {...p} />;
-  if (/\badd\b|\bplus\b|\bcreate\b/.test(d)) return <Plus {...p} />;
-  if (/\bshare\b/.test(d))                   return <Share2 {...p} />;
-  if (/\bedit\b|\bpencil\b/.test(d))         return <Pencil {...p} />;
-  if (/\bnotif|\bbell\b/.test(d))            return <Bell {...p} />;
-  return <Settings {...p} />;
+  if (/\bback\b/.test(d))                          return <ChevronLeft {...p} />;
+  if (/\bforward\b/.test(d))                        return <ChevronRight {...p} />;
+  if (/\b(close|dismiss)\b/.test(d))                return <X {...p} />;
+  if (/\bsearch\b/.test(d))                         return <Search {...p} />;
+  if (/\b(menu|hamburger)\b/.test(d))               return <Menu {...p} />;
+  if (/\b(add|plus|create|new)\b/.test(d))          return <Plus {...p} />;
+  if (/\bshare\b/.test(d))                          return <Share2 {...p} />;
+  if (/\b(edit|pencil)\b/.test(d))                  return <Pencil {...p} />;
+  if (/\b(notif|bell|alert)\b/.test(d))             return <Bell {...p} />;
+  if (/\bvideo\b/.test(d))                          return <Video {...p} />;
+  if (/\b(phone|call)\b/.test(d))                   return <Phone {...p} />;
+  if (/\bsend\b/.test(d))                           return <Send {...p} />;
+  if (/\bbookmark\b/.test(d))                       return <Bookmark {...p} />;
+  if (/\b(heart|like|love|fav)\b/.test(d))          return <Heart {...p} />;
+  if (/\b(camera|photo)\b/.test(d))                 return <Camera {...p} />;
+  if (/\b(star|rating)\b/.test(d))                  return <Star {...p} />;
+  if (/\b(more|overflow|ellipsis|options)\b/.test(d)) return <MoreHorizontal {...p} />;
+  if (/\bfilter\b/.test(d))                         return <Filter {...p} />;
+  if (/\bdownload\b/.test(d))                       return <Download {...p} />;
+  if (/\bupload\b/.test(d))                         return <Upload {...p} />;
+  if (/\b(globe|web|browser)\b/.test(d))            return <Globe {...p} />;
+  if (/\block\b/.test(d))                           return <Lock {...p} />;
+  if (/\bunlock\b/.test(d))                         return <Unlock {...p} />;
+  if (/\binfo\b/.test(d))                           return <Info {...p} />;
+  if (/\bsettings\b/.test(d))                       return <Settings {...p} />;
+  if (/\b(check|done|confirm)\b/.test(d))           return <Check {...p} />;
+  if (/\b(delete|trash|remove)\b/.test(d))          return <Trash2 {...p} />;
+  if (/\b(refresh|reload|sync)\b/.test(d))          return <RefreshCw {...p} />;
+  if (/\b(external|link|open)\b/.test(d))           return <ExternalLink {...p} />;
+  if (/\bmic\b/.test(d))                            return <Mic {...p} />;
+  if (/\b(headphone|audio)\b/.test(d))              return <Headphones {...p} />;
+  if (/\bhome\b/.test(d))                           return <Home {...p} />;
+  if (/\buser\b/.test(d))                           return <User {...p} />;
+  return null;
 }
 
 function HeaderSection({ section }: SectionProps) {
   const items = section.contains;
-  const hasLogo   = items.some(s => /\b(logo|brand|wordmark)\b/i.test(s));
-  const hasAvatar = items.some(s => /\b(avatar|profile photo|user photo|user avatar)\b/i.test(s));
 
-  if (hasLogo || hasAvatar) {
-    const logoItems   = items.filter(s => /\b(logo|brand)\b/i.test(s));
-    const avatarItems = items.filter(s => /\b(avatar|profile photo|user photo|user avatar)\b/i.test(s));
-    const navItems    = items.filter(s => !logoItems.includes(s) && !avatarItems.includes(s));
+  const isLeftBtn  = (s: string) => /\b(back|close|dismiss|cancel|menu|hamburger)\b/i.test(s);
+  const isAvatar   = (s: string) => /\b(avatar|photo|picture)\b/i.test(s);
+  const isLogo     = (s: string) => /\b(logo|brand|wordmark)\b/i.test(s);
+  const isBtn      = (s: string) => /\bbutton\b/i.test(s) || isLeftBtn(s);
+  const isHeadline = (s: string) => /\b(headline|heading|title|label|name)\b/i.test(s) && !isBtn(s);
+  const isSubline  = (s: string) => /\b(subheadline|subtitle|status|online|caption|subline|description)\b/i.test(s) && !isBtn(s);
+
+  const leftBtns   = items.filter(isLeftBtn);
+  const logoItem   = items.find(isLogo);
+  const avatarIdx  = items.findIndex(isAvatar);
+  const avatarItem = avatarIdx >= 0 ? items[avatarIdx] : null;
+
+  // Chat / profile header: back + avatar + name/status + action buttons
+  if (avatarItem) {
+    const afterAvatar = items.slice(avatarIdx + 1);
+    const nameItem    = afterAvatar.find(isHeadline);
+    const statusItem  = afterAvatar.find(isSubline);
+    const rightBtns   = items.filter(s => isBtn(s) && !isLeftBtn(s) && !isAvatar(s));
+
     return (
-      <div className="flex items-center w-full gap-3">
-        {logoItems.length > 0 && (
-          <span className="text-xs font-bold tracking-widest text-foreground bg-muted border border-border rounded px-2 py-0.5 flex-shrink-0 select-none">
-            LOGO
-          </span>
-        )}
-        <nav className="flex items-center gap-4 flex-1 overflow-x-auto">
-          {navItems.map((item, i) => (
-            <span key={i} className="text-sm text-muted-foreground whitespace-nowrap select-none">
-              {displayLabel(item)}
-            </span>
+      <div className="flex items-center w-full gap-2">
+        <div className="flex items-center w-8 flex-shrink-0">
+          {leftBtns.map((item, i) => (
+            <span key={i} className="text-foreground"><HeaderIcon desc={item} /></span>
           ))}
-        </nav>
-        {avatarItems.length > 0 && (
-          <div className="ml-auto flex-shrink-0">
-            <div className="w-6 h-6 rounded-full bg-muted border border-border" />
+        </div>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-muted border border-border flex-shrink-0" />
+          <div className="flex flex-col min-w-0">
+            {nameItem && <span className="text-sm font-semibold text-foreground leading-tight truncate select-none">{displayLabel(nameItem)}</span>}
+            {statusItem && <span className="text-[11px] text-muted-foreground leading-tight truncate select-none">{displayLabel(statusItem)}</span>}
           </div>
-        )}
+        </div>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          {rightBtns.map((item, i) => (
+            <span key={i} className="text-foreground"><HeaderIcon desc={item} /></span>
+          ))}
+        </div>
       </div>
     );
   }
 
-  const leftItems   = items.filter(s => /\b(back|close|dismiss|cancel|menu|hamburger)\b/i.test(s));
-  const centerItems = items.filter(s =>
-    /\b(label|title|heading)\b/i.test(s) && !leftItems.includes(s)
-  );
-  const rightItems  = items.filter(s => !leftItems.includes(s) && !centerItems.includes(s));
+  // App bar: logo + nav links + optional right actions
+  if (logoItem) {
+    const navLinks  = items.filter(s => !isLogo(s) && !isBtn(s));
+    const rightBtns = items.filter(s => isBtn(s) && !isLeftBtn(s));
+    return (
+      <div className="flex items-center w-full gap-3">
+        <span className="text-xs font-bold tracking-widest text-foreground bg-muted border border-border rounded px-2 py-0.5 flex-shrink-0 select-none">
+          {displayLabel(logoItem).toUpperCase()}
+        </span>
+        <nav className="flex items-center gap-4 flex-1 overflow-x-auto">
+          {navLinks.map((item, i) => (
+            <span key={i} className="text-sm text-muted-foreground whitespace-nowrap select-none">{displayLabel(item)}</span>
+          ))}
+        </nav>
+        {rightBtns.map((item, i) => (
+          <span key={i} className="text-foreground ml-1 flex-shrink-0"><HeaderIcon desc={item} /></span>
+        ))}
+      </div>
+    );
+  }
+
+  // Mobile nav bar: [left actions] [center title] [right actions]
+  const rightBtns   = items.filter(s => isBtn(s) && !isLeftBtn(s));
+  const centerItems = items.filter(s => !isBtn(s));
 
   return (
     <div className="flex items-center w-full">
-      <div className="w-11 flex items-center gap-1">
-        {leftItems.map((item, i) => (
+      <div className="w-10 flex items-center gap-0.5 flex-shrink-0">
+        {leftBtns.map((item, i) => (
           <span key={i} className="text-foreground"><HeaderIcon desc={item} /></span>
         ))}
       </div>
-      <div className="flex-1 flex justify-center items-center">
-        {centerItems.map((item, i) => (
-          <span key={i} className="text-sm font-semibold text-foreground whitespace-nowrap overflow-hidden text-ellipsis select-none">
-            {displayLabel(item)}
-          </span>
+      <div className="flex-1 flex justify-center items-center min-w-0 px-2">
+        {centerItems.slice(0, 1).map((item, i) => (
+          <span key={i} className="text-sm font-semibold text-foreground truncate select-none">{displayLabel(item)}</span>
         ))}
       </div>
-      <div className="w-11 flex items-center justify-end gap-1">
-        {rightItems.map((item, i) => (
+      <div className="w-10 flex items-center justify-end gap-0.5 flex-shrink-0">
+        {rightBtns.map((item, i) => (
           <span key={i} className="text-foreground"><HeaderIcon desc={item} /></span>
         ))}
       </div>
