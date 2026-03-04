@@ -17,44 +17,30 @@ export function useTabs() {
 
   // Add or update a tab. If a complete tab with the same label exists, update it in place.
   const addTab = useCallback((schema: LookyLooSchema): string => {
-    let resolvedId = '';
+    const existing = tabs.find(
+      (t) => t.label === schema.label && t.status === 'complete'
+    );
 
-    setTabs((prev) => {
-      const existing = prev.find(
-        (t) => t.label === schema.label && t.status === 'complete'
-      );
-      if (existing) {
-        resolvedId = existing.id;
-        return prev.map((t) =>
+    if (existing) {
+      setTabs((prev) =>
+        prev.map((t) =>
           t.id === existing.id
-            ? {
-                ...t,
-                schema,
-                timestamp: schema.timestamp,
-                platform: schema.platform,
-                flashKey: t.flashKey + 1,
-              }
+            ? { ...t, schema, timestamp: schema.timestamp, platform: schema.platform, flashKey: t.flashKey + 1 }
             : t
-        );
-      }
-      resolvedId = crypto.randomUUID();
-      return [
-        ...prev,
-        {
-          id: resolvedId,
-          label: schema.label,
-          timestamp: schema.timestamp,
-          platform: schema.platform,
-          status: 'complete',
-          schema,
-          flashKey: 0,
-        },
-      ];
-    });
+        )
+      );
+      setActiveTabId(existing.id);
+      return existing.id;
+    }
 
-    setActiveTabId(resolvedId);
-    return resolvedId;
-  }, []);
+    const id = crypto.randomUUID();
+    setTabs((prev) => [
+      ...prev,
+      { id, label: schema.label, timestamp: schema.timestamp, platform: schema.platform, status: 'complete', schema, flashKey: 0 },
+    ]);
+    setActiveTabId(id);
+    return id;
+  }, [tabs]);
 
   // Add a placeholder tab before its schema arrives (used by multi-screen flows).
   const addLoadingTab = useCallback((label: string, platform: Platform): string => {
