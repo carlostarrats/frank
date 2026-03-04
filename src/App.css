@@ -112,7 +112,10 @@ html, body, #root {
 
 .tab {
   flex-shrink: 0;
-  padding: 6px 12px 7px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 7px;
   background: transparent;
   border: none;
   border-radius: var(--radius) var(--radius) 0 0;
@@ -120,10 +123,7 @@ html, body, #root {
   font-family: var(--font);
   font-size: 12px;
   cursor: pointer;
-  white-space: nowrap;
   max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   transition: color 0.1s, background 0.1s;
 }
 

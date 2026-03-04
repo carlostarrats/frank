@@ -139,13 +139,12 @@
 /* ── toolbar ─────────────────────────────────────────────────────────────── */
 
 .wf-section--toolbar {
-  padding: 8px 16px;
+  padding: 6px 12px;
   background: var(--wf-bg);
   border-top: 1px solid var(--wf-border);
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 44px;
 }
 
 /* ── modal ───────────────────────────────────────────────────────────────── */

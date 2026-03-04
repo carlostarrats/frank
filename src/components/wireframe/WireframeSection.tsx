@@ -647,13 +647,20 @@ function BannerSection({ section }: SectionProps) {
 }
 
 function ToolbarSection({ section }: SectionProps) {
+  const isInput = (s: string) => /\binput\b|\btext field\b|\bsearch\b|\btype\b/i.test(s);
   return (
     <>
-      {section.contains.map((item, i) => (
-        <Button key={i} variant="outline" size="icon" title={item}>
-          <HeaderIcon desc={item} />
-        </Button>
-      ))}
+      {section.contains.map((item, i) =>
+        isInput(item) ? (
+          <div key={i} className="flex-1 h-8 rounded-full bg-muted border border-border flex items-center px-3">
+            <span className="text-xs text-muted-foreground/60 select-none truncate">{displayLabel(item)}</span>
+          </div>
+        ) : (
+          <Button key={i} variant="ghost" size="icon" className="w-8 h-8 flex-shrink-0" title={item}>
+            <HeaderIcon desc={item} />
+          </Button>
+        )
+      )}
     </>
   );
 }
