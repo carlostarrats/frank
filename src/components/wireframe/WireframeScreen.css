@@ -73,18 +73,21 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 16px 48px rgba(0, 0, 0, 0.16);
 }
 
+/* Mobile — iPhone 15 / modern Android standard */
 .wf-device--mobile {
-  width: 320px;
+  width: 390px;
   margin: 0 auto;
-  min-height: 568px;
+  min-height: 700px;
 }
 
+/* Tablet — iPad mini / standard tablet */
 .wf-device--tablet {
-  width: 380px;
+  width: 744px;
   margin: 0 auto;
-  min-height: 600px;
+  min-height: 900px;
 }
 
+/* Web / desktop — full panel width */
 .wf-device--web {
   width: 100%;
   min-height: 500px;
@@ -99,7 +102,7 @@
 /* ── Section label ───────────────────────────────────────────────────────── */
 
 .wf-section__label {
-  font-size: 9px;
+  font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -120,7 +123,7 @@
   border-radius: 4px;
   padding: 5px 8px;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 0.75rem;
   font-family: var(--wf-font);
   color: var(--wf-note-text);
 }
@@ -131,188 +134,7 @@
   letter-spacing: 0.05em;
   opacity: 0.7;
   flex-shrink: 0;
-  font-size: 9px;
+  font-size: 0.6875rem;
 }
 
-/* ── SmartItem atoms ─────────────────────────────────────────────────────── */
-
-.wf-smart-headline {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--wf-text);
-  line-height: 1.2;
-  font-family: var(--wf-font);
-  user-select: none;
-}
-
-.wf-smart-subheadline {
-  font-size: 13px;
-  color: var(--wf-text-muted);
-  line-height: 1.4;
-  font-family: var(--wf-font);
-  user-select: none;
-}
-
-.wf-smart-body {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  width: 100%;
-}
-
-.wf-text-bar {
-  height: 8px;
-  background: var(--wf-border-strong);
-  border-radius: 3px;
-}
-
-.wf-smart-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: var(--wf-font);
-  user-select: none;
-  cursor: default;
-}
-
-.wf-smart-btn--primary {
-  background: var(--wf-primary);
-  color: var(--wf-primary-fg);
-}
-
-.wf-smart-btn--secondary {
-  background: transparent;
-  color: var(--wf-text);
-  border: 1px solid var(--wf-border-strong);
-}
-
-.wf-smart-image {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: var(--wf-muted);
-  border: 1px solid var(--wf-border);
-  border-radius: 6px;
-  position: relative;
-  overflow: hidden;
-}
-
-.wf-smart-image::before,
-.wf-smart-image::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-}
-
-.wf-smart-image::before {
-  background: linear-gradient(
-    to bottom right,
-    transparent calc(50% - 0.5px),
-    var(--wf-border-strong) calc(50% - 0.5px),
-    var(--wf-border-strong) calc(50% + 0.5px),
-    transparent calc(50% + 0.5px)
-  );
-}
-
-.wf-smart-image::after {
-  background: linear-gradient(
-    to bottom left,
-    transparent calc(50% - 0.5px),
-    var(--wf-border-strong) calc(50% - 0.5px),
-    var(--wf-border-strong) calc(50% + 0.5px),
-    transparent calc(50% + 0.5px)
-  );
-}
-
-.wf-smart-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--wf-muted);
-  border: 1px solid var(--wf-border);
-  flex-shrink: 0;
-}
-
-.wf-smart-avatar--sm {
-  width: 24px;
-  height: 24px;
-}
-
-.wf-smart-icon {
-  width: 20px;
-  height: 20px;
-  background: var(--wf-muted);
-  border: 1px solid var(--wf-border);
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.wf-smart-logo {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--wf-text);
-  font-family: var(--wf-font);
-  user-select: none;
-  background: var(--wf-muted);
-  border: 1px solid var(--wf-border);
-  border-radius: 4px;
-  padding: 3px 8px;
-}
-
-.wf-smart-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-}
-
-.wf-smart-input-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--wf-text);
-  font-family: var(--wf-font);
-  user-select: none;
-}
-
-.wf-smart-input {
-  height: 36px;
-  border: 1px solid var(--wf-border-strong);
-  border-radius: 6px;
-  background: var(--wf-bg);
-  width: 100%;
-}
-
-.wf-smart-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-size: 10px;
-  font-weight: 500;
-  font-family: var(--wf-font);
-  background: var(--wf-muted);
-  border: 1px solid var(--wf-border);
-  color: var(--wf-text-muted);
-  user-select: none;
-}
-
-.wf-smart-nav-item {
-  font-size: 12px;
-  color: var(--wf-text-muted);
-  font-family: var(--wf-font);
-  user-select: none;
-  padding: 2px 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.wf-smart-text {
-  font-size: 12px;
-  color: var(--wf-text-muted);
-  font-family: var(--wf-font);
-  user-select: none;
-}
+/* SmartItem atoms removed — inner elements now use Tailwind utilities directly in WireframeSection.tsx */

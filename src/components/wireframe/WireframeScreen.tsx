@@ -27,7 +27,7 @@ export function WireframeScreen({ schema }: Props) {
     <div className="wireframe" style={tokenStyle}>
       <WireframeDevice platform={schema.platform}>
         {schema.sections.map((section, i) => (
-          <WireframeSection key={i} section={section} screenLabel={schema.label} />
+          <WireframeSection key={i} section={section} screenLabel={schema.label} platform={schema.platform} />
         ))}
       </WireframeDevice>
     </div>
@@ -41,8 +41,14 @@ function WireframeDevice({
   platform: Platform;
   children: React.ReactNode;
 }) {
+  // Normalise platform aliases to CSS class names
+  const cls =
+    platform === 'ios' || platform === 'android' ? 'mobile'
+    : platform === 'tablet' ? 'tablet'
+    : platform === 'web'    ? 'web'
+    : 'mobile'; // safe default
   return (
-    <div className={`wf-device wf-device--${platform}`}>
+    <div className={`wf-device wf-device--${cls}`}>
       {children}
     </div>
   );

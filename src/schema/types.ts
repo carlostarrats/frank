@@ -23,7 +23,7 @@ export interface DesignTokens {
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
 
-export const PLATFORMS = ['mobile', 'web', 'tablet'] as const;
+export const PLATFORMS = ['mobile', 'web', 'tablet', 'ios', 'android'] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 // Built-in types get dedicated high-fidelity renderers.
