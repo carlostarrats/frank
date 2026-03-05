@@ -105,3 +105,55 @@ lookyloo/
 - Shadcn/Radix for all UI primitives
 - Keep Rust surface area minimal — if logic can live in React, it lives in React
 - No external state management library in v1 (React state + context is sufficient)
+
+---
+
+## Wireframe Renderer — Non-Negotiable Rules
+
+These rules apply to every file under `src/components/wireframe/`. Violating them produces renders that look broken. No exceptions.
+
+### Use shadcn components. Never reinvent them.
+
+| Need | Use |
+|---|---|
+| Any button or icon button | `<Button>` — `variant="ghost" size="icon"` for icon-only |
+| Any text input | `<Input>` — never a custom `<div>` with a border |
+| Avatar / user photo | `<Avatar>` + `<AvatarFallback>` |
+| Card / contained block | `<Card>` + `<CardContent>` |
+| Divider / separator line | `<Separator>` |
+| Tag / chip / label | `<Badge>` |
+
+If you find yourself writing `<div className="border rounded px-3 ...">` for something interactive, stop — there is a shadcn component for it.
+
+### Typography — Tailwind scale only. No arbitrary values.
+
+| Use | For |
+|---|---|
+| `text-xs` | Timestamps, captions, eyebrow labels |
+| `text-sm` | Secondary text, meta info, badges |
+| `text-base` | Primary body text, list items, chat messages |
+| `text-lg` | Section headings, card titles |
+| `text-xl` | Screen titles |
+| `text-2xl`+ | Hero headlines |
+
+Never write `text-[13px]`, `text-[15px]`, or any bracket value. If a Tailwind scale step doesn't fit, use the nearest one — don't invent a custom size.
+
+### Spacing — Tailwind scale only. No half-steps.
+
+Use `gap-1 / 2 / 3 / 4 / 6 / 8` and `p-1 / 2 / 3 / 4 / 6 / 8`.
+Never use `gap-2.5`, `py-3.5`, `px-2.5`, or any `.5` step that isn't on the 4px grid.
+
+Standard defaults:
+- Section horizontal padding: `px-4`
+- List row padding: `py-3 px-4`
+- Component internal gap: `gap-2` (tight) or `gap-3` (standard)
+- Section-level gap: `gap-4`
+
+### Mobile device is a fixed viewport — not a content wrapper.
+
+- Mobile device: `min-height: 650px`. Tablet: `min-height: 960px`.
+- `WireframeScreen` detects the first non-chrome section and gives it `flex: 1` so it fills the space between header and toolbar. This is how every real mobile app works.
+- Chrome sections: `header`, `top-nav`, `toolbar`, `bottom-nav`, `banner`
+- Fill sections: `list`, `content`, `chat`, `messages`, `form`, `grid`, `empty-state`
+
+Never remove `min-height` from device frames — it's not "extra space", it's a phone screen.
