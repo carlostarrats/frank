@@ -115,7 +115,7 @@ function renderSection(section: Section, screenLabel?: string, platform?: string
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-2 select-none">
+    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 select-none">
       {children}
     </div>
   );
@@ -228,7 +228,7 @@ function SmartItem({ label }: { label: string }) {
 
     case 'logo':
       return (
-        <span className="text-xs font-bold tracking-widest text-foreground bg-muted border border-border rounded px-2 py-0.5 select-none">
+        <span className="text-xs font-bold tracking-widest text-foreground bg-muted border border-border rounded px-2 py-1 select-none">
           LOGO
         </span>
       );
@@ -350,7 +350,7 @@ function HeaderSection({ section }: SectionProps) {
     const rightBtns = items.filter(s => isBtn(s) && !isLeftBtn(s));
     return (
       <div className="flex items-center w-full gap-3">
-        <span className="text-xs font-bold tracking-widest text-foreground bg-muted border border-border rounded px-2 py-0.5 flex-shrink-0 select-none">
+        <span className="text-xs font-bold tracking-widest text-foreground bg-muted border border-border rounded px-2 py-1 flex-shrink-0 select-none">
           {displayLabel(logoItem).toUpperCase()}
         </span>
         <nav className="flex items-center gap-4 flex-1 overflow-x-auto">
@@ -409,11 +409,11 @@ function HeroSection({ section, platform }: SectionProps) {
     );
   }
   return (
-    <div className="flex flex-col items-center gap-3 text-center py-8 px-6">
+    <div className="flex flex-col items-center gap-3 text-center py-8 px-4">
       {section.label && <SectionLabel>{section.label}</SectionLabel>}
       {section.contains.map((item, i) => {
         if (classify(item) === 'headline') {
-          return <p key={i} className="text-2xl font-bold text-foreground leading-tight max-w-[260px] select-none">{displayLabel(item)}</p>;
+          return <p key={i} className="text-2xl font-bold text-foreground leading-tight max-w-xs select-none">{displayLabel(item)}</p>;
         }
         return <SmartItem key={i} label={item} />;
       })}
@@ -441,7 +441,7 @@ function TopNavSection({ section }: SectionProps) {
   const navItems = section.contains.filter(s => !isLogo(s) && !isCta(s) && !isAuth(s));
 
   return (
-    <div className="flex items-center h-[52px] border-b border-border px-4">
+    <div className="flex items-center h-14 border-b border-border px-4">
       {logoItem && (
         <span className="text-sm font-bold text-foreground mr-6 flex-shrink-0 select-none">
           {displayLabel(logoItem)}
@@ -449,14 +449,14 @@ function TopNavSection({ section }: SectionProps) {
       )}
       <nav className="flex items-center gap-1 flex-1">
         {navItems.map((item, i) => (
-          <span key={i} className="px-3 py-1 text-sm text-muted-foreground rounded select-none">
+          <span key={i} className="px-3 py-2 text-sm text-muted-foreground rounded select-none">
             {item}
           </span>
         ))}
       </nav>
       <div className="flex items-center gap-2 flex-shrink-0">
         {authItem && (
-          <span className="text-sm text-muted-foreground px-3 py-1 select-none">{authItem}</span>
+          <span className="text-sm text-muted-foreground px-3 py-2 select-none">{authItem}</span>
         )}
         {ctaItem && <Button size="sm">{displayLabel(ctaItem)}</Button>}
       </div>
@@ -478,7 +478,7 @@ function navIcon(label: string) {
   if (/\bmessage|\bchat\b|\binbox\b/.test(l))              return <MessageSquare {...p} />;
   if (/\bcart\b|\bshop\b|\bstore\b/.test(l))               return <ShoppingCart {...p} />;
   if (/\bheart\b|\blike\b|\bfavorite\b/.test(l))           return <Heart {...p} />;
-  if (/\bexplore\b|\bdisc?over\b|\bcompass\b/.test(l))     return <Compass {...p} />;
+  if (/\bexplore\b|\bdisc?ver\b|\bcompass\b/.test(l))      return <Compass {...p} />;
   if (/\bmap\b/.test(l))                                   return <MapPin {...p} />;
   if (/\banalytics?\b|\bstats?\b/.test(l))                 return <BarChart2 {...p} />;
   if (/\bcamera\b|\bphoto\b/.test(l))                      return <Camera {...p} />;
@@ -656,11 +656,11 @@ function GridSection({ section }: SectionProps) {
       <div className="grid grid-cols-2 gap-2">
         {section.contains.map((item, i) => (
           <Card key={i} className="overflow-hidden p-0 gap-0">
-            <div className="wf-image-placeholder w-full h-[120px]" />
+            <div className="wf-image-placeholder w-full h-32" />
             <CardContent className="p-3">
               <p className="text-sm font-medium text-foreground select-none">{displayLabel(item)}</p>
               {item.includes('—') && (
-                <p className="text-xs text-muted-foreground mt-0.5 select-none">{item.split('—')[1]?.trim()}</p>
+                <p className="text-xs text-muted-foreground mt-1 select-none">{item.split('—')[1]?.trim()}</p>
               )}
             </CardContent>
           </Card>
@@ -680,7 +680,7 @@ function FooterSection({ section }: SectionProps) {
     <div className="flex flex-col gap-3 px-4 py-4">
       <div className="flex items-center gap-4 flex-wrap">
         {logo && (
-          <span className="text-xs font-bold tracking-widest text-foreground bg-muted border border-border rounded px-2 py-0.5 flex-shrink-0 select-none">
+          <span className="text-xs font-bold tracking-widest text-foreground bg-muted border border-border rounded px-2 py-1 flex-shrink-0 select-none">
             LOGO
           </span>
         )}
@@ -776,7 +776,7 @@ function StatsRowSection({ section }: SectionProps) {
         const value = parts[0] ?? '';
         const label = parts.slice(1).join(' ');
         return (
-          <div key={i} className={`flex-1 flex flex-col items-center py-5 px-4 gap-1 ${
+          <div key={i} className={`flex-1 flex flex-col items-center py-4 px-4 gap-1 ${
             i < section.contains.length - 1 ? 'border-r border-border' : ''
           }`}>
             <div className="text-2xl font-bold text-foreground select-none">{value}</div>
@@ -862,7 +862,7 @@ function TabsSection({ section }: SectionProps) {
       {section.contains.map((item, i) => (
         <div key={i} className={`px-4 py-3 text-sm font-medium select-none whitespace-nowrap cursor-default ${
           i === 0
-            ? 'text-foreground border-b-2 border-foreground -mb-px'
+            ? 'text-foreground border-b-2 border-foreground'
             : 'text-muted-foreground'
         }`}>
           {item}
@@ -900,7 +900,7 @@ function FeatureSection({ section }: SectionProps) {
 function ChartSection({ section: _ }: SectionProps) {
   return (
     <div className="flex flex-col gap-2 w-full">
-      <div className="w-full h-[160px] bg-muted border border-border rounded-lg relative overflow-hidden">
+      <div className="w-full h-40 bg-muted border border-border rounded-lg relative overflow-hidden">
         {/* Y-axis lines */}
         {[0.25, 0.5, 0.75].map(p => (
           <div key={p} className="absolute w-full border-t border-border/60" style={{ top: `${p * 100}%` }} />
@@ -920,9 +920,9 @@ function OnboardingSection({ section }: SectionProps) {
   const stepItems  = section.contains.filter(s => !classify(s).startsWith('btn'));
   const btnItems   = section.contains.filter(s =>  classify(s).startsWith('btn'));
   return (
-    <div className="flex flex-col items-center gap-6 text-center py-8 px-6">
+    <div className="flex flex-col items-center gap-6 text-center py-8 px-4">
       <div className="wf-image-placeholder w-24 h-24 rounded-2xl" />
-      <div className="flex flex-col gap-2 max-w-[260px]">
+      <div className="flex flex-col gap-2 max-w-xs">
         {stepItems.map((item, i) => {
           if (classify(item) === 'headline') return <p key={i} className="text-xl font-bold text-foreground select-none">{displayLabel(item)}</p>;
           return <SmartItem key={i} label={item} />;
@@ -934,9 +934,9 @@ function OnboardingSection({ section }: SectionProps) {
         </div>
       )}
       {/* Step dots */}
-      <div className="flex gap-1.5">
+      <div className="flex gap-2">
         {[0, 1, 2].map(i => (
-          <div key={i} className={`h-1.5 rounded-full ${i === 0 ? 'w-4 bg-foreground' : 'w-1.5 bg-border'}`} />
+          <div key={i} className={`h-2 rounded-full ${i === 0 ? 'w-4 bg-foreground' : 'w-2 bg-border'}`} />
         ))}
       </div>
     </div>
@@ -956,7 +956,7 @@ function PricingSection({ section }: SectionProps) {
               <span className={`text-xs font-semibold uppercase tracking-wider select-none ${featured ? 'text-background/70' : 'text-muted-foreground'}`}>{name}</span>
               {price && <span className={`text-2xl font-bold select-none ${featured ? 'text-background' : 'text-foreground'}`}>{price}</span>}
               {[0, 1, 2].map(j => (
-                <div key={j} className={`h-1.5 rounded-sm ${featured ? 'bg-background/20' : 'bg-border'}`} style={{ width: `${70 - j * 15}%` }} />
+                <div key={j} className={`h-2 rounded-sm ${featured ? 'bg-background/20' : 'bg-border'}`} style={{ width: `${70 - j * 15}%` }} />
               ))}
               <Button size="sm" variant={featured ? 'secondary' : 'outline'} className="mt-1">Get started</Button>
             </div>
@@ -998,7 +998,7 @@ function GallerySection({ section }: SectionProps) {
   return (
     <div className="flex flex-col gap-3">
       {section.label && <SectionLabel>{section.label}</SectionLabel>}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-3 gap-2">
         {section.contains.map((item, i) => (
           <div key={i} className="wf-image-placeholder aspect-square rounded-md" aria-label={item} />
         ))}
@@ -1037,7 +1037,7 @@ function LoaderSection({ section }: SectionProps) {
   // ── Split & Converge ──────────────────────────────────────────────────
   if (/split|converge|halve/i.test(v)) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-5">
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
         <div className="flex items-end gap-10">
           <motion.svg
             width="44" height="72" viewBox="0 0 44 90" fill="currentColor" className="text-foreground"
@@ -1054,7 +1054,7 @@ function LoaderSection({ section }: SectionProps) {
             <path d="M2 6 L2 58 L14 78 L44 60 L22 53 Z" />
           </motion.svg>
         </div>
-        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-[180px]">{desc}</p>}
+        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-xs">{desc}</p>}
       </div>
     );
   }
@@ -1062,7 +1062,7 @@ function LoaderSection({ section }: SectionProps) {
   // ── Contrail Trace ────────────────────────────────────────────────────
   if (/contrail|trace|draw|path/i.test(v)) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-5">
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
         <div className="relative flex flex-col items-center">
           <InFlightMark size={80} />
           <svg width="140" height="36" viewBox="0 0 140 36" className="mt-1">
@@ -1080,7 +1080,7 @@ function LoaderSection({ section }: SectionProps) {
             />
           </svg>
         </div>
-        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-[180px]">{desc}</p>}
+        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-xs">{desc}</p>}
       </div>
     );
   }
@@ -1088,7 +1088,7 @@ function LoaderSection({ section }: SectionProps) {
   // ── Gentle Float ──────────────────────────────────────────────────────
   if (/float|gentle|bob|drift/i.test(v)) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-5">
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
         <motion.div
           className="flex items-center gap-4"
           animate={{ y: [-4, 4, -4] }}
@@ -1102,7 +1102,7 @@ function LoaderSection({ section }: SectionProps) {
             <path d="M0 4 Q8 7 16 4 Q24 1 32 4" stroke="currentColor" strokeWidth="1" fill="none" className="text-border" strokeDasharray="3 2" />
           </svg>
         </motion.div>
-        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-[180px]">{desc}</p>}
+        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-xs">{desc}</p>}
       </div>
     );
   }
@@ -1110,7 +1110,7 @@ function LoaderSection({ section }: SectionProps) {
   // ── Paper Fold ────────────────────────────────────────────────────────
   if (/fold|origami|unfold|paper/i.test(v)) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-5">
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
         <motion.div
           className="relative"
           animate={{ rotateY: [0, 8, 0, -8, 0] }}
@@ -1122,7 +1122,7 @@ function LoaderSection({ section }: SectionProps) {
             <line x1="22" y1="53" x2="78" y2="53" stroke="currentColor" strokeWidth="0.8" strokeDasharray="3 2" className="text-border" />
           </svg>
         </motion.div>
-        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-[180px]">{desc}</p>}
+        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-xs">{desc}</p>}
       </div>
     );
   }
@@ -1130,8 +1130,8 @@ function LoaderSection({ section }: SectionProps) {
   // ── Pulse Ring ────────────────────────────────────────────────────────
   if (/ring|pulse|glow|radiat|expand/i.test(v)) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-5">
-        <div className="relative flex items-center justify-center w-[160px] h-[140px]">
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="relative flex items-center justify-center w-40 h-36">
           <motion.div
             className="absolute rounded-full border border-border"
             animate={{ width: [100, 130, 100], height: [100, 130, 100], opacity: [0.4, 0.15, 0.4] }}
@@ -1144,14 +1144,14 @@ function LoaderSection({ section }: SectionProps) {
           />
           <InFlightMark size={80} />
         </div>
-        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-[180px] -mt-4">{desc}</p>}
+        {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-xs -mt-4">{desc}</p>}
       </div>
     );
   }
 
   // ── Speed Lines (default) ─────────────────────────────────────────────
   return (
-    <div className="flex flex-col items-center justify-center py-20 gap-5">
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
       <div className="flex flex-col items-center">
         <motion.div
           animate={{ x: [0, 3, 0] }}
@@ -1161,11 +1161,11 @@ function LoaderSection({ section }: SectionProps) {
         </motion.div>
         <div className="flex gap-3 mt-2">
           {[0, 1, 2].map(col => (
-            <div key={col} className="flex flex-col gap-1.5">
+            <div key={col} className="flex flex-col gap-2">
               {[0, 1, 2, 3].map(row => (
                 <motion.div
                   key={row}
-                  className="w-1.5 h-3 bg-foreground rounded-full"
+                  className="w-2 h-3 bg-foreground rounded-full"
                   animate={{ opacity: [0.35 - row * 0.07, 0.05, 0.35 - row * 0.07] }}
                   transition={{ repeat: Infinity, duration: 1.6, ease: 'easeInOut', delay: col * 0.15 + row * 0.05 }}
                 />
@@ -1174,7 +1174,7 @@ function LoaderSection({ section }: SectionProps) {
           ))}
         </div>
       </div>
-      {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-[180px]">{desc}</p>}
+      {desc && <p className="text-xs text-muted-foreground select-none text-center max-w-xs">{desc}</p>}
     </div>
   );
 }
@@ -1267,10 +1267,10 @@ function ModalSection({ section }: SectionProps) {
 
   return (
     <div className="w-full flex items-center justify-center">
-      <div className="bg-background border border-border rounded-xl w-[85%] max-w-[280px] shadow-lg overflow-hidden">
+      <div className="bg-background border border-border rounded-xl w-[85%] max-w-xs shadow-lg overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <span className="text-sm font-semibold text-foreground select-none">{section.label ?? 'Dialog'}</span>
-          <span className="text-xs text-muted-foreground select-none">✕</span>
+          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><X size={14} /></Button>
         </div>
         <div className="px-4 py-3 flex flex-col gap-2">
           {bodyItems.map((item, i) => <SmartItem key={i} label={item} />)}

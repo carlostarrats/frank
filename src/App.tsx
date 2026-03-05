@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, Component } from 'react';
 import type { ReactNode } from 'react';
 import { Pencil } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { useDaemonSocket } from './hooks/useDaemonSocket';
@@ -55,6 +55,17 @@ function useIdlePhrase() {
 export default function App() {
   const idlePhrase = useIdlePhrase();
   const { tabs, activeTab, activeTabId, setActiveTabId, addTab, closeTab, clearTabs } = useTabs();
+  const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
+
+  // WKWebView doesn't re-evaluate :hover until mouse moves after focus.
+  // Dispatching a synthetic mousemove on focus forces immediate re-evaluation.
+  useEffect(() => {
+    const onFocus = () => {
+      window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true }));
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   const handleMessage = useCallback(
     (msg: PanelMessage) => {
@@ -85,7 +96,7 @@ export default function App() {
         addTab(result.schema);
       }
 
-      getCurrentWebviewWindow().show().catch(() => {});
+      invoke('show_panel').catch(() => {});
     },
     [addTab, clearTabs]
   );
@@ -114,6 +125,9 @@ export default function App() {
                   ]
                     .filter(Boolean)
                     .join(' ')}
+                  style={hoveredTabId === tab.id && tab.id !== activeTabId ? { color: 'var(--text)', background: 'var(--tab-hover-bg)' } : undefined}
+                  onMouseEnter={() => setHoveredTabId(tab.id)}
+                  onMouseLeave={() => setHoveredTabId(null)}
                   onClick={() => setActiveTabId(tab.id)}
                   title={tab.label}
                 >
@@ -121,11 +135,6 @@ export default function App() {
                   <span key={tab.flashKey} className={`tab-label${tab.flashKey > 0 ? ' tab-label--flash' : ''}`}>
                     {tab.label}
                   </span>
-                  <span
-                    className="tab-close"
-                    onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
-                    aria-label="Close tab"
-                  >×</span>
                 </button>
               ))}
             </div>
@@ -141,7 +150,7 @@ export default function App() {
                   transition={{ duration: 0.08, ease: 'easeOut' }}
                   style={{ height: '100%' }}
                 >
-                  <TabContent tab={activeTab} onNavigate={handleNavigate} sendToDaemon={sendToDaemon} />
+                  <TabContent tab={activeTab} onNavigate={handleNavigate} sendToDaemon={sendToDaemon} closeTab={closeTab} />
                 </motion.div>
               ) : null}
             </AnimatePresence>
@@ -161,13 +170,18 @@ interface TabContentProps {
   tab: Tab;
   onNavigate: (screenLabel: string) => void;
   sendToDaemon: (msg: object) => void;
+  closeTab: (id: string) => void;
 }
 
-function TabContent({ tab, onNavigate, sendToDaemon }: TabContentProps) {
+function TabContent({ tab, onNavigate, sendToDaemon, closeTab }: TabContentProps) {
   const wireframeRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [confirmed, setConfirmed] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+
+  // JS-driven hover state — CSS :hover is unreliable in WKWebView with Accessory activation policy
+  const [pencilHov, setPencilHov] = useState(false);
+  const [dotsHov, setDotsHov] = useState(false);
 
   // Edit mode state
   const [editMode, setEditMode] = useState(false);
@@ -258,12 +272,23 @@ function TabContent({ tab, onNavigate, sendToDaemon }: TabContentProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <button
             className={`actions-toggle${editMode ? ' actions-toggle--active' : ''}`}
+            style={pencilHov && !editMode ? { background: 'var(--tab-hover-bg)' } : undefined}
+            onMouseEnter={() => setPencilHov(true)}
+            onMouseLeave={() => setPencilHov(false)}
             onClick={() => { setEditMode(m => !m); setEditSection(null); }}
             title={editMode ? 'Exit edit mode' : 'Edit a section'}
           >
             <Pencil size={13} />
           </button>
-          <button ref={buttonRef} className="actions-toggle" onClick={openMenu} title="Export options">
+          <button
+            ref={buttonRef}
+            className={`actions-toggle${menuPos ? ' actions-toggle--active' : ''}`}
+            style={dotsHov && !menuPos ? { background: 'var(--tab-hover-bg)' } : undefined}
+            onMouseEnter={() => setDotsHov(true)}
+            onMouseLeave={() => setDotsHov(false)}
+            onClick={menuPos ? closeMenu : openMenu}
+            title="Export options"
+          >
             {confirmed
               ? <span className="actions-toggle__confirmed">{confirmed}</span>
               : <span className="actions-toggle__dots" aria-hidden><span/><span/><span/></span>
@@ -306,6 +331,8 @@ function TabContent({ tab, onNavigate, sendToDaemon }: TabContentProps) {
             <button className="actions-menu__item" onClick={handleSaveMd}>Save .md</button>
             <div className="actions-menu__separator" />
             <button className="actions-menu__item" onClick={handleSavePng}>Save PNG</button>
+            <div className="actions-menu__separator" />
+            <button className="actions-menu__item actions-menu__item--destructive" onClick={() => { closeMenu(); closeTab(tab.id); }}>Close tab</button>
           </div>
         </>
       )}

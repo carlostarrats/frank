@@ -20,9 +20,10 @@
         "minWidth": 360,
         "minHeight": 500,
         "resizable": true,
-        "visible": true,
+        "visible": false,
         "titleBarStyle": "Transparent",
-        "hiddenTitle": true
+        "hiddenTitle": true,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

@@ -83,6 +83,7 @@ html, body, #root {
   background: var(--tab-bar-bg);
   flex-shrink: 0;
   overflow: hidden;
+  user-select: none;
 }
 
 .tab-bar-wrap::after {
@@ -164,36 +165,6 @@ html, body, #root {
   animation: tab-flash 0.7s ease-out forwards;
 }
 
-.tab-close {
-  display: none;
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  margin-left: 2px;
-  margin-right: -2px;
-  border-radius: 50%;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  line-height: 1;
-  color: var(--text-muted);
-}
-
-.tab:hover .tab-close,
-.tab--active .tab-close {
-  display: flex;
-}
-
-.tab-close:hover {
-  background: rgba(0, 0, 0, 0.1);
-  color: var(--text);
-}
-
-@media (prefers-color-scheme: dark) {
-  .tab-close:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-}
 
 /* Spinner shown in tab label while content is loading */
 @keyframes tab-spin {
@@ -235,6 +206,7 @@ html, body, #root {
   padding: 8px 12px;
   flex-shrink: 0;
   gap: 8px;
+  user-select: none;
 }
 
 .tab-content__meta {
@@ -279,12 +251,11 @@ html, body, #root {
 }
 
 .actions-toggle--active {
-  background: #18181b;
-  color: #fff;
+  background: var(--tab-hover-bg);
 }
 
 .actions-toggle--active:hover {
-  background: #18181b;
+  background: var(--tab-hover-bg);
 }
 
 .actions-toggle__dots {
@@ -300,10 +271,9 @@ html, body, #root {
   background: var(--text);
   opacity: 0.55;
   display: block;
-  transition: opacity 0.1s;
 }
 
-.actions-toggle:hover .actions-toggle__dots span {
+.actions-toggle--active .actions-toggle__dots span {
   opacity: 0.9;
 }
 
@@ -409,6 +379,15 @@ html, body, #root {
   margin: 4px 12px;
 }
 
+.actions-menu__item--destructive {
+  color: rgb(200, 30, 30);
+}
+
+.actions-menu__item--destructive:hover {
+  background: rgb(200, 30, 30);
+  color: #ffffff;
+}
+
 @media (prefers-color-scheme: dark) {
   .actions-menu {
     background: rgb(44, 44, 44);
@@ -426,5 +405,14 @@ html, body, #root {
 
   .actions-menu__separator {
     background: rgba(255, 255, 255, 0.1);
+  }
+
+  .actions-menu__item--destructive {
+    color: rgb(255, 100, 100);
+  }
+
+  .actions-menu__item--destructive:hover {
+    background: rgb(180, 30, 30);
+    color: #ffffff;
   }
 }
