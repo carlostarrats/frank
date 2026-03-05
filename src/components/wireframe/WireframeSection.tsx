@@ -29,9 +29,10 @@ interface SectionProps {
   onNavigate?: (screenLabel: string) => void;
   editMode?: boolean;
   onSectionClick?: () => void;
+  fill?: boolean;
 }
 
-export function WireframeSection({ section, screenLabel, platform, onNavigate, editMode, onSectionClick }: SectionProps) {
+export function WireframeSection({ section, screenLabel, platform, onNavigate, editMode, onSectionClick, fill }: SectionProps) {
   const hasNavigate = !!section.navigatesTo && !!onNavigate;
   const ringClass = hasNavigate ? 'ring-1 ring-blue-200' : '';
   const editClass = editMode ? 'cursor-pointer hover:ring-1 hover:ring-muted-foreground/30' : '';
@@ -44,11 +45,15 @@ export function WireframeSection({ section, screenLabel, platform, onNavigate, e
     }
   }
 
+  const fillStyle: React.CSSProperties = fill
+    ? { flex: '1 1 0', minHeight: 0, overflowY: 'auto' }
+    : {};
+
   return (
     <div
       className={`wf-section wf-section--${section.type} ${ringClass} ${editClass}`.trim()}
       onClick={(editMode || hasNavigate) ? handleClick : undefined}
-      style={(editMode || hasNavigate) ? { cursor: 'pointer' } : undefined}
+      style={{ ...fillStyle, ...((editMode || hasNavigate) ? { cursor: 'pointer' } : {}) }}
       data-prototype={hasNavigate ? 'true' : undefined}
     >
       {renderSection(section, screenLabel, platform, onNavigate)}

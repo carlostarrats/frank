@@ -73,19 +73,21 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 16px 48px rgba(0, 0, 0, 0.16);
 }
 
-/* Mobile — iPhone 15 / modern Android standard */
+/* Mobile — iPhone 15 logical height */
 .wf-device--mobile {
   width: 390px;
   margin: 0 auto;
+  min-height: 650px;
 }
 
-/* Tablet — iPad mini / standard tablet */
+/* Tablet — iPad Air */
 .wf-device--tablet {
   width: 744px;
   margin: 0 auto;
+  min-height: 960px;
 }
 
-/* Web / desktop — full panel width */
+/* Web / desktop — no fixed height, flows to content */
 .wf-device--web {
   width: 100%;
 }
