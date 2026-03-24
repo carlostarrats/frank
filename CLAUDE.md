@@ -3,9 +3,7 @@
 ## What This Is
 Terminal companion tool for Claude Code. Renders wireframes in a native Tauri panel from structured JSON schemas. Wireframes serve as visual sketches that become structural blueprints for real code.
 
-Open source, MIT, Mac-first v1.
-
-Full product proposal: `lookyloo-product-proposal.md`
+Open source, MIT, Mac-first v1. Progress tracked in `PROGRESS.md`.
 
 ---
 

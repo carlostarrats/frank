@@ -23,7 +23,7 @@ Frank started as "Looky Loo" — an open source terminal companion for developer
 
 **What changed:** Discovered [Arrow.js](https://github.com/standardagents/arrow-js) and its zero-dependency philosophy. Realized wireframes are static content — no framework needed. Rebuilt the entire frontend as plain JavaScript ES modules with no build step. Added a design-to-code workflow where wireframes become structural blueprints for real code generation. Renamed to Frank.
 
-Full original proposal: `lookyloo-product-proposal.md`
+The original proposal has been archived — its key points are captured above.
 
 ---
 
