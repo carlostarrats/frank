@@ -4,9 +4,32 @@ Last updated: 2026-03-23
 
 ---
 
-## What Frank is
+## Original vision (Looky Loo, Feb 2026)
 
-A terminal companion for Claude Code that renders wireframes in a native macOS panel. You talk to Claude about UI, Frank shows you the wireframe. You iterate visually, then tell Claude to build it for real.
+Frank started as "Looky Loo" — an open source terminal companion for developers working with AI coding assistants. The core problem: when working in Claude Code, visual output (layouts, screen designs, component structures) is described in text. Reading that text and mentally constructing the visual is slow and error-prone.
+
+**Original principles** (all still hold):
+- Zero friction — nothing to configure, it just works alongside your workflow
+- Zero cost — piggybacks on the existing AI session, no API calls
+- Zero data collection — reads only local files, nothing leaves the machine
+- Static only — renders snapshots, not interactive prototypes
+- Schema first — one schema drives the panel render and all exports
+- Mac first — ship tight for Mac, cross-platform later
+- Open source, always — not a business, a contribution
+
+**Original tech stack:** Tauri v2 + React + TypeScript + shadcn/Radix + Tailwind + Framer Motion + Vite. The React app was the entire frontend — rendering, tabs, schema validation, exports.
+
+**What was built in v1:** 30+ section renderers, tab system, Cmd+Shift+L hotkey, skeleton loading states, PNG export, edit overlay, file watcher daemon, CLAUDE.md injection. The core rendering worked well but the build pipeline (Vite + TypeScript + Tailwind + shadcn + Framer Motion) was heavy and fragile, and the project stalled.
+
+**What changed:** Discovered [Arrow.js](https://github.com/standardagents/arrow-js) and its zero-dependency philosophy. Realized wireframes are static content — no framework needed. Rebuilt the entire frontend as plain JavaScript ES modules with no build step. Added a design-to-code workflow where wireframes become structural blueprints for real code generation. Renamed to Frank.
+
+Full original proposal: `lookyloo-product-proposal.md`
+
+---
+
+## What Frank is now
+
+A terminal companion for Claude Code that renders wireframes in a native macOS panel. You talk to Claude about UI, Frank shows you the wireframe. You iterate visually, then tell Claude to build it for real. The wireframe schema becomes the structural blueprint for code generation.
 
 ---
 
