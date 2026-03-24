@@ -1,4 +1,4 @@
-<img width="684" height="644" alt="Screenshot 2026-03-04 at 7 24 21 PM" src="https://github.com/user-attachments/assets/ededc3d6-5d98-4cde-a06c-d7d0632eb0e7" />
+<img width="684" height="644" alt="Screenshot 2026-03-04 at 7 24 21 PM" src="https://github.com/user-attachments/assets/ededc3d6-5d98-4cde-a06c-d7d0632eb0e7" />
 
 
 # Frank
@@ -13,9 +13,9 @@
 
 ## What it does
 
-When you ask Claude Code to design a screen or flow, Frank intercepts the output, generates a structured layout schema, and renders it as a wireframe in a floating native panel alongside your terminal. Each screen becomes a tab. The panel stays out of your way until there's something to show.
+When you ask Claude Code to design a screen or flow, Frank renders a wireframe in a floating native panel alongside your terminal. You iterate visually — "move the chart above the table", "make it mobile", "add a sidebar" — and Frank re-renders instantly. When the layout is right, you tell Claude to build it, and Claude uses the wireframe schema as a structural blueprint to generate real components in your project.
 
-When the layout is right, you tell Claude to build it — and Claude uses the wireframe schema as a structural blueprint to generate real components in your project.
+Frank is the sketch layer. Wireframes are disposable — they communicate layout and content hierarchy. The real code happens in your actual project.
 
 ---
 
@@ -28,22 +28,48 @@ When the layout is right, you tell Claude to build it — and Claude uses the wi
 4. Build it          →  "Build this out in Next.js" — Claude uses the schema as the blueprint
 ```
 
-Frank is the sketch layer. The wireframes are disposable — they communicate layout and content hierarchy. The real code happens in your actual project.
+---
+
+## What it renders
+
+30+ section types with dedicated renderers:
+
+| Section | What it looks like |
+|---|---|
+| `header` | App bar — logo, nav links, search, user avatar |
+| `hero` | Large headline + subtext + CTA + optional image |
+| `stats-row` | KPI cards with label, value, and change badge |
+| `chart` | Line/bar chart with axis labels and time-period tabs |
+| `list` | Mobile list rows OR data table (auto-detected from content) |
+| `form` | Stacked form fields with labels |
+| `grid` | 2-column card grid |
+| `bottom-nav` | Mobile tab bar with icons |
+| `sidebar` | Vertical nav with grouped items |
+| `chat` | Message bubbles (sent/received) |
+| `empty-state` | Centered icon + headline + CTA |
+| `modal` | Overlay dialog |
+| `tabs` | Horizontal tab selector |
+| `pricing` | Pricing tier cards |
+| `footer` | Logo + links + copyright |
+| ...and more | `banner`, `toolbar`, `action-row`, `loader`, `map`, `onboarding`, `testimonial`, `gallery`, `feature-grid` |
+
+- Web platform renders full-width — no device frame
+- Mobile/tablet renders inside a device frame (iPhone/iPad dimensions)
+- Tab bar for navigating multiple screens
+- `Cmd+Shift+L` to show/hide the panel
 
 ---
 
-## What works
+## Design intelligence
 
-- Single screens and multi-screen flows render automatically as you work with Claude Code
-- Section types with dedicated renderers: `header` `hero` `content` `top-nav` `bottom-nav` `sidebar` `form` `list` `grid` `chart` `stats-row` `footer` `empty-state` `banner` `toolbar` `modal` `loader` and more
-- `list` sections with column headers render as data tables
-- `stats-row` sections with value/badge format render as KPI cards
-- `chart` sections render line charts with time-period tabs and axis labels
-- Web platform (`"platform": "web"`) renders in full-width desktop layout — no device frame
-- Mobile/tablet platforms render inside a device frame
-- Tab bar for navigating multiple screens
-- `Cmd+Shift+L` to show/hide the panel
-- Actions menu per tab: copy markdown, save PNG, close tab
+Frank doesn't just render schemas — it teaches Claude how to design. When Frank is running, Claude gets injected design knowledge:
+
+- **Section vocabulary** — what Frank can render and when to use each section type
+- **Contains syntax** — how to write content strings that render correctly (headlines, buttons, inputs, badges, toggles, charts, data tables)
+- **Design taste** — visual hierarchy, composition rules, proportion limits, platform-specific patterns
+- **Realistic content** — "$84,320" not "$X,XXX", "Sarah Johnson" not "User Name"
+
+This means Claude produces better wireframes out of the box — proper information hierarchy, appropriate section types, realistic data, and platform-aware layouts.
 
 ---
 
@@ -56,7 +82,7 @@ Claude Code writes schema → /tmp/frank/render-<timestamp>.json
          ↓
   WebSocket → Tauri panel (ws://localhost:42069)
          ↓
-  ArrowJS validates + renders wireframe
+  Plain JS validates + renders wireframe (<5ms)
 ```
 
 No network traffic. No API calls. Everything stays on your machine.
@@ -65,13 +91,15 @@ No network traffic. No API calls. Everything stays on your machine.
 
 | Layer | Technology |
 |---|---|
-| Companion panel | Tauri v2 (native macOS window) |
-| Panel UI | ArrowJS (~5KB, zero dependencies, no build step) |
-| Wireframe rendering | ArrowJS templates + plain CSS |
+| Companion panel | [Tauri v2](https://v2.tauri.app/) (native macOS window) |
+| Panel UI | Plain JavaScript ES modules — zero dependencies, zero build step |
+| Wireframe rendering | HTML string templates + plain CSS |
+| Icons | SVG icon functions inspired by [Lucide](https://lucide.dev/) |
 | Output interception | Claude Code hooks (file watcher daemon) |
 | Panel/daemon communication | WebSocket (localhost:42069) |
-| Export: image | DOM-to-PNG |
 | Distribution | Build from source (Homebrew planned) |
+
+The frontend was originally built with React + Vite + shadcn + Tailwind + Framer Motion. It was rebuilt as plain JavaScript with no framework, no bundler, and no build step — inspired by the philosophy of [Arrow.js](https://github.com/standardagents/arrow-js), a reactive UI library that proved zero-dependency frontends can be fast, simple, and maintainable. Arrow.js's approach to reactive templates without a build step directly influenced Frank's architecture pivot.
 
 ---
 
@@ -105,7 +133,7 @@ frank stop    # stops daemon, removes CLAUDE.md block
 
 ## Schema
 
-Frank renders from a typed JSON schema. Claude writes it; the panel consumes it.
+Frank renders from a JSON schema. Claude writes it; the panel consumes it.
 
 **Single screen:**
 
@@ -166,9 +194,9 @@ The wireframe schema is the bridge between visual design and real implementation
 1. **Sketch** — Ask Claude for a wireframe. Frank renders it instantly.
 2. **Iterate** — Refine the layout conversationally. Claude updates the schema, Frank re-renders.
 3. **Export** — Copy the schema as markdown or save as a file.
-4. **Build** — Tell Claude to build from the wireframe. Claude already knows the structure — it wrote the schema. It translates section types into real components (React, SwiftUI, whatever your stack is).
+4. **Build** — Tell Claude to build from the wireframe. Claude already knows the structure — it wrote the schema. It translates section types into real components for whatever stack you're using.
 
-The schema captures layout intent: what sections exist, what they contain, how they're arranged. Claude uses this as the structural blueprint, not a pixel-perfect spec.
+The schema captures layout intent — what sections exist, what they contain, how they're arranged. It's a structural blueprint, not a pixel-perfect spec.
 
 ---
 
@@ -183,11 +211,14 @@ The schema captures layout intent: what sections exist, what they contain, how t
 
 ## Development
 
-The frontend has no build step — ArrowJS templates are served directly to Tauri's webview.
+The frontend has no build step — plain JS files are served directly to Tauri's webview.
 
 ```bash
 # Serve the UI for browser testing (no Tauri needed)
 npx serve ui -p 8080
+
+# Test with sample wireframe
+open http://localhost:8080?test
 
 # Tauri dev with hot reload
 cargo tauri dev
@@ -200,25 +231,33 @@ cargo tauri build
 
 ```
 frank/
-├── ui/                   # ArrowJS frontend (no build step)
+├── ui/                   # Plain JS frontend (no build step, no dependencies)
 │   ├── index.html        # Entry point
-│   ├── app.js            # Main app: tabs, WebSocket, state
-│   ├── screen.js         # Device frame wrapper
-│   ├── sections.js       # 30+ section renderers
+│   ├── app.js            # Main app: tabs, WebSocket, state, actions menu
+│   ├── screen.js         # Device frame wrapper + chrome detection
+│   ├── sections.js       # 30+ section renderers (HTML string templates)
 │   ├── smart-item.js     # Item classification + rendering
-│   ├── icons.js          # SVG icon functions
+│   ├── icons.js          # 57 SVG icon functions
 │   ├── validate.js       # Schema validation
-│   └── style.css         # All styles (panel + wireframe + utilities)
+│   └── style.css         # All styles: panel chrome + wireframe tokens + utilities
 ├── daemon/               # Node.js CLI + file watcher
 │   ├── src/cli.ts        # frank start / frank stop
-│   ├── src/server.ts     # File watcher + WebSocket server
-│   └── src/inject.ts     # CLAUDE.md injection
-├── src-tauri/            # Tauri shell (minimal Rust)
-│   ├── src/lib.rs        # Window + hotkey (Cmd+Shift+L)
+│   ├── src/server.ts     # FSEvents watcher + WebSocket server
+│   └── src/inject.ts     # CLAUDE.md injection/removal
+├── src-tauri/            # Tauri shell (minimal Rust — infrastructure only)
+│   ├── src/lib.rs        # Window + hotkey (Cmd+Shift+L) + show/hide
 │   └── tauri.conf.json   # App configuration
 ├── CLAUDE.md
 └── package.json
 ```
+
+---
+
+## Credits
+
+- [Arrow.js](https://github.com/standardagents/arrow-js) by Standard Agents — the reactive UI framework whose zero-dependency, no-build-step philosophy directly inspired Frank's architecture. Arrow.js proved that modern UIs don't need heavyweight frameworks.
+- [Tauri](https://v2.tauri.app/) — native app shell
+- [Lucide](https://lucide.dev/) — icon paths used in the SVG icon system
 
 ---
 
