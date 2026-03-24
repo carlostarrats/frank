@@ -3,7 +3,7 @@
 
 # Frank
 
-> A terminal companion for Claude Code that renders wireframes as you design.
+> A terminal companion for Claude Code that renders wireframes as you design — then hands them off to become real code.
 
 **Status: Beta.** Core functionality works. Rough edges exist. Not ready for general use.
 
@@ -15,27 +15,63 @@
 
 When you ask Claude Code to design a screen or flow, Frank intercepts the output, generates a structured layout schema, and renders it as a wireframe in a floating native panel alongside your terminal. Each screen becomes a tab. The panel stays out of your way until there's something to show.
 
+When the layout is right, you tell Claude to build it — and Claude uses the wireframe schema as a structural blueprint to generate real components in your project.
+
+---
+
+## The workflow
+
+```
+1. Talk to Claude    →  "Design a dashboard with stats, a chart, and a recent orders table"
+2. Frank renders     →  Wireframe appears instantly in the companion panel
+3. Iterate visually  →  "Move the chart above the table" — Claude updates, Frank re-renders
+4. Build it          →  "Build this out in Next.js" — Claude uses the schema as the blueprint
+```
+
+Frank is the sketch layer. The wireframes are disposable — they communicate layout and content hierarchy. The real code happens in your actual project.
+
 ---
 
 ## What works
 
 - Single screens and multi-screen flows render automatically as you work with Claude Code
 - Section types with dedicated renderers: `header` `hero` `content` `top-nav` `bottom-nav` `sidebar` `form` `list` `grid` `chart` `stats-row` `footer` `empty-state` `banner` `toolbar` `modal` `loader` and more
-- `list` sections with column headers render as data tables (not mobile lists)
+- `list` sections with column headers render as data tables
 - `stats-row` sections with value/badge format render as KPI cards
 - `chart` sections render line charts with time-period tabs and axis labels
 - Web platform (`"platform": "web"`) renders in full-width desktop layout — no device frame
 - Mobile/tablet platforms render inside a device frame
 - Tab bar for navigating multiple screens
 - `Cmd+Shift+L` to show/hide the panel
-- Actions menu per tab: copy schema, export as PNG, export as HTML, save as HTML, close tab
+- Actions menu per tab: copy markdown, save PNG, close tab
 
-## What's known to be incomplete
+---
 
-- Colors appear in some renderers (status badges, chart lines) — should be black and white only
-- Build and deploy process is manual — `frank start` should be the only command ever needed
-- Renderer quality varies by section type — some sections look better than others
-- No Homebrew or npm package yet — build from source only
+## Architecture
+
+```
+Claude Code writes schema → /tmp/frank/render-<timestamp>.json
+         ↓
+  frank daemon watches /tmp/frank/ (FSEvents, ~10ms)
+         ↓
+  WebSocket → Tauri panel (ws://localhost:42069)
+         ↓
+  ArrowJS validates + renders wireframe
+```
+
+No network traffic. No API calls. Everything stays on your machine.
+
+### Tech stack
+
+| Layer | Technology |
+|---|---|
+| Companion panel | Tauri v2 (native macOS window) |
+| Panel UI | ArrowJS (~5KB, zero dependencies, no build step) |
+| Wireframe rendering | ArrowJS templates + plain CSS |
+| Output interception | Claude Code hooks (file watcher daemon) |
+| Panel/daemon communication | WebSocket (localhost:42069) |
+| Export: image | DOM-to-PNG |
+| Distribution | Build from source (Homebrew planned) |
 
 ---
 
@@ -45,11 +81,8 @@ When you ask Claude Code to design a screen or flow, Frank intercepts the output
 git clone https://github.com/carlostarrats/frank
 cd frank
 
-# Install dependencies
-npm install
-
 # Build and install the panel app
-npm run tauri build
+cargo tauri build
 cp -r src-tauri/target/release/bundle/macos/frank.app /Applications/frank.app
 
 # Build and install the daemon CLI
@@ -67,22 +100,6 @@ frank stop    # stops daemon, removes CLAUDE.md block
 ```
 
 `frank start` is the only command you should need. Open Claude Code, ask for a wireframe, it appears.
-
----
-
-## How it works
-
-```
-Claude Code writes schema → /tmp/frank/render-<timestamp>.json
-         ↓
-  frank daemon watches /tmp/frank/ (FSEvents, ~10ms)
-         ↓
-  WebSocket → Tauri panel (ws://localhost:42069)
-         ↓
-  React validates + renders wireframe
-```
-
-No network traffic. No API calls. Everything stays on your machine.
 
 ---
 
@@ -142,6 +159,19 @@ Frank renders from a typed JSON schema. Claude writes it; the panel consumes it.
 
 ---
 
+## Design to code
+
+The wireframe schema is the bridge between visual design and real implementation:
+
+1. **Sketch** — Ask Claude for a wireframe. Frank renders it instantly.
+2. **Iterate** — Refine the layout conversationally. Claude updates the schema, Frank re-renders.
+3. **Export** — Copy the schema as markdown or save as a file.
+4. **Build** — Tell Claude to build from the wireframe. Claude already knows the structure — it wrote the schema. It translates section types into real components (React, SwiftUI, whatever your stack is).
+
+The schema captures layout intent: what sections exist, what they contain, how they're arranged. Claude uses this as the structural blueprint, not a pixel-perfect spec.
+
+---
+
 ## Privacy
 
 - No data leaves your machine. Ever.
@@ -153,13 +183,42 @@ Frank renders from a typed JSON schema. Claude writes it; the panel consumes it.
 
 ## Development
 
+The frontend has no build step — ArrowJS templates are served directly to Tauri's webview.
+
 ```bash
-npm run dev          # frontend dev server
-npm run tauri dev    # Tauri dev with hot reload (fastest for renderer changes)
-npx tsc --noEmit     # type-check
+# Serve the UI for browser testing (no Tauri needed)
+npx serve ui -p 8080
+
+# Tauri dev with hot reload
+cargo tauri dev
+
+# Build for distribution
+cargo tauri build
 ```
 
-Renderer changes during development: use `npm run tauri dev` — hot reload means no rebuild needed. Only use `npm run tauri build` for distribution.
+### Project structure
+
+```
+frank/
+├── ui/                   # ArrowJS frontend (no build step)
+│   ├── index.html        # Entry point
+│   ├── app.js            # Main app: tabs, WebSocket, state
+│   ├── screen.js         # Device frame wrapper
+│   ├── sections.js       # 30+ section renderers
+│   ├── smart-item.js     # Item classification + rendering
+│   ├── icons.js          # SVG icon functions
+│   ├── validate.js       # Schema validation
+│   └── style.css         # All styles (panel + wireframe + utilities)
+├── daemon/               # Node.js CLI + file watcher
+│   ├── src/cli.ts        # frank start / frank stop
+│   ├── src/server.ts     # File watcher + WebSocket server
+│   └── src/inject.ts     # CLAUDE.md injection
+├── src-tauri/            # Tauri shell (minimal Rust)
+│   ├── src/lib.rs        # Window + hotkey (Cmd+Shift+L)
+│   └── tauri.conf.json   # App configuration
+├── CLAUDE.md
+└── package.json
+```
 
 ---
 

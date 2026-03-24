@@ -1,7 +1,7 @@
-# Looky Loo — Claude Code Context
+# Frank — Claude Code Context
 
 ## What This Is
-Terminal companion tool for Claude Code. Intercepts output via Claude Code hooks, classifies render-worthy content, generates a structured schema, and renders wireframes in a native Tauri panel.
+Terminal companion tool for Claude Code. Renders wireframes in a native Tauri panel from structured JSON schemas. Wireframes serve as visual sketches that become structural blueprints for real code.
 
 Open source, MIT, Mac-first v1.
 
@@ -22,8 +22,8 @@ Full product proposal: `lookyloo-product-proposal.md`
 - User never touches it manually
 
 ### Tauri Layer
-- **Thin shell only**: native window + local socket listener in Rust
-- All logic lives in React — rendering, tabs, schema, exports
+- **Thin shell only**: native window + hotkey in Rust
+- All logic lives in ArrowJS — rendering, tabs, schema, exports
 - Do not put application logic in Rust/Tauri. Treat it as infrastructure.
 
 ### Schema
@@ -32,6 +32,12 @@ Full product proposal: `lookyloo-product-proposal.md`
 - Schema is versioned from day one (`"schema": "v1"`)
 - Never render without a valid schema
 
+### ArrowJS Frontend
+- **No build step.** The `ui/` directory is served directly to Tauri's webview.
+- ArrowJS loaded from CDN (`https://esm.sh/@arrow-js/core`)
+- Plain JS ES modules — no TypeScript, no bundler, no transpilation
+- Plain CSS with custom properties — no Tailwind, no CSS-in-JS
+
 ---
 
 ## Tech Stack
@@ -39,51 +45,37 @@ Full product proposal: `lookyloo-product-proposal.md`
 | Layer | Technology |
 |---|---|
 | Companion panel | Tauri v2 (native macOS window) |
-| Panel UI | React + TypeScript + Shadcn/Radix |
-| Wireframe rendering | React components, React Flow for flows |
+| Panel UI | ArrowJS (~5KB, zero deps, no build step) |
+| Wireframe rendering | ArrowJS templates + plain CSS |
 | Output interception | Claude Code hooks system |
-| Panel/daemon communication | Local socket |
+| Panel/daemon communication | WebSocket (localhost:42069) |
 | Export: image | DOM-to-PNG |
-| Export: MCP | Dynamic detection of user's installed MCP servers |
-| Distribution | Homebrew (preferred) + npm |
+| Distribution | Build from source (Homebrew planned) |
 
 ---
 
 ## Project Structure
 
 ```
-lookyloo/
-├── src/                  # React frontend (all real logic lives here)
-│   ├── components/       # UI components (tabs, wireframe renderers, skeletons)
-│   ├── schema/           # Schema types and validation
-│   ├── hooks/            # React hooks
-│   └── exports/          # PNG, context copy, MCP export logic
-├── src-tauri/            # Tauri/Rust shell (keep minimal)
-│   ├── src/main.rs       # Entry point — window + socket listener only
-│   └── tauri.conf.json
-├── daemon/               # Claude Code hooks integration (Node)
+frank/
+├── ui/                   # ArrowJS frontend (no build step, served directly)
+│   ├── index.html        # Entry point — loads app.js as ES module
+│   ├── app.js            # Main app: reactive state, WebSocket, tabs, menus
+│   ├── screen.js         # Device frame wrapper + chrome detection
+│   ├── sections.js       # 30+ dedicated section renderers
+│   ├── smart-item.js     # SmartItem classifier + renderer (classify, displayLabel, smartItem)
+│   ├── icons.js          # SVG icon functions (replaces Lucide React)
+│   ├── validate.js       # Schema validation (port of validate.ts)
+│   └── style.css         # All styles: panel chrome + wireframe tokens + components + utilities
+├── daemon/               # Node.js CLI + file watcher
+│   ├── src/cli.ts        # frank start / frank stop
+│   ├── src/server.ts     # FSEvents watcher + WebSocket server
+│   └── src/inject.ts     # CLAUDE.md injection/removal
+├── src-tauri/            # Tauri shell (infrastructure only)
+│   ├── src/lib.rs        # Window + hotkey (Cmd+Shift+L) + show/hide
+│   └── tauri.conf.json   # App config
 └── CLAUDE.md
 ```
-
----
-
-## Build Order (follow this)
-
-1. Schema design and validation ← **current focus**
-2. Output interceptor (hooks-based daemon)
-3. Tauri panel shell + local socket listener
-4. Skeleton loading states
-5. Single screen wireframe renderer
-6. Tab system (labels + timestamps)
-7. Hide/show + hotkey
-8. Multi-screen flow support
-9. Skeleton → render crossfade
-10. PNG export
-11. Copy as context export
-12. MCP export (dynamic server detection)
-13. Text rendering (secondary)
-14. Empty/idle state rotating phrases
-15. README + demo gif
 
 ---
 
@@ -92,68 +84,96 @@ lookyloo/
 - **Schema first**: never build a renderer before the schema it consumes is defined
 - **Conservative classification**: render 5 things perfectly > attempt 20 and miss some
 - **No persistence**: session-scoped only, nothing written to disk between sessions
-- **No data leaves the machine**: no network calls except user-initiated MCP exports
+- **No data leaves the machine**: no network calls except user-initiated exports
 - **Static renders only**: no interaction, no hover states, no animation in wireframes
 - **No dock icon, no menu bar**: panel is invisible until there is something to render
+- **No build step**: the `ui/` directory must be servable as-is — no compilation, no bundling
 
 ---
 
 ## Coding Conventions
 
-- TypeScript strict mode
-- React functional components only, no class components
-- Shadcn/Radix for all UI primitives
-- Keep Rust surface area minimal — if logic can live in React, it lives in React
-- No external state management library in v1 (React state + context is sufficient)
+- Plain JavaScript ES modules (no TypeScript in the frontend)
+- ArrowJS `reactive()` for state, `html` tagged templates for DOM
+- Functions returning `html` templates (not classes, not components in the React sense)
+- SVG icons as string functions via `icon(name)` and `rawHtml()` helper
+- CSS custom properties for all design tokens
+- CSS utility classes in `style.css` for common layouts (flex, gap, padding, typography)
+- Keep Rust surface area minimal — if logic can live in JS, it lives in JS
 
 ---
 
-## Wireframe Renderer — Non-Negotiable Rules
+## Wireframe Renderer Rules
 
-These rules apply to every file under `src/components/wireframe/`. Violating them produces renders that look broken. No exceptions.
+These rules apply to every section renderer in `ui/sections.js`. Violating them produces renders that look broken. No exceptions.
 
-### Use shadcn components. Never reinvent them.
+### Use wireframe component classes. Never write raw styled divs.
 
 | Need | Use |
 |---|---|
-| Any button or icon button | `<Button>` — `variant="ghost" size="icon"` for icon-only |
-| Any text input | `<Input>` — never a custom `<div>` with a border |
-| Avatar / user photo | `<Avatar>` + `<AvatarFallback>` |
-| Card / contained block | `<Card>` + `<CardContent>` |
-| Divider / separator line | `<Separator>` |
-| Tag / chip / label | `<Badge>` |
+| Any button | `.wf-btn` — add `.wf-btn--outline` / `.wf-btn--ghost` / `.wf-btn--icon` |
+| Any text input | `.wf-input` — never a raw div with a border |
+| Avatar / user photo | `.wf-avatar` — add `.wf-avatar--sm` for small |
+| Card / contained block | `.wf-card` + `.wf-card__content` |
+| Divider / separator line | `.wf-separator` |
+| Tag / chip / label | `.wf-badge` |
+| Toggle switch | `.wf-switch` — add `.wf-switch--on` for checked |
+| Form label | `.wf-label` |
+| Image placeholder | `.wf-image-placeholder` |
 
-If you find yourself writing `<div className="border rounded px-3 ...">` for something interactive, stop — there is a shadcn component for it.
+### Typography — use the CSS utility classes.
 
-### Typography — Tailwind scale only. No arbitrary values.
+| Class | Size | For |
+|---|---|---|
+| `.text-xs` | 11px | Timestamps, captions, eyebrow labels |
+| `.text-sm` | 13px | Secondary text, meta info, badges |
+| `.text-base` | 14px | Primary body text, list items |
+| `.text-lg` | 16px | Section headings, card titles |
+| `.text-xl` | 18px | Screen titles |
+| `.text-2xl` | 24px | Hero headlines |
 
-| Use | For |
-|---|---|
-| `text-xs` | Timestamps, captions, eyebrow labels |
-| `text-sm` | Secondary text, meta info, badges |
-| `text-base` | Primary body text, list items, chat messages |
-| `text-lg` | Section headings, card titles |
-| `text-xl` | Screen titles |
-| `text-2xl`+ | Hero headlines |
+### Spacing — use gap/padding utility classes on the 4px grid.
 
-Never write `text-[13px]`, `text-[15px]`, or any bracket value. If a Tailwind scale step doesn't fit, use the nearest one — don't invent a custom size.
+Use `.gap-1` (4px) / `.gap-2` (8px) / `.gap-3` (12px) / `.gap-4` (16px) / `.gap-6` (24px).
+Use `.p-2` / `.p-3` / `.p-4` and `.px-*` / `.py-*` variants.
 
-### Spacing — Tailwind scale only. No half-steps.
+### Mobile device is a fixed viewport.
 
-Use `gap-1 / 2 / 3 / 4 / 6 / 8` and `p-1 / 2 / 3 / 4 / 6 / 8`.
-Never use `gap-2.5`, `py-3.5`, `px-2.5`, or any `.5` step that isn't on the 4px grid.
-
-Standard defaults:
-- Section horizontal padding: `px-4`
-- List row padding: `py-3 px-4`
-- Component internal gap: `gap-2` (tight) or `gap-3` (standard)
-- Section-level gap: `gap-4`
-
-### Mobile device is a fixed viewport — not a content wrapper.
-
-- Mobile device: `min-height: 650px`. Tablet: `min-height: 960px`.
-- `WireframeScreen` detects the first non-chrome section and gives it `flex: 1` so it fills the space between header and toolbar. This is how every real mobile app works.
+- Mobile: `min-height: 650px`. Tablet: `min-height: 960px`.
+- `screen.js` detects the first non-chrome section and gives it `flex: 1` to fill space.
 - Chrome sections: `header`, `top-nav`, `toolbar`, `bottom-nav`, `banner`
-- Fill sections: `list`, `content`, `chat`, `messages`, `form`, `grid`, `empty-state`
+- Fill sections: everything else (`list`, `content`, `chat`, `form`, `grid`, `empty-state`)
 
-Never remove `min-height` from device frames — it's not "extra space", it's a phone screen.
+### Icons — use the `icon()` and `rawHtml()` helpers.
+
+```js
+import { icon, headerIcon, navIcon } from './icons.js'
+import { rawHtml } from './smart-item.js'
+
+// In a template:
+html`<span>${rawHtml(icon('search', 16))}</span>`
+```
+
+Never inline raw SVG paths. Always use `icon(name, size)` from `icons.js`.
+
+---
+
+## Design-to-Code Workflow
+
+Frank's wireframes are not the final product — they're the sketch layer:
+
+1. **Sketch**: User asks Claude for a wireframe → Claude writes schema → Frank renders it
+2. **Iterate**: User refines layout conversationally → Claude updates schema → Frank re-renders
+3. **Build**: User says "build this" → Claude uses the schema as a structural blueprint → generates real components
+
+The schema captures layout intent (section types, content hierarchy, arrangement). Claude translates this into real code for whatever stack the user is working in.
+
+---
+
+## After fixing renderer code
+
+After any change to files in `ui/`:
+1. Run `cargo tauri build` in the frank project root
+2. Kill the running app: `osascript -e 'quit app "frank"' 2>/dev/null; sleep 0.5; kill -9 $(pgrep -f "frank.app/Contents/MacOS/frank") 2>/dev/null; sleep 0.3`
+3. Install: `cp -r src-tauri/target/release/bundle/macos/frank.app /Applications/frank.app`
+4. Tell the user: "Done — run `frank start`"
