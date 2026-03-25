@@ -3,6 +3,12 @@
 
 import { renderSection } from './sections.js'
 
+export const PLATFORM_DEFAULTS = {
+  mobile: { width: 390, height: 844 },
+  tablet: { width: 768, height: 1024 },
+  web: { width: 1440, height: 900 },
+};
+
 const CHROME = new Set(['header', 'top-nav', 'toolbar', 'bottom-nav', 'banner'])
 
 export function renderScreen(schema) {
@@ -14,6 +20,8 @@ export function renderScreen(schema) {
     : platform === 'web' ? 'web'
     : 'mobile'
 
+  const viewport = schema.viewport || PLATFORM_DEFAULTS[deviceClass] || PLATFORM_DEFAULTS.web;
+
   const hasChrome = platform !== 'web' && schema.sections.some(s => CHROME.has(s.type))
   const fillIdx = hasChrome ? schema.sections.findIndex(s => !CHROME.has(s.type)) : -1
 
@@ -24,5 +32,5 @@ export function renderScreen(schema) {
     return `<div ${fillStyle} class="wf-section wf-section--${section.type}">${content}</div>`
   }).join('')
 
-  return `<div class="wireframe"><div class="wf-device wf-device--${deviceClass}">${sectionHtml}</div></div>`
+  return `<div class="wireframe"><div class="wf-device wf-device--${deviceClass}" style="width:${viewport.width}px;min-height:${viewport.height}px">${sectionHtml}</div></div>`
 }

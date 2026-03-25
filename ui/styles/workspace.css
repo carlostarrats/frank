@@ -1,3 +1,30 @@
 .workspace { height: 100vh; display: flex; flex-direction: column; }
 .view { display: none; flex: 1; overflow: hidden; }
 .view.active { display: flex; flex-direction: column; }
+
+/* Canvas */
+.canvas {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 40px;
+}
+
+.canvas-viewport {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: auto;
+}
+
+.canvas-transform {
+  transition: transform 0.15s ease;
+}
+
+.canvas-content .wireframe {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.4);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
