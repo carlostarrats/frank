@@ -6,6 +6,7 @@ import { renderToolbar } from '../components/toolbar.js';
 import { renderComments } from '../components/comments.js';
 import projectManager from '../core/project.js';
 import undoManager from '../core/undo.js';
+import starsManager from '../core/stars.js';
 
 let currentCanvas = null;
 let currentToolbar = null;
@@ -63,7 +64,17 @@ export function renderEditor(container, { screenId, onBack }) {
         setupDragHandles(screenId);
       }
     },
-    onStar: () => { /* Task 12 */ },
+    onStar: () => {
+      const stars = starsManager.list(screenId);
+      if (stars.length === 0) {
+        // No stars — create one
+        starsManager.star(screenId);
+        currentToolbar.updateStarCount(starsManager.count(screenId));
+        return;
+      }
+      // Stars exist — show dropdown to create new or restore
+      showStarDropdown(screenId);
+    },
     onZoomFit: () => currentCanvas.fitToWindow(),
     onZoomIn: () => currentCanvas.zoomIn(),
     onZoomOut: () => currentCanvas.zoomOut(),
@@ -120,6 +131,85 @@ export function renderEditor(container, { screenId, onBack }) {
     statusEl.textContent = `Auto-saved · ${screenCount} screen${screenCount !== 1 ? 's' : ''}${noteCount > 0 ? ` · ${noteCount} note${noteCount !== 1 ? 's' : ''} pending` : ''}`;
   }
   updateStatus();
+}
+
+// Star dropdown
+function showStarDropdown(screenId) {
+  // Remove existing dropdown
+  document.querySelector('.star-dropdown')?.remove();
+
+  const stars = starsManager.list(screenId);
+  const starBtn = document.querySelector('.toolbar-star');
+  if (!starBtn) return;
+
+  const rect = starBtn.getBoundingClientRect();
+  const dropdown = document.createElement('div');
+  dropdown.className = 'star-dropdown';
+  dropdown.style.cssText = `position:fixed;top:${rect.bottom + 4}px;right:${window.innerWidth - rect.right}px;z-index:100;`;
+
+  dropdown.innerHTML = `
+    <div class="star-dropdown-inner">
+      <button class="star-dropdown-new">+ New Star</button>
+      <div class="star-dropdown-divider"></div>
+      ${stars.map((s, i) => `
+        <div class="star-dropdown-item" data-index="${i}">
+          <div class="star-dropdown-item-info">
+            <span class="star-dropdown-item-label">${escapeHtml(s.label)}</span>
+            <span class="star-dropdown-item-date">${new Date(s.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+          </div>
+          <div class="star-dropdown-item-actions">
+            <button class="star-restore" data-index="${i}" title="Restore">&#8617;</button>
+            <button class="star-delete" data-index="${i}" title="Delete">&times;</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.body.appendChild(dropdown);
+
+  // New star
+  dropdown.querySelector('.star-dropdown-new').addEventListener('click', () => {
+    starsManager.star(screenId);
+    currentToolbar.updateStarCount(starsManager.count(screenId));
+    dropdown.remove();
+  });
+
+  // Restore
+  dropdown.querySelectorAll('.star-restore').forEach(btn => {
+    btn.addEventListener('click', () => {
+      starsManager.restore(screenId, parseInt(btn.dataset.index));
+      currentCanvas.setContent(renderScreen(projectManager.getScreen(screenId)));
+      setupDragHandles(screenId);
+      currentToolbar.updateUndoState(undoManager.undoCount(screenId), undoManager.redoCount(screenId));
+      dropdown.remove();
+    });
+  });
+
+  // Delete
+  dropdown.querySelectorAll('.star-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      starsManager.remove(screenId, parseInt(btn.dataset.index));
+      currentToolbar.updateStarCount(starsManager.count(screenId));
+      dropdown.remove();
+    });
+  });
+
+  // Close on click outside
+  setTimeout(() => {
+    document.addEventListener('click', function close(e) {
+      if (!dropdown.contains(e.target) && e.target !== starBtn) {
+        dropdown.remove();
+        document.removeEventListener('click', close);
+      }
+    });
+  }, 0);
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 // Drag-to-reorder sections
