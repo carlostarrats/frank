@@ -3,6 +3,7 @@
 import { createCanvas } from '../components/canvas.js';
 import { renderScreen } from '../render/screen.js';
 import { renderToolbar } from '../components/toolbar.js';
+import { renderComments } from '../components/comments.js';
 import projectManager from '../core/project.js';
 
 let currentCanvas = null;
@@ -17,11 +18,7 @@ export function renderEditor(container, { screenId, onBack }) {
       <div class="editor-toolbar"></div>
       <div class="editor-body">
         <div class="editor-canvas-area"></div>
-        <div class="editor-comments">
-          <div class="comments-placeholder">
-            <p style="color:var(--text-muted);font-size:13px;padding:16px;">Comments panel — Task 10</p>
-          </div>
-        </div>
+        <div class="editor-comments"></div>
       </div>
       <div class="editor-status">Auto-saved · ${Object.keys(projectManager.get()?.screens || {}).length} screens</div>
     </div>
@@ -55,11 +52,50 @@ export function renderEditor(container, { screenId, onBack }) {
     starCount: screen.stars?.length || 0,
   });
 
+  // Comments panel
+  const commentsEl = container.querySelector('.editor-comments');
+
+  function refreshComments() {
+    const currentScreen = projectManager.getScreen(screenId);
+    renderComments(commentsEl, {
+      screen: currentScreen,
+      screenId,
+      authorName: 'You',
+      onApprove: (index) => {
+        const notes = [...(currentScreen.notes || [])];
+        if (notes[index]) {
+          notes[index] = { ...notes[index], status: 'approved' };
+          projectManager.updateScreen(screenId, { notes });
+          refreshComments();
+          updateStatus();
+        }
+      },
+      onDismiss: (index) => {
+        const notes = [...(currentScreen.notes || [])];
+        if (notes[index]) {
+          notes[index] = { ...notes[index], status: 'dismissed' };
+          projectManager.updateScreen(screenId, { notes });
+          refreshComments();
+          updateStatus();
+        }
+      },
+      onAddNote: (note) => {
+        const notes = [...(currentScreen.notes || []), note];
+        projectManager.updateScreen(screenId, { notes });
+        refreshComments();
+        updateStatus();
+      },
+    });
+  }
+
+  refreshComments();
+
   // Update status
   function updateStatus() {
     const statusEl = container.querySelector('.editor-status');
+    const currentScreen = projectManager.getScreen(screenId);
     const screenCount = Object.keys(projectManager.get()?.screens || {}).length;
-    const noteCount = (screen.notes || []).filter(n => !n.status).length;
+    const noteCount = (currentScreen.notes || []).filter(n => !n.status).length;
     statusEl.textContent = `Auto-saved · ${screenCount} screen${screenCount !== 1 ? 's' : ''}${noteCount > 0 ? ` · ${noteCount} note${noteCount !== 1 ? 's' : ''} pending` : ''}`;
   }
   updateStatus();
