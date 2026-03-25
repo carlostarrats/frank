@@ -3,6 +3,7 @@ import sync from './core/sync.js';
 import projectManager from './core/project.js';
 import { renderHome } from './views/home.js';
 import { renderGallery } from './views/gallery.js';
+import { renderEditor } from './views/editor.js';
 
 const state = {
   currentView: 'home',
@@ -15,6 +16,13 @@ function switchView(view, params = {}) {
   const el = document.getElementById(`view-${view}`);
   if (el) el.classList.add('active');
   state.currentView = view;
+
+  if (view === 'editor') {
+    renderEditor(document.getElementById('view-editor'), {
+      screenId: state.activeScreenId,
+      onBack: () => switchView('gallery'),
+    });
+  }
 
   if (view === 'gallery') {
     renderGallery(document.getElementById('view-gallery'), {
