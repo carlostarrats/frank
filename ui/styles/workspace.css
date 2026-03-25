@@ -509,3 +509,12 @@
   color: #fff;
   border-color: var(--accent);
 }
+
+/* Drag to reorder */
+.wf-section.dragging {
+  opacity: 0.4;
+}
+
+.drag-handle:hover {
+  color: var(--accent) !important;
+}
