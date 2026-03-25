@@ -11,9 +11,38 @@ export interface ClearMessage {
   type: 'clear';
 }
 
-export type PanelMessage = RenderMessage | ClearMessage;
+// ─── App → Daemon (WebSocket) ─────────────────────────────────────────────
+
+export interface ListProjectsRequest { type: 'list-projects'; requestId?: number; }
+export interface LoadProjectRequest { type: 'load-project'; filePath: string; requestId?: number; }
+export interface SaveProjectRequest { type: 'save-project'; project: unknown; requestId?: number; }
+export interface CreateProjectRequest { type: 'create-project'; label: string; requestId?: number; }
+export interface ArchiveProjectRequest { type: 'archive-project'; filePath: string; requestId?: number; }
+export interface ProjectChangedMessage { type: 'project-changed'; filePath: string; }
+
+export type AppMessage =
+  | ListProjectsRequest
+  | LoadProjectRequest
+  | SaveProjectRequest
+  | CreateProjectRequest
+  | ArchiveProjectRequest
+  | ProjectChangedMessage
+  | { type: 'inject'; prompt: string };
+
+// ─── Daemon → App (WebSocket) ─────────────────────────────────────────────
+
+export interface ProjectUpdatedMessage {
+  type: 'project-updated';
+  project: unknown;
+  filePath: string;
+}
+
+export type PanelMessage = RenderMessage | ClearMessage | ProjectUpdatedMessage;
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
+
+export const PROJECTS_DIR = `${process.env.HOME}/Documents/Frank`;
+export const ARCHIVE_DIR = `${process.env.HOME}/Documents/Frank/.archive`;
 
 export const WEBSOCKET_PORT = 42069;
 export const SCHEMA_DIR = '/tmp/frank';

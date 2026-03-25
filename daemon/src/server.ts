@@ -9,10 +9,12 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
-import { WEBSOCKET_PORT, SCHEMA_DIR, type PanelMessage } from './protocol.js';
+import { WEBSOCKET_PORT, SCHEMA_DIR, type PanelMessage, type AppMessage } from './protocol.js';
+import { listProjects, loadProject, saveProject, createProject, archiveProject, getGitUserName } from './projects.js';
 
 const panelClients = new Set<WebSocket>();
 let lastSchema: unknown = null;
+let activeProjectPath: string | null = null;
 
 // ─── Default design tokens (shadcn/ui zinc palette) ───────────────────────────
 // Auto-injected into every schema so downstream tools have exact values.
@@ -146,7 +148,67 @@ function startWebSocketServer(): void {
 
     ws.on('message', (data) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type: string; prompt?: string };
+        const msg = JSON.parse(data.toString()) as AppMessage;
+
+        if (msg.type === 'list-projects') {
+          try {
+            const projects = listProjects();
+            ws.send(JSON.stringify({ requestId: msg.requestId, projects }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'load-project') {
+          try {
+            const project = loadProject(msg.filePath);
+            activeProjectPath = msg.filePath;
+            ws.send(JSON.stringify({ requestId: msg.requestId, project, filePath: msg.filePath }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'save-project') {
+          try {
+            const filePath = saveProject(msg.project as Record<string, unknown>);
+            ws.send(JSON.stringify({ requestId: msg.requestId, success: true, filePath }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, success: false, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'create-project') {
+          try {
+            const { project, filePath } = createProject(msg.label);
+            activeProjectPath = filePath;
+            ws.send(JSON.stringify({ requestId: msg.requestId, project, filePath }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'archive-project') {
+          try {
+            archiveProject(msg.filePath);
+            if (activeProjectPath === msg.filePath) activeProjectPath = null;
+            ws.send(JSON.stringify({ requestId: msg.requestId, success: true }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, success: false, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'project-changed') {
+          activeProjectPath = msg.filePath || null;
+          console.log(`[frank] active project: ${activeProjectPath}`);
+          return;
+        }
+
         if (msg.type === 'inject' && typeof msg.prompt === 'string') {
           applyEdit(msg.prompt);
         }
