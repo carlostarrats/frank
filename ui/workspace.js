@@ -1,4 +1,5 @@
 // workspace.js — App shell: view router, state management
+import sync from './core/sync.js';
 
 const state = {
   currentView: 'home',
@@ -22,6 +23,7 @@ function init() {
       <div id="view-editor" class="view"></div>
     </div>
   `;
+  sync.connect();
   switchView('home');
 }
 
