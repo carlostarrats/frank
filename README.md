@@ -3,7 +3,7 @@
 
 # Frank
 
-> A terminal companion for Claude Code that renders wireframes as you design — then hands them off to become real code.
+> The prototype layer between conversation and code. AI generates wireframes, you iterate visually, share for feedback, and hand off to become real code.
 
 **Status: Beta.** Core functionality works. Rough edges exist. Not ready for general use.
 
@@ -11,11 +11,24 @@
 
 ---
 
+## Who this is for
+
+Designers and makers who work in code. If you use AI coding assistants to build UI, Frank gives you:
+
+- **Instant preview** — see your layout alongside the terminal without publishing, deploying, or opening a design tool
+- **Interactive iteration** — drag sections, try different layouts, save what works
+- **Shareable prototypes** — send a link, get feedback from teammates or clients in the browser, no app needed
+- **Code handoff** — when the design is right, the schema becomes the blueprint the AI builds from
+
+## The gap
+
+There's no tool where an AI generates a visual prototype, you iterate on it interactively, share it for team feedback, and then hand it off as a code blueprint. Figma requires design skills. Excalidraw has no prototyping or AI generation. v0 goes straight from prompt to code with no shared visual artifact in between. Frank sits in the middle — the iteration and alignment step that doesn't exist anywhere else.
+
+---
+
 ## What it does
 
 When you ask Claude Code to design a screen or flow, Frank renders a wireframe in a floating native panel alongside your terminal. You iterate visually — "move the chart above the table", "make it mobile", "add a sidebar" — and Frank re-renders instantly. When the layout is right, you tell Claude to build it, and Claude uses the wireframe schema as a structural blueprint to generate real components in your project.
-
-Frank is the sketch layer. Wireframes are disposable — they communicate layout and content hierarchy. The real code happens in your actual project.
 
 ---
 
