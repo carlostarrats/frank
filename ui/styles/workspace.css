@@ -1,0 +1,3 @@
+.workspace { height: 100vh; display: flex; flex-direction: column; }
+.view { display: none; flex: 1; overflow: hidden; }
+.view.active { display: flex; flex-direction: column; }
