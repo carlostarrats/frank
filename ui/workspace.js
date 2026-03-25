@@ -1,5 +1,7 @@
 // workspace.js — App shell: view router, state management
 import sync from './core/sync.js';
+import projectManager from './core/project.js';
+import { renderHome } from './views/home.js';
 
 const state = {
   currentView: 'home',
@@ -24,6 +26,35 @@ function init() {
     </div>
   `;
   sync.connect();
+
+  const homeContainer = document.getElementById('view-home');
+  renderHome(homeContainer, {
+    async onOpenProject(path) {
+      try {
+        const { project, filePath } = await sync.loadProject(path);
+        if (project) {
+          projectManager.load(project, filePath);
+          sync.setActiveProject(filePath);
+          switchView('gallery');
+        }
+      } catch (e) {
+        console.warn('[workspace] failed to open project:', e.message);
+      }
+    },
+    async onCreateProject(label) {
+      try {
+        const { project, filePath } = await sync.createProject(label);
+        if (project && filePath) {
+          projectManager.load(project, filePath);
+          sync.setActiveProject(filePath);
+          switchView('gallery');
+        }
+      } catch (e) {
+        console.warn('[workspace] failed to create project:', e.message);
+      }
+    },
+  });
+
   switchView('home');
 }
 

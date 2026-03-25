@@ -28,3 +28,86 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
+
+/* Home view */
+.home {
+  padding: 48px;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.home-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.home-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.home-new-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.home-new-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.home-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-project-card {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.home-project-card:hover {
+  border-color: var(--accent);
+}
+
+.home-project-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-project-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.home-project-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.home-empty {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 48px 0;
+}

@@ -75,7 +75,7 @@ const sync = {
 
   async loadProject(filePath) {
     const res = await request({ type: 'load-project', filePath });
-    return res.project || null;
+    return { project: res.project || null, filePath: res.filePath || filePath };
   },
 
   async saveProject(project) {
@@ -85,7 +85,7 @@ const sync = {
 
   async createProject(label) {
     const res = await request({ type: 'create-project', label });
-    return res.project || null;
+    return { project: res.project || null, filePath: res.filePath || null };
   },
 
   async archiveProject(filePath) {
