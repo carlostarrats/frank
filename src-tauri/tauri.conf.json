@@ -4,10 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.frank.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "frontendDist": "../ui"
   },
   "app": {
     "macOSPrivateApi": false,
@@ -15,10 +14,10 @@
       {
         "label": "main",
         "title": "Frank",
-        "width": 440,
-        "height": 760,
-        "minWidth": 360,
-        "minHeight": 500,
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
         "resizable": true,
         "visible": false,
         "titleBarStyle": "Transparent",
