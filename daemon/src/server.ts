@@ -18,6 +18,7 @@ const __dirname = path.dirname(__filename);
 const UI_DIR = path.resolve(__dirname, '../../ui');
 import { listProjects, loadProject, saveProject, createProject, archiveProject, mergeScreenIntoProject, getGitUserName } from './projects.js';
 import { updateInjectionProjectPath } from './inject.js';
+import { createShare, getShare, addNote } from './shares.js';
 
 const panelClients = new Set<WebSocket>();
 let lastSchema: unknown = null;
@@ -185,8 +186,76 @@ const MIME_TYPES: Record<string, string> = {
   '.ico':  'image/x-icon',
 };
 
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (chunk: Buffer) => body += chunk.toString());
+    req.on('end', () => resolve(body));
+  });
+}
+
 function startHttpServer(): void {
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
+    // CORS headers for all responses
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Handle OPTIONS preflight
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    // API routes
+    const url = new URL(req.url || '/', `http://localhost`);
+
+    if (url.pathname === '/api/share' && req.method === 'POST') {
+      try {
+        const body = JSON.parse(await readBody(req));
+        const result = createShare(body.project, body.coverNote || '', body.oldRevokeToken, body.oldShareId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (e: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    if (url.pathname.startsWith('/api/share/') && req.method === 'GET') {
+      const shareId = url.pathname.split('/api/share/')[1];
+      if (shareId) {
+        const result = getShare(shareId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } else {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'missing share id' }));
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/note' && req.method === 'POST') {
+      try {
+        const body = JSON.parse(await readBody(req));
+        const result = addNote(body.shareId, {
+          screenId: body.screenId,
+          section: body.section ?? null,
+          author: body.author,
+          text: body.text,
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (e: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // Static file serving
     let urlPath = req.url?.split('?')[0] || '/';
     if (urlPath === '/') urlPath = '/index.html';
 

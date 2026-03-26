@@ -37,7 +37,13 @@ export interface ProjectUpdatedMessage {
   filePath: string;
 }
 
-export type PanelMessage = RenderMessage | ClearMessage | ProjectUpdatedMessage;
+export interface NotesUpdatedMessage {
+  type: 'notes-updated';
+  screenId: string;
+  notes: Array<{ id: string; author: string; screenId: string; section: number | null; text: string; ts: string }>;
+}
+
+export type PanelMessage = RenderMessage | ClearMessage | ProjectUpdatedMessage | NotesUpdatedMessage;
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
