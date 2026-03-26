@@ -42,7 +42,7 @@ export function renderToolbar(container, options) {
         <button class="toolbar-btn toolbar-zoom-in" title="Zoom in">+</button>
         <button class="toolbar-btn toolbar-zoom-100" title="100%">1:1</button>
         <div class="toolbar-separator"></div>
-        <button class="toolbar-btn toolbar-share" title="Share">Share</button>
+        <button class="toolbar-btn toolbar-share" title="Share">Share${activeShare?.unseenNotes > 0 ? ` <span class="toolbar-badge">${activeShare.unseenNotes}</span>` : ''}</button>
       </div>
     </div>
   `;

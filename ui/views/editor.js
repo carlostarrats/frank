@@ -172,6 +172,25 @@ export function renderEditor(container, { screenId, onBack }) {
   }
 
   refreshComments();
+
+  // Mark notes as seen when viewing comments
+  const activeShare = projectManager.getActiveShare();
+  if (activeShare && activeShare.unseenNotes > 0) {
+    projectManager.updateActiveShare({ ...activeShare, unseenNotes: 0 });
+  }
+
+  // Listen for synced notes from daemon
+  sync.onNotesUpdated((msg) => {
+    if (msg.screenId === screenId) {
+      refreshComments();
+    }
+    // Mark as seen immediately since user is viewing comments
+    const share = projectManager.getActiveShare();
+    if (share && share.unseenNotes > 0) {
+      projectManager.updateActiveShare({ ...share, unseenNotes: 0 });
+    }
+  });
+
   setupSectionSelection(screenId, refreshComments);
 
   // Update status

@@ -6,7 +6,7 @@ export function ensureProjectsDir(): void {
   fs.mkdirSync(PROJECTS_DIR, { recursive: true });
 }
 
-export function listProjects(): Array<{ label: string; filePath: string; modifiedAt: string; screenCount: number }> {
+export function listProjects(): Array<{ label: string; filePath: string; modifiedAt: string; screenCount: number; unseenNotes: number }> {
   ensureProjectsDir();
   const files = fs.readdirSync(PROJECTS_DIR).filter(f => f.endsWith('.frank.json'));
   return files.map(f => {
@@ -19,9 +19,10 @@ export function listProjects(): Array<{ label: string; filePath: string; modifie
         filePath,
         modifiedAt: stat.mtime.toISOString(),
         screenCount: content.screenOrder ? content.screenOrder.length : 0,
+        unseenNotes: content.activeShare?.unseenNotes || 0,
       };
     } catch {
-      return { label: f.replace('.frank.json', ''), filePath, modifiedAt: '', screenCount: 0 };
+      return { label: f.replace('.frank.json', ''), filePath, modifiedAt: '', screenCount: 0, unseenNotes: 0 };
     }
   });
 }

@@ -59,7 +59,7 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
         <div class="home-project-card" data-path="${encodeURIComponent(p.filePath)}">
           <div class="home-project-info">
             <span class="home-project-label">${escapeHtml(p.label)}</span>
-            <span class="home-project-meta">${p.screenCount} screen${p.screenCount !== 1 ? 's' : ''} · ${formatDate(p.modifiedAt)}</span>
+            <span class="home-project-meta">${p.screenCount} screen${p.screenCount !== 1 ? 's' : ''} · ${formatDate(p.modifiedAt)}${p.unseenNotes > 0 ? ` <span class="home-badge">${p.unseenNotes} new</span>` : ''}</span>
           </div>
         </div>
       `).join('');
