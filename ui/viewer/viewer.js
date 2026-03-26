@@ -6,6 +6,7 @@ const shareId = params.get('id');
 let shareData = null;
 let currentScreenIndex = 0;
 let screens = [];
+let selectedViewerSection = null;
 
 async function init() {
   const app = document.getElementById('viewer-app');
@@ -139,6 +140,9 @@ function renderCurrentScreen() {
 
   // Render comments for this screen
   renderComments();
+
+  // Set up section click handlers
+  setupViewerSectionClicks();
 }
 
 function renderComments() {
@@ -183,6 +187,122 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = String(text);
   return div.innerHTML;
+}
+
+function getAuthorName() {
+  return localStorage.getItem('frank-reviewer-name') || '';
+}
+
+function setAuthorName(name) {
+  localStorage.setItem('frank-reviewer-name', name);
+}
+
+function setupViewerSectionClicks() {
+  const wireframeEl = document.getElementById('viewer-wireframe');
+  const sectionEls = wireframeEl.querySelectorAll('[data-section-index]');
+
+  sectionEls.forEach(section => {
+    const idx = parseInt(section.dataset.sectionIndex);
+    section.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sectionEls.forEach(s => s.classList.remove('section-selected'));
+      section.classList.add('section-selected');
+      selectedViewerSection = idx;
+      showCommentForm();
+    });
+  });
+
+  // Click background to deselect
+  wireframeEl.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-section-index]')) {
+      sectionEls.forEach(s => s.classList.remove('section-selected'));
+      selectedViewerSection = null;
+      renderComments();
+    }
+  });
+}
+
+function showCommentForm() {
+  const addCommentEl = document.getElementById('viewer-add-comment');
+  if (!addCommentEl) return;
+
+  const authorName = getAuthorName();
+  const sectionType = getSectionType(selectedViewerSection);
+
+  addCommentEl.innerHTML = `
+    <div class="viewer-form">
+      <div class="viewer-form-label">Comment on ${escapeHtml(sectionType)}</div>
+      ${!authorName ? `
+        <input class="viewer-form-name" type="text" placeholder="Your name" autofocus>
+      ` : `
+        <div class="viewer-form-author">Commenting as ${escapeHtml(authorName)}</div>
+      `}
+      <textarea class="viewer-form-text" placeholder="Add your feedback..." rows="3"${authorName ? ' autofocus' : ''}></textarea>
+      <div class="viewer-prompts">
+        <button class="viewer-prompt-btn" data-prompt="How does this feel?">How does this feel?</button>
+        <button class="viewer-prompt-btn" data-prompt="What's missing?">What's missing?</button>
+        <button class="viewer-prompt-btn" data-prompt="What would you change?">What would you change?</button>
+      </div>
+      <button class="viewer-form-submit">Submit</button>
+    </div>
+  `;
+
+  // Guided prompts
+  addCommentEl.querySelectorAll('.viewer-prompt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const textarea = addCommentEl.querySelector('.viewer-form-text');
+      textarea.value = btn.dataset.prompt + ' ';
+      textarea.focus();
+    });
+  });
+
+  // Submit
+  addCommentEl.querySelector('.viewer-form-submit').addEventListener('click', async () => {
+    const nameInput = addCommentEl.querySelector('.viewer-form-name');
+    const textarea = addCommentEl.querySelector('.viewer-form-text');
+
+    let author = authorName;
+    if (nameInput) {
+      author = nameInput.value.trim();
+      if (!author) { nameInput.focus(); return; }
+      setAuthorName(author);
+    }
+
+    const text = textarea.value.trim();
+    if (!text) { textarea.focus(); return; }
+
+    try {
+      const res = await fetch('/api/note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shareId,
+          screenId: screens[currentScreenIndex].id,
+          section: selectedViewerSection,
+          author,
+          text,
+        }),
+      });
+      const result = await res.json();
+      if (result.note) {
+        shareData.notes.push(result.note);
+        renderComments();
+        showCommentForm();
+      }
+    } catch (e) {
+      console.warn('Failed to submit note:', e);
+    }
+  });
+
+  // Cmd+Enter to submit
+  const textarea = addCommentEl.querySelector('.viewer-form-text');
+  if (textarea) {
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        addCommentEl.querySelector('.viewer-form-submit')?.click();
+      }
+    });
+  }
 }
 
 init();
