@@ -7,6 +7,7 @@ import { renderComments } from '../components/comments.js';
 import projectManager from '../core/project.js';
 import undoManager from '../core/undo.js';
 import starsManager from '../core/stars.js';
+import sync from '../core/sync.js';
 
 let currentCanvas = null;
 let currentToolbar = null;
@@ -77,6 +78,46 @@ export function renderEditor(container, { screenId, onBack }) {
       // Stars exist — show dropdown to create new or restore
       showStarDropdown(screenId);
     },
+    onShare: async ({ action, coverNote }) => {
+      const project = projectManager.get();
+      const activeShare = projectManager.getActiveShare();
+
+      if (action === 'create') {
+        const result = await sync.createShare(project, coverNote);
+        if (result.shareId) {
+          const share = {
+            id: result.shareId,
+            revokeToken: result.revokeToken,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            coverNote: coverNote || '',
+            lastSyncedNoteId: null,
+            unseenNotes: 0,
+          };
+          projectManager.updateActiveShare(share);
+          currentToolbar.updateShareState(share);
+          try { await navigator.clipboard.writeText(`http://localhost:42068${result.url}`); } catch (e) { /* ignore */ }
+        }
+      }
+
+      if (action === 'update') {
+        const result = await sync.createShare(project, coverNote, activeShare?.revokeToken, activeShare?.id);
+        if (result.shareId) {
+          const share = {
+            id: result.shareId,
+            revokeToken: result.revokeToken,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            coverNote: coverNote || '',
+            lastSyncedNoteId: null,
+            unseenNotes: 0,
+          };
+          projectManager.updateActiveShare(share);
+          currentToolbar.updateShareState(share);
+          try { await navigator.clipboard.writeText(`http://localhost:42068${result.url}`); } catch (e) { /* ignore */ }
+        }
+      }
+    },
     onZoomFit: () => currentCanvas.fitToWindow(),
     onZoomIn: () => currentCanvas.zoomIn(),
     onZoomOut: () => currentCanvas.zoomOut(),
@@ -84,6 +125,7 @@ export function renderEditor(container, { screenId, onBack }) {
     undoCount: undoManager.undoCount(screenId),
     redoCount: undoManager.redoCount(screenId),
     starCount: screen.stars?.length || 0,
+    activeShare: projectManager.getActiveShare(),
   });
 
   // Comments panel

@@ -5,6 +5,7 @@ let ws = null;
 let pendingRequests = new Map();
 let requestId = 0;
 let onProjectUpdate = null;
+let onNotesUpdated = null;
 let readyCallback = null;
 let errorCallback = null;
 let isConnected = false;
@@ -53,6 +54,9 @@ function connect() {
       }
       if (msg.type === 'render' && onProjectUpdate) {
         onProjectUpdate(msg);
+      }
+      if (msg.type === 'notes-updated' && onNotesUpdated) {
+        onNotesUpdated(msg);
       }
     } catch (e) {
       console.warn('[sync] message parse error:', e);
@@ -103,6 +107,7 @@ async function request(msg) {
 const sync = {
   connect,
   onProjectUpdate(cb) { onProjectUpdate = cb; },
+  onNotesUpdated(cb) { onNotesUpdated = cb; },
   onReady(cb) { readyCallback = cb; },
   onError(cb) { errorCallback = cb; },
 
@@ -133,6 +138,18 @@ const sync = {
 
   setActiveProject(filePath) {
     send({ type: 'project-changed', filePath });
+  },
+
+  async createShare(project, coverNote, oldRevokeToken, oldShareId) {
+    const body = { project, coverNote };
+    if (oldRevokeToken) body.oldRevokeToken = oldRevokeToken;
+    if (oldShareId) body.oldShareId = oldShareId;
+    const res = await fetch('/api/share', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
   },
 };
 

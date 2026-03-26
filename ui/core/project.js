@@ -107,6 +107,16 @@ const projectManager = {
       ...project.screens[id],
     })).filter(s => s.sections);
   },
+
+  updateActiveShare(share) {
+    if (!project) return;
+    project.activeShare = share;
+    this.save();
+  },
+
+  getActiveShare() {
+    return project?.activeShare || null;
+  },
 };
 
 export default projectManager;

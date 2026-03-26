@@ -12,7 +12,7 @@ const PRESETS = [
 ];
 
 export function renderToolbar(container, options) {
-  const { screen, screenId, onBack, onViewportChange, onUndo, onRedo, onStar, onZoomFit, onZoomIn, onZoomOut, onZoomReset, undoCount, redoCount, starCount } = options;
+  const { screen, screenId, onBack, onViewportChange, onUndo, onRedo, onStar, onShare, onZoomFit, onZoomIn, onZoomOut, onZoomReset, undoCount, redoCount, starCount, activeShare } = options;
 
   const viewport = screen.viewport || PLATFORM_DEFAULTS[screen.platform] || PLATFORM_DEFAULTS.web;
   const currentPreset = PRESETS.find(p => p.width === viewport.width && p.height === viewport.height);
@@ -42,7 +42,7 @@ export function renderToolbar(container, options) {
         <button class="toolbar-btn toolbar-zoom-in" title="Zoom in">+</button>
         <button class="toolbar-btn toolbar-zoom-100" title="100%">1:1</button>
         <div class="toolbar-separator"></div>
-        <button class="toolbar-btn toolbar-share" title="Share" disabled>Share</button>
+        <button class="toolbar-btn toolbar-share" title="Share">Share</button>
       </div>
     </div>
   `;
@@ -115,6 +115,92 @@ export function renderToolbar(container, options) {
   container.querySelector('.toolbar-zoom-out').addEventListener('click', onZoomOut);
   container.querySelector('.toolbar-zoom-100').addEventListener('click', onZoomReset);
 
+  // Share popover state
+  let currentShareState = activeShare || null;
+  let sharePopover = null;
+
+  function closeSharePopover() {
+    if (sharePopover) {
+      sharePopover.remove();
+      sharePopover = null;
+    }
+  }
+
+  function showSharePopover() {
+    closeSharePopover();
+    const shareBtn = container.querySelector('.toolbar-share');
+    if (!shareBtn) return;
+    const rect = shareBtn.getBoundingClientRect();
+
+    const popover = document.createElement('div');
+    popover.className = 'share-popover';
+    popover.style.top = (rect.bottom + 4) + 'px';
+    popover.style.right = (window.innerWidth - rect.right) + 'px';
+
+    if (currentShareState) {
+      const shareUrl = `http://localhost:42068/viewer/?id=${currentShareState.id}`;
+      popover.innerHTML = `
+        <div class="share-popover-label">Shared</div>
+        <div class="share-popover-url">
+          <input type="text" readonly value="${escapeHtml(shareUrl)}">
+          <button class="share-popover-copy">Copy</button>
+        </div>
+        <textarea class="share-popover-note" placeholder="Update the cover note..." rows="3">${escapeHtml(currentShareState.coverNote || '')}</textarea>
+        <div class="share-popover-actions">
+          <button class="share-popover-update">Update Link</button>
+        </div>
+      `;
+
+      popover.querySelector('.share-popover-copy').addEventListener('click', () => {
+        try {
+          navigator.clipboard.writeText(shareUrl);
+          const copyBtn = popover.querySelector('.share-popover-copy');
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { if (copyBtn.isConnected) copyBtn.textContent = 'Copy'; }, 2000);
+        } catch (e) { /* clipboard may not be available */ }
+      });
+
+      popover.querySelector('.share-popover-update').addEventListener('click', () => {
+        const coverNote = popover.querySelector('.share-popover-note').value.trim();
+        if (onShare) onShare({ action: 'update', coverNote });
+      });
+    } else {
+      popover.innerHTML = `
+        <div class="share-popover-label">Share this prototype</div>
+        <textarea class="share-popover-note" placeholder="Any context for the reviewer? (optional)" rows="3"></textarea>
+        <div class="share-popover-actions">
+          <button class="share-popover-create">Create Link</button>
+        </div>
+      `;
+
+      popover.querySelector('.share-popover-create').addEventListener('click', () => {
+        const coverNote = popover.querySelector('.share-popover-note').value.trim();
+        if (onShare) onShare({ action: 'create', coverNote });
+      });
+    }
+
+    document.body.appendChild(popover);
+    sharePopover = popover;
+
+    // Close on click outside
+    setTimeout(() => {
+      document.addEventListener('click', function closeOutside(e) {
+        if (!popover.contains(e.target) && e.target !== shareBtn) {
+          closeSharePopover();
+          document.removeEventListener('click', closeOutside);
+        }
+      });
+    }, 0);
+  }
+
+  container.querySelector('.toolbar-share').addEventListener('click', () => {
+    if (sharePopover) {
+      closeSharePopover();
+    } else {
+      showSharePopover();
+    }
+  });
+
   return {
     updateUndoState(undoCount, redoCount) {
       container.querySelector('.toolbar-undo').disabled = undoCount === 0;
@@ -122,6 +208,13 @@ export function renderToolbar(container, options) {
     },
     updateStarCount(count) {
       container.querySelector('.toolbar-star').textContent = count > 0 ? `\u2605 ${count}` : '\u2606';
+    },
+    updateShareState(share) {
+      currentShareState = share;
+      // If popover is open, re-render it with new state
+      if (sharePopover) {
+        showSharePopover();
+      }
     },
   };
 }
