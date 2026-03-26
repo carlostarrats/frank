@@ -10,7 +10,8 @@ import { spawn } from 'child_process';
 import { execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import { WEBSOCKET_PORT, SCHEMA_DIR, type PanelMessage, type AppMessage } from './protocol.js';
-import { listProjects, loadProject, saveProject, createProject, archiveProject, getGitUserName } from './projects.js';
+import { listProjects, loadProject, saveProject, createProject, archiveProject, mergeScreenIntoProject, getGitUserName } from './projects.js';
+import { updateInjectionProjectPath } from './inject.js';
 
 const panelClients = new Set<WebSocket>();
 let lastSchema: unknown = null;
@@ -119,13 +120,42 @@ function handleSchemaFile(content: string): void {
   let schema: Record<string, unknown>;
   try {
     schema = JSON.parse(content) as Record<string, unknown>;
-  } catch {
-    return;
-  }
+  } catch { return; }
 
   if (schema.schema !== 'v1') return;
-  if (schema.type !== 'screen' && schema.type !== 'flow') return;
+  // Accept screen, flow, or any v1 schema the AI writes
+  if (!schema.type) return;
 
+  if (activeProjectPath) {
+    // Merge into active project
+    try {
+      const updatedProject = mergeScreenIntoProject(activeProjectPath, schema);
+      broadcast({ type: 'project-updated', project: updatedProject, filePath: activeProjectPath });
+      console.log(`[frank] merged screen into ${activeProjectPath}`);
+    } catch (e: any) {
+      console.warn('[frank] merge failed:', e.message);
+      // Fall back to legacy broadcast
+      broadcastLegacy(schema);
+    }
+  } else {
+    // No active project — create one
+    const label = (schema.label as string) || 'Untitled';
+    try {
+      const { project, filePath } = createProject(label);
+      activeProjectPath = filePath;
+      const updatedProject = mergeScreenIntoProject(filePath, schema);
+      broadcast({ type: 'project-updated', project: updatedProject, filePath });
+      updateInjectionProjectPath(filePath);
+      console.log(`[frank] created project ${filePath} with first screen`);
+    } catch (e: any) {
+      console.warn('[frank] project creation failed:', e.message);
+      broadcastLegacy(schema);
+    }
+  }
+}
+
+// Legacy broadcast for backward compat (no active project, creation failed)
+function broadcastLegacy(schema: Record<string, unknown>): void {
   const stamped = {
     ...schema,
     timestamp: new Date().toISOString(),
@@ -205,6 +235,7 @@ function startWebSocketServer(): void {
 
         if (msg.type === 'project-changed') {
           activeProjectPath = msg.filePath || null;
+          if (activeProjectPath) updateInjectionProjectPath(activeProjectPath);
           console.log(`[frank] active project: ${activeProjectPath}`);
           return;
         }

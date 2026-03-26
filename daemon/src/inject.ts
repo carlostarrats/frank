@@ -87,6 +87,43 @@ export function removeClaudeMd(): void {
   console.log('[frank] CLAUDE.md: removed');
 }
 
+// ─── Project path tracking ───────────────────────────────────────────────────
+
+const ACTIVE_PROJECT_LINE_PREFIX = 'Active project: ';
+
+export function updateInjectionProjectPath(projectPath: string): void {
+  const existing = readFileOrEmpty(CLAUDE_MD_PATH);
+  if (!existing.includes(INJECT_MARKER_START)) return;
+
+  const startIdx = existing.indexOf(INJECT_MARKER_START);
+  const endIdx = existing.indexOf(INJECT_MARKER_END);
+  if (startIdx === -1 || endIdx === -1) return;
+
+  const before = existing.slice(0, startIdx);
+  const block = existing.slice(startIdx, endIdx + INJECT_MARKER_END.length);
+  const after = existing.slice(endIdx + INJECT_MARKER_END.length);
+
+  // Replace home dir with ~ for readability
+  const displayPath = projectPath.replace(process.env.HOME || '', '~');
+  const newLine = `${ACTIVE_PROJECT_LINE_PREFIX}${displayPath}`;
+
+  // Check if there's already an "Active project:" line in the block
+  const lines = block.split('\n');
+  const existingLineIdx = lines.findIndex(l => l.startsWith(ACTIVE_PROJECT_LINE_PREFIX));
+
+  if (existingLineIdx !== -1) {
+    lines[existingLineIdx] = newLine;
+  } else {
+    // Insert before the end marker
+    const endMarkerIdx = lines.findIndex(l => l.includes(INJECT_MARKER_END));
+    lines.splice(endMarkerIdx, 0, '', newLine);
+  }
+
+  const updatedBlock = lines.join('\n');
+  fs.writeFileSync(CLAUDE_MD_PATH, before + updatedBlock + after, 'utf8');
+  console.log(`[frank] CLAUDE.md: updated active project to ${displayPath}`);
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function readFileOrEmpty(filePath: string): string {
