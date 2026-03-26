@@ -262,7 +262,7 @@ function startHttpServer(): void {
 
     // Static file serving
     let urlPath = req.url?.split('?')[0] || '/';
-    if (urlPath === '/') urlPath = '/index.html';
+    if (urlPath.endsWith('/')) urlPath += 'index.html';
 
     const filePath = path.join(UI_DIR, urlPath);
 
