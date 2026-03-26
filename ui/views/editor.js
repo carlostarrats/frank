@@ -10,6 +10,7 @@ import starsManager from '../core/stars.js';
 
 let currentCanvas = null;
 let currentToolbar = null;
+let selectedSection = null; // null = show all, number = section index
 
 export function renderEditor(container, { screenId, onBack }) {
   const screen = projectManager.getScreen(screenId);
@@ -30,6 +31,7 @@ export function renderEditor(container, { screenId, onBack }) {
   const canvasArea = container.querySelector('.editor-canvas-area');
   currentCanvas = createCanvas(canvasArea);
   currentCanvas.setContent(renderScreen(screen));
+  selectedSection = null; // reset on each render
   setupDragHandles(screenId);
 
   // Toolbar
@@ -92,7 +94,14 @@ export function renderEditor(container, { screenId, onBack }) {
     renderComments(commentsEl, {
       screen: currentScreen,
       screenId,
+      selectedSection,
       authorName: 'You',
+      onClearSection: () => {
+        const canvasContent = currentCanvas.content;
+        canvasContent.querySelectorAll('[data-section-index]').forEach(s => s.classList.remove('section-selected'));
+        selectedSection = null;
+        refreshComments();
+      },
       onApprove: (index) => {
         const notes = [...(currentScreen.notes || [])];
         if (notes[index]) {
@@ -121,6 +130,7 @@ export function renderEditor(container, { screenId, onBack }) {
   }
 
   refreshComments();
+  setupSectionSelection(screenId, refreshComments);
 
   // Update status
   function updateStatus() {
@@ -210,6 +220,42 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Section selection for comment anchoring
+function setupSectionSelection(screenId, onSelectionChange) {
+  const canvasContent = currentCanvas.content;
+  const sectionEls = canvasContent.querySelectorAll('[data-section-index]');
+
+  sectionEls.forEach((section) => {
+    const sectionIndex = parseInt(section.dataset.sectionIndex);
+    section.style.cursor = 'pointer';
+
+    section.addEventListener('click', (e) => {
+      // Don't select if clicking a drag handle
+      if (e.target.closest('.drag-handle')) return;
+      e.stopPropagation();
+
+      // Deselect all
+      sectionEls.forEach(s => s.classList.remove('section-selected'));
+      // Select this one
+      section.classList.add('section-selected');
+      selectedSection = sectionIndex;
+      onSelectionChange();
+    });
+  });
+
+  // Click canvas background to deselect
+  const canvasEl = canvasContent.closest('.canvas') || canvasContent.parentElement;
+  if (canvasEl) {
+    canvasEl.addEventListener('click', (e) => {
+      if (!e.target.closest('[data-section-index]')) {
+        sectionEls.forEach(s => s.classList.remove('section-selected'));
+        selectedSection = null;
+        onSelectionChange();
+      }
+    });
+  }
 }
 
 // Drag-to-reorder sections

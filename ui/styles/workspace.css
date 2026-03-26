@@ -600,3 +600,49 @@
   background: var(--bg-elevated);
   color: var(--text-primary);
 }
+
+/* Section selection */
+[data-section-index] {
+  transition: outline 0.1s, outline-offset 0.1s;
+  cursor: pointer;
+}
+[data-section-index]:hover {
+  outline: 2px dashed rgba(74, 158, 255, 0.3);
+  outline-offset: 2px;
+}
+[data-section-index].section-selected {
+  outline: 2px solid #4a9eff;
+  outline-offset: 2px;
+}
+
+/* Comment section labels */
+.comments-section-label {
+  font-weight: 400;
+  color: var(--accent);
+  font-size: 12px;
+}
+.comments-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.comments-show-all {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: all 0.1s;
+}
+.comments-show-all:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.comment-section-tag {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 11px;
+}
