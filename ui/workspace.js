@@ -50,21 +50,6 @@ function init() {
       <div id="view-editor" class="view"></div>
     </div>
   `;
-  // Debug: show connection status on screen
-  const debugEl = document.createElement('div');
-  debugEl.style.cssText = 'position:fixed;bottom:8px;left:8px;font-size:11px;color:#666;z-index:9999;';
-  debugEl.textContent = 'Connecting...';
-  document.body.appendChild(debugEl);
-
-  sync.onReady(() => {
-    debugEl.textContent = 'Connected to daemon';
-    debugEl.style.color = '#4aff8b';
-  });
-  sync.onError((msg) => {
-    debugEl.textContent = 'Error: ' + msg;
-    debugEl.style.color = '#ff4a4a';
-  });
-
   sync.connect();
 
   const homeContainer = document.getElementById('view-home');

@@ -45,14 +45,8 @@ export const PROJECTS_DIR = `${process.env.HOME}/Documents/Frank`;
 export const ARCHIVE_DIR = `${process.env.HOME}/Documents/Frank/.archive`;
 
 export const WEBSOCKET_PORT = 42069;
+export const HTTP_PORT = 42068;
 export const SCHEMA_DIR = '/tmp/frank';
-
-// Panel app locations — checked in order, first found wins
-export const PANEL_APP_CANDIDATES = [
-  '/Applications/frank.app',
-  `${process.env.HOME}/Applications/frank.app`,
-  `${process.env.HOME}/Documents/lookyloo/src-tauri/target/release/bundle/macos/frank.app`,
-];
 
 // Marker used in CLAUDE.md to identify our injected block
 export const INJECT_MARKER_START = '<!-- FRANK:START -->';

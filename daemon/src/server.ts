@@ -6,10 +6,16 @@
 
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
+import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
-import { WEBSOCKET_PORT, SCHEMA_DIR, type PanelMessage, type AppMessage } from './protocol.js';
+import { WEBSOCKET_PORT, HTTP_PORT, SCHEMA_DIR, type PanelMessage, type AppMessage } from './protocol.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const UI_DIR = path.resolve(__dirname, '../../ui');
 import { listProjects, loadProject, saveProject, createProject, archiveProject, mergeScreenIntoProject, getGitUserName } from './projects.js';
 import { updateInjectionProjectPath } from './inject.js';
 
@@ -74,10 +80,12 @@ const DEFAULT_TOKENS = {
 export function startServer(): void {
   startFileWatcher();
   startWebSocketServer();
+  startHttpServer();
 
   console.log(`[frank] daemon started`);
   console.log(`[frank] watching:    ${SCHEMA_DIR}`);
-  console.log(`[frank] panel port:  ws://localhost:${WEBSOCKET_PORT}`);
+  console.log(`[frank] websocket:   ws://localhost:${WEBSOCKET_PORT}`);
+  console.log(`[frank] ui:          http://localhost:${HTTP_PORT}`);
 }
 
 // ─── File watcher (replaces hook handler) ────────────────────────────────────
@@ -165,7 +173,56 @@ function broadcastLegacy(schema: Record<string, unknown>): void {
   broadcast({ type: 'render', schema: stamped });
 }
 
-// ─── WebSocket server (sends to Tauri panel) ─────────────────────────────────
+// ─── HTTP server (serves ui/ directory) ───────────────────────────────────────
+
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.js':   'application/javascript',
+  '.css':  'text/css',
+  '.svg':  'image/svg+xml',
+  '.png':  'image/png',
+  '.json': 'application/json',
+  '.ico':  'image/x-icon',
+};
+
+function startHttpServer(): void {
+  const server = http.createServer((req, res) => {
+    let urlPath = req.url?.split('?')[0] || '/';
+    if (urlPath === '/') urlPath = '/index.html';
+
+    const filePath = path.join(UI_DIR, urlPath);
+
+    // Prevent directory traversal
+    if (!filePath.startsWith(UI_DIR)) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
+
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+
+      const ext = path.extname(filePath);
+      const mime = MIME_TYPES[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(data);
+    });
+  });
+
+  server.listen(HTTP_PORT, () => {
+    console.log(`[frank] http server listening on port ${HTTP_PORT}`);
+  });
+
+  server.on('error', (err) => {
+    console.error(`[frank] http server error:`, err.message);
+  });
+}
+
+// ─── WebSocket server (sends to panel) ───────────────────────────────────────
 
 function startWebSocketServer(): void {
   const wss = new WebSocketServer({ port: WEBSOCKET_PORT });
