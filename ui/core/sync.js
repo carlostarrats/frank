@@ -5,17 +5,37 @@ let ws = null;
 let pendingRequests = new Map();
 let requestId = 0;
 let onProjectUpdate = null;
-let connectResolve = null;
-let connected = new Promise(r => { connectResolve = r; });
 let readyCallback = null;
 let errorCallback = null;
+let isConnected = false;
+let waitingForConnect = []; // Queue of { resolve } waiting for connection
+
+function resolveAllWaiters() {
+  const waiters = waitingForConnect;
+  waitingForConnect = [];
+  for (const w of waiters) w.resolve();
+}
+
+function rejectAllWaiters(err) {
+  const waiters = waitingForConnect;
+  waitingForConnect = [];
+  for (const w of waiters) w.reject(err);
+}
+
+function waitForConnection() {
+  if (isConnected) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    waitingForConnect.push({ resolve, reject });
+  });
+}
 
 function connect() {
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
     console.log('[sync] connected to daemon');
-    if (connectResolve) { connectResolve(); connectResolve = null; }
+    isConnected = true;
+    resolveAllWaiters();
     if (readyCallback) readyCallback();
   };
 
@@ -41,11 +61,14 @@ function connect() {
 
   ws.onclose = () => {
     console.log('[sync] disconnected, reconnecting in 2s...');
+    isConnected = false;
+    // Reject pending requests — they were sent on the old socket
     for (const [id, { reject }] of pendingRequests) {
       reject(new Error('WebSocket disconnected'));
     }
     pendingRequests.clear();
-    connected = new Promise(r => { connectResolve = r; });
+    // Reject anyone waiting for connection — they'll retry via the caller
+    rejectAllWaiters(new Error('WebSocket disconnected'));
     setTimeout(connect, 2000);
   };
 
@@ -62,7 +85,7 @@ function send(msg) {
 }
 
 async function request(msg) {
-  await connected; // wait for WebSocket to be open
+  await waitForConnection();
   return new Promise((resolve, reject) => {
     const id = ++requestId;
     msg.requestId = id;

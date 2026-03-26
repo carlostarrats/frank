@@ -6,7 +6,8 @@ const DEFAULT_PADDING = 40;
 let currentScale = 1;
 
 export function createCanvas(container) {
-  const bg = localStorage.getItem('frank-canvas-bg') || DEFAULT_BG;
+  let bg = DEFAULT_BG;
+  try { bg = localStorage.getItem('frank-canvas-bg') || DEFAULT_BG; } catch (e) { /* localStorage unavailable */ }
 
   container.innerHTML = `
     <div class="canvas" style="background: ${bg};">

@@ -96,9 +96,13 @@ function renderThumbnailGrid(grid, screens, { onSelectScreen, onAddScreen }) {
     card.addEventListener('click', () => onSelectScreen(card.dataset.screenId));
   });
 
-  grid.querySelector('.gallery-card--add')?.addEventListener('click', () => {
+  grid.querySelector('.gallery-card--add')?.addEventListener('click', (e) => {
+    // Don't re-trigger if clicking inside the inline form
+    if (e.target.closest('.add-screen-input, .add-screen-confirm, .add-screen-cancel')) return;
     const addCard = grid.querySelector('.gallery-card--add');
     const thumb = addCard.querySelector('.gallery-thumb--add');
+    // Don't replace if form is already showing
+    if (thumb.querySelector('.add-screen-input')) return;
     thumb.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:8px;padding:16px;width:100%;">
         <input class="add-screen-input" type="text" placeholder="Screen name..." autofocus
@@ -115,10 +119,12 @@ function renderThumbnailGrid(grid, screens, { onSelectScreen, onAddScreen }) {
       const label = input.value.trim();
       if (label) onAddScreen(label);
     }
-    thumb.querySelector('.add-screen-confirm').addEventListener('click', submit);
-    thumb.querySelector('.add-screen-cancel').addEventListener('click', () => {
+    thumb.querySelector('.add-screen-confirm').addEventListener('click', (e) => { e.stopPropagation(); submit(); });
+    thumb.querySelector('.add-screen-cancel').addEventListener('click', (e) => {
+      e.stopPropagation();
       thumb.innerHTML = '<span class="gallery-add-icon">+</span>';
     });
+    input.addEventListener('click', (e) => e.stopPropagation());
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') submit();
       if (e.key === 'Escape') thumb.innerHTML = '<span class="gallery-add-icon">+</span>';
