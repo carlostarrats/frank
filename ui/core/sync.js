@@ -5,11 +5,19 @@ let ws = null;
 let pendingRequests = new Map();
 let requestId = 0;
 let onProjectUpdate = null;
+let connectResolve = null;
+let connected = new Promise(r => { connectResolve = r; });
+let readyCallback = null;
+let errorCallback = null;
 
 function connect() {
   ws = new WebSocket(WS_URL);
 
-  ws.onopen = () => console.log('[sync] connected to daemon');
+  ws.onopen = () => {
+    console.log('[sync] connected to daemon');
+    if (connectResolve) { connectResolve(); connectResolve = null; }
+    if (readyCallback) readyCallback();
+  };
 
   ws.onmessage = (event) => {
     try {
@@ -37,10 +45,14 @@ function connect() {
       reject(new Error('WebSocket disconnected'));
     }
     pendingRequests.clear();
+    connected = new Promise(r => { connectResolve = r; });
     setTimeout(connect, 2000);
   };
 
-  ws.onerror = () => {};
+  ws.onerror = (e) => {
+    console.error('[sync] WebSocket error:', e);
+    if (errorCallback) errorCallback('WebSocket connection failed to ws://localhost:42069');
+  };
 }
 
 function send(msg) {
@@ -49,7 +61,8 @@ function send(msg) {
   }
 }
 
-function request(msg) {
+async function request(msg) {
+  await connected; // wait for WebSocket to be open
   return new Promise((resolve, reject) => {
     const id = ++requestId;
     msg.requestId = id;
@@ -67,6 +80,8 @@ function request(msg) {
 const sync = {
   connect,
   onProjectUpdate(cb) { onProjectUpdate = cb; },
+  onReady(cb) { readyCallback = cb; },
+  onError(cb) { errorCallback = cb; },
 
   async listProjects() {
     const res = await request({ type: 'list-projects' });

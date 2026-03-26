@@ -50,13 +50,36 @@ export function renderToolbar(container, options) {
   // Back button
   container.querySelector('.toolbar-back').addEventListener('click', onBack);
 
-  // Label rename
+  // Label rename — inline input instead of prompt()
   container.querySelector('.toolbar-label').addEventListener('click', (e) => {
-    const newLabel = prompt('Screen name:', screen.label || '');
-    if (newLabel?.trim() && newLabel.trim() !== screen.label) {
-      e.target.textContent = newLabel.trim();
-      onViewportChange({ label: newLabel.trim() });
+    const labelEl = e.target;
+    const currentLabel = labelEl.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentLabel;
+    input.className = 'toolbar-label-input';
+    input.style.cssText = 'font-size:14px;font-weight:500;padding:2px 6px;border-radius:4px;border:1px solid var(--accent);background:var(--bg-elevated);color:var(--text-primary);font-family:inherit;width:160px;';
+    labelEl.replaceWith(input);
+    input.focus();
+    input.select();
+    function commit() {
+      const newLabel = input.value.trim();
+      const newEl = document.createElement('span');
+      newEl.className = 'toolbar-label';
+      newEl.textContent = newLabel || currentLabel;
+      newEl.title = 'Click to rename';
+      input.replaceWith(newEl);
+      if (newLabel && newLabel !== currentLabel) {
+        onViewportChange({ label: newLabel });
+      }
+      // Re-attach click handler
+      newEl.addEventListener('click', (e2) => container.querySelector('.toolbar-label')?.click());
     }
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+      if (ev.key === 'Escape') { input.value = currentLabel; input.blur(); }
+    });
   });
 
   // Viewport preset select

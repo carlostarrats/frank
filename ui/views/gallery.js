@@ -97,8 +97,32 @@ function renderThumbnailGrid(grid, screens, { onSelectScreen, onAddScreen }) {
   });
 
   grid.querySelector('.gallery-card--add')?.addEventListener('click', () => {
-    const label = prompt('Screen name:');
-    if (label?.trim()) onAddScreen(label.trim());
+    const addCard = grid.querySelector('.gallery-card--add');
+    const thumb = addCard.querySelector('.gallery-thumb--add');
+    thumb.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;padding:16px;width:100%;">
+        <input class="add-screen-input" type="text" placeholder="Screen name..." autofocus
+          style="padding:8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-size:13px;font-family:inherit;width:100%;">
+        <div style="display:flex;gap:4px;">
+          <button class="add-screen-confirm" style="flex:1;padding:6px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-family:inherit;">Create</button>
+          <button class="add-screen-cancel" style="padding:6px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-secondary);cursor:pointer;font-size:12px;font-family:inherit;">Cancel</button>
+        </div>
+      </div>
+    `;
+    const input = thumb.querySelector('.add-screen-input');
+    input.focus();
+    function submit() {
+      const label = input.value.trim();
+      if (label) onAddScreen(label);
+    }
+    thumb.querySelector('.add-screen-confirm').addEventListener('click', submit);
+    thumb.querySelector('.add-screen-cancel').addEventListener('click', () => {
+      thumb.innerHTML = '<span class="gallery-add-icon">+</span>';
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') thumb.innerHTML = '<span class="gallery-add-icon">+</span>';
+    });
   });
 }
 
