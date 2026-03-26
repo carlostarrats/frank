@@ -4,15 +4,22 @@ import projectManager from '../core/project.js';
 import { renderScreen, PLATFORM_DEFAULTS } from '../render/screen.js';
 import { renderFlowMap } from '../components/flow-map.js';
 
-export function renderGallery(container, { onSelectScreen, onAddScreen, onBack }) {
+export function renderGallery(container, { onSelectScreen, onAddScreen, onBack, onPreview, onHandoff }) {
   const screens = projectManager.getAllScreens();
   const project = projectManager.get();
+  const hasScreens = screens.length > 0;
 
   container.innerHTML = `
     <div class="gallery">
       <div class="gallery-header">
-        <button class="gallery-back-btn">\u2190 Projects</button>
-        <h2 class="gallery-title">${escapeHtml(project?.label || 'Untitled')}</h2>
+        <div class="gallery-header-left">
+          <button class="gallery-back-btn">\u2190 Projects</button>
+          <h2 class="gallery-title">${escapeHtml(project?.label || 'Untitled')}</h2>
+        </div>
+        <div class="gallery-header-right">
+          ${hasScreens ? `<button class="gallery-preview-btn" title="Preview prototype">&#9654; Preview</button>` : ''}
+          ${hasScreens ? `<button class="gallery-handoff-btn" title="Handoff view">Handoff</button>` : ''}
+        </div>
       </div>
       <div class="gallery-grid"></div>
       <div class="gallery-flow-map"></div>
@@ -23,6 +30,17 @@ export function renderGallery(container, { onSelectScreen, onAddScreen, onBack }
   const flowMapContainer = container.querySelector('.gallery-flow-map');
 
   container.querySelector('.gallery-back-btn').addEventListener('click', onBack);
+
+  // Preview button
+  container.querySelector('.gallery-preview-btn')?.addEventListener('click', () => {
+    const firstScreenId = screens[0]?.id;
+    if (firstScreenId && onPreview) onPreview(firstScreenId);
+  });
+
+  // Handoff button
+  container.querySelector('.gallery-handoff-btn')?.addEventListener('click', () => {
+    if (onHandoff) onHandoff();
+  });
 
   // Render thumbnail cards
   renderThumbnailGrid(grid, screens, { onSelectScreen, onAddScreen });

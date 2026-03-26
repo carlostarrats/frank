@@ -4,6 +4,8 @@ import projectManager from './core/project.js';
 import { renderHome } from './views/home.js';
 import { renderGallery } from './views/gallery.js';
 import { renderEditor } from './views/editor.js';
+import { renderPreview } from './views/preview.js';
+import { renderHandoff } from './views/handoff.js';
 
 const state = {
   currentView: 'home',
@@ -37,6 +39,30 @@ function switchView(view, params = {}) {
       onBack() {
         switchView('home');
       },
+      onPreview(startScreenId) {
+        state.activeScreenId = startScreenId;
+        switchView('preview');
+      },
+      onHandoff() {
+        switchView('handoff');
+      },
+    });
+  }
+
+  if (view === 'preview') {
+    renderPreview(document.getElementById('view-preview'), {
+      startScreenId: state.activeScreenId || projectManager.getScreenOrder()[0],
+      onExit: () => switchView('gallery'),
+    });
+  }
+
+  if (view === 'handoff') {
+    renderHandoff(document.getElementById('view-handoff'), {
+      onBack: () => switchView('gallery'),
+      onSelectScreen(id) {
+        state.activeScreenId = id;
+        switchView('editor');
+      },
     });
   }
 }
@@ -48,6 +74,8 @@ function init() {
       <div id="view-home" class="view active"></div>
       <div id="view-gallery" class="view"></div>
       <div id="view-editor" class="view"></div>
+      <div id="view-preview" class="view"></div>
+      <div id="view-handoff" class="view"></div>
     </div>
   `;
   sync.connect();
