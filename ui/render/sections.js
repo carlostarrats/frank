@@ -1,5 +1,5 @@
-// Frank — Section renderers
-// Ports ALL section components from WireframeSection.tsx to plain JS + HTML string templates.
+// Frank — Section renderers (shadcn-quality)
+// Each renderer returns an HTML string that matches shadcn/ui visual quality.
 
 import { icon, headerIcon, navIcon } from './icons.js'
 import { classify, displayLabel, smartItem } from './smart-item.js'
@@ -29,7 +29,7 @@ export function renderSection(section, screenLabel, platform) {
 
 function renderSectionContent(section, screenLabel, platform) {
   switch (section.type) {
-    case 'header':          return headerSection(section)
+    case 'header':          return headerSection(section, platform)
     case 'hero':            return heroSection(section, platform)
     case 'content':         return contentSection(section)
     case 'top-nav':         return topNavSection(section)
@@ -85,7 +85,7 @@ const isSubline  = (s) => /\b(subheadline|subtitle|status|online|caption|subline
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
-function headerSection(section) {
+function headerSection(section, platform) {
   const items = section.contains
 
   const leftBtns   = items.filter(isLeftBtn)
@@ -94,55 +94,89 @@ function headerSection(section) {
   const avatarItem = avatarIdx >= 0 ? items[avatarIdx] : null
 
   // Chat / profile header: back + avatar + name/status + action buttons
-  if (avatarItem && !logoItem) {
+  if (avatarItem && !logoItem && platform !== 'web') {
     const afterAvatar = items.slice(avatarIdx + 1)
     const nameItem    = afterAvatar.find(isHeadline)
     const statusItem  = afterAvatar.find(isSubline)
     const rightBtns   = items.filter(s => isBtn(s) && !isLeftBtn(s) && !isAvatar(s))
 
-    return `<div class="flex items-center w-full gap-2">
-      <div class="flex items-center flex-shrink-0" style="width:32px">
-        ${leftBtns.map(item => `<span class="wf-btn wf-btn--ghost wf-btn--icon flex-shrink-0">${headerIcon(item)}</span>`).join('')}
+    return `<div class="sc-header" style="gap:8px">
+      <div style="display:flex;align-items:center;flex-shrink:0;width:32px">
+        ${leftBtns.map(item => `<span class="sc-btn sc-btn--ghost sc-btn--icon" style="width:28px;height:28px">${headerIcon(item)}</span>`).join('')}
       </div>
-      <div class="flex items-center gap-2 flex-1 min-w-0">
-        <div style="width:32px;height:32px;border-radius:50%;background:var(--wf-muted);border:1px solid var(--wf-border);flex-shrink:0"></div>
-        <div class="flex flex-col min-w-0">
-          ${nameItem ? `<span class="text-sm font-semibold text-foreground leading-tight truncate select-none">${displayLabel(nameItem)}</span>` : ''}
-          ${statusItem ? `<span class="text-xs text-muted-foreground leading-tight truncate select-none">${displayLabel(statusItem)}</span>` : ''}
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+        <div class="sc-avatar" style="width:34px;height:34px">${avatarItem ? displayLabel(avatarItem).slice(0, 2).toUpperCase() : 'U'}</div>
+        <div style="display:flex;flex-direction:column;min-width:0">
+          ${nameItem ? `<span style="font-size:14px;font-weight:600;color:var(--foreground);line-height:1.3;user-select:none">${displayLabel(nameItem)}</span>` : ''}
+          ${statusItem ? `<span style="font-size:12px;color:var(--muted-foreground);line-height:1.3;user-select:none">${displayLabel(statusItem)}</span>` : ''}
         </div>
       </div>
-      <div class="flex items-center gap-1 flex-shrink-0">
-        ${rightBtns.map(item => `<span class="wf-btn wf-btn--ghost wf-btn--icon flex-shrink-0">${headerIcon(item)}</span>`).join('')}
+      <div style="display:flex;align-items:center;gap:2px;flex-shrink:0">
+        ${rightBtns.map(item => `<span class="sc-btn sc-btn--ghost sc-btn--icon" style="width:28px;height:28px">${headerIcon(item)}</span>`).join('')}
       </div>
     </div>`
   }
 
-  // App bar: logo + nav links + search + right actions
+  // Web app header bar: headline + search + actions (used inside sidebar layout)
+  if (platform === 'web') {
+    const headlineItem = items.find(isHeadline)
+    const isInputItem  = (s) => /\binput\b|\bsearch\b/i.test(s)
+    const isActionItem = (s) => /\b(button|btn|icon)\b/i.test(s) || /\bavatar\b/i.test(s)
+    const inputItem    = items.find(isInputItem)
+    const actionItems  = items.filter(s => isActionItem(s) && !isLogo(s) && !isHeadline(s))
+    const navLinks     = items.filter(s => !isLogo(s) && !isInputItem(s) && !isActionItem(s) && !isHeadline(s))
+    const cleanNavLabel = (s) => s.replace(/\s*(nav\s+)?(link|button|item)\s*$/i, '').replace(/\s+active\s*$/i, '').trim() || s
+
+    return `<div class="sc-header">
+      ${headlineItem ? `<h1 style="font-size:20px;font-weight:600;color:var(--foreground);letter-spacing:-0.01em;user-select:none;flex-shrink:0">${displayLabel(headlineItem)}</h1>` : ''}
+      ${logoItem && !headlineItem ? `<span class="sc-header-logo">${displayLabel(logoItem)}</span>` : ''}
+      ${navLinks.length > 0 ? `<nav class="sc-nav" style="margin-left:8px">${navLinks.map((item, i) => {
+        const isActive = /\bactive\b/i.test(item) || i === 0
+        return `<span class="sc-nav-item${isActive ? ' sc-nav-item--active' : ''}">${cleanNavLabel(item)}</span>`
+      }).join('')}</nav>` : ''}
+      <div style="flex:1"></div>
+      ${inputItem ? `<div class="sc-header-search">
+        ${icon('search', 14)}
+        <span style="user-select:none">${displayLabel(inputItem)}</span>
+      </div>` : ''}
+      <div class="sc-header-actions">
+        ${actionItems.map(item => {
+          if (/\bavatar\b/i.test(item)) {
+            return `<div class="sc-avatar" style="margin-left:4px">${displayLabel(item).slice(0, 2).toUpperCase() || 'U'}</div>`
+          }
+          return `<span class="sc-btn sc-btn--ghost sc-btn--icon" style="width:32px;height:32px">${headerIcon(item)}</span>`
+        }).join('')}
+      </div>
+    </div>`
+  }
+
+  // App bar with logo + nav links (desktop without sidebar)
   if (logoItem) {
     const isInputItem  = (s) => /\binput\b|\bsearch\b/i.test(s)
     const isActionItem = (s) => /\b(button|btn|icon)\b/i.test(s) || /\bavatar\b/i.test(s)
     const navLinks     = items.filter(s => !isLogo(s) && !isInputItem(s) && !isActionItem(s))
     const inputItem    = items.find(isInputItem)
     const actionItems  = items.filter(s => isActionItem(s) && !isLogo(s))
-    const cleanNavLabel = (s) => s.replace(/\s*(nav\s+)?(link|button|item)\s*$/i, '').trim() || s
+    const cleanNavLabel = (s) => s.replace(/\s*(nav\s+)?(link|button|item)\s*$/i, '').replace(/\s+active\s*$/i, '').trim() || s
 
-    return `<div class="flex items-center w-full gap-2">
-      <span class="text-sm font-semibold text-foreground select-none flex-shrink-0" style="margin-right:4px">
-        ${displayLabel(logoItem)}
-      </span>
-      <nav class="flex items-center gap-3 flex-1 overflow-x-auto">
-        ${navLinks.map((item, i) => `<span class="${i === 0 ? 'text-xs whitespace-nowrap select-none text-foreground font-medium' : 'text-xs whitespace-nowrap select-none text-muted-foreground'}">${cleanNavLabel(item)}</span>`).join('')}
+    return `<div class="sc-header">
+      <span class="sc-header-logo">${displayLabel(logoItem)}</span>
+      <nav class="sc-nav" style="flex:1;margin-left:8px">
+        ${navLinks.map((item, i) => {
+          const isActive = /\bactive\b/i.test(item) || i === 0
+          return `<span class="sc-nav-item${isActive ? ' sc-nav-item--active' : ''}">${cleanNavLabel(item)}</span>`
+        }).join('')}
       </nav>
-      ${inputItem ? `<div class="flex items-center gap-1 bg-muted border rounded select-none flex-shrink-0" style="padding:4px 8px">
-        ${icon('search', 11)}
-        <span class="text-xs text-muted-foreground truncate" style="width:48px">${displayLabel(inputItem)}</span>
+      ${inputItem ? `<div class="sc-header-search">
+        ${icon('search', 14)}
+        <span style="user-select:none">${displayLabel(inputItem)}</span>
       </div>` : ''}
-      <div class="flex items-center flex-shrink-0" style="gap:2px">
+      <div class="sc-header-actions">
         ${actionItems.map(item => {
           if (/\bavatar\b/i.test(item)) {
-            return `<div style="width:24px;height:24px;border-radius:50%;background:var(--wf-muted);border:1px solid var(--wf-border);flex-shrink:0;margin-left:4px"></div>`
+            return `<div class="sc-avatar" style="margin-left:4px">${displayLabel(item).slice(0, 2).toUpperCase() || 'U'}</div>`
           }
-          return `<span class="wf-btn wf-btn--ghost wf-btn--icon flex-shrink-0" style="width:24px;height:24px">${headerIcon(item)}</span>`
+          return `<span class="sc-btn sc-btn--ghost sc-btn--icon" style="width:32px;height:32px">${headerIcon(item)}</span>`
         }).join('')}
       </div>
     </div>`
@@ -152,15 +186,15 @@ function headerSection(section) {
   const rightBtns   = items.filter(s => isBtn(s) && !isLeftBtn(s))
   const centerItems = items.filter(s => !isBtn(s))
 
-  return `<div class="flex items-center w-full">
-    <div class="flex items-center gap-1 flex-shrink-0" style="width:40px">
-      ${leftBtns.map(item => `<span class="wf-btn wf-btn--ghost wf-btn--icon flex-shrink-0">${headerIcon(item)}</span>`).join('')}
+  return `<div class="sc-header" style="padding:0 16px">
+    <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;width:40px">
+      ${leftBtns.map(item => `<span class="sc-btn sc-btn--ghost sc-btn--icon" style="width:28px;height:28px">${headerIcon(item)}</span>`).join('')}
     </div>
-    <div class="flex-1 flex justify-center items-center min-w-0 px-2">
-      ${centerItems.slice(0, 1).map(item => `<span class="text-sm font-semibold text-foreground truncate select-none">${displayLabel(item)}</span>`).join('')}
+    <div style="flex:1;display:flex;justify-content:center;align-items:center;min-width:0;padding:0 8px">
+      ${centerItems.slice(0, 1).map(item => `<span style="font-size:16px;font-weight:600;color:var(--foreground);user-select:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${displayLabel(item)}</span>`).join('')}
     </div>
-    <div class="flex items-center gap-1 flex-shrink-0" style="width:40px;justify-content:flex-end">
-      ${rightBtns.map(item => `<span class="wf-btn wf-btn--ghost wf-btn--icon flex-shrink-0">${headerIcon(item)}</span>`).join('')}
+    <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;width:40px;justify-content:flex-end">
+      ${rightBtns.map(item => `<span class="sc-btn sc-btn--ghost sc-btn--icon" style="width:28px;height:28px">${headerIcon(item)}</span>`).join('')}
     </div>
   </div>`
 }
@@ -171,25 +205,28 @@ function heroSection(section, platform) {
   const isWeb = platform === 'web' || platform === 'tablet'
 
   if (isWeb) {
-    return `<div class="flex items-center" style="gap:48px;padding:48px 40px;min-height:320px">
-      <div class="flex-1 flex flex-col items-start gap-4">
+    return `<div style="display:flex;align-items:center;gap:48px;padding:64px 48px;min-height:360px">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:16px">
         ${section.label ? sectionLabel(section.label) : ''}
         ${section.contains.map(item => {
           if (classify(item) === 'headline') {
-            return `<p style="font-size:36px" class="font-bold text-foreground leading-tight select-none">${displayLabel(item)}</p>`
+            return `<h1 style="font-size:42px;font-weight:700;color:var(--foreground);line-height:1.15;letter-spacing:-0.02em;user-select:none">${displayLabel(item)}</h1>`
+          }
+          if (classify(item) === 'subheadline') {
+            return `<p style="font-size:18px;color:var(--muted-foreground);line-height:1.6;max-width:480px;user-select:none">${displayLabel(item)}</p>`
           }
           return smartItem(item)
         }).join('')}
       </div>
-      <div class="wf-image-placeholder flex-1" style="min-height:220px;border-radius:12px"></div>
+      <div class="sc-image-placeholder" style="flex:1;min-height:240px;border-radius:var(--radius)"></div>
     </div>`
   }
 
-  return `<div class="flex flex-col items-center gap-3 select-none" style="text-align:center;padding:32px 16px">
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;padding:40px 20px">
     ${section.label ? sectionLabel(section.label) : ''}
     ${section.contains.map(item => {
       if (classify(item) === 'headline') {
-        return `<p class="text-2xl font-bold text-foreground leading-tight select-none" style="max-width:280px">${displayLabel(item)}</p>`
+        return `<h1 style="font-size:28px;font-weight:700;color:var(--foreground);line-height:1.2;letter-spacing:-0.02em;user-select:none;max-width:280px">${displayLabel(item)}</h1>`
       }
       return smartItem(item)
     }).join('')}
@@ -199,7 +236,7 @@ function heroSection(section, platform) {
 // ─── Content ──────────────────────────────────────────────────────────────────
 
 function contentSection(section) {
-  return `<div class="flex flex-col items-start gap-3">
+  return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:16px">
     ${section.label ? sectionLabel(section.label) : ''}
     ${section.contains.map(item => smartItem(item)).join('')}
   </div>`
@@ -217,14 +254,14 @@ function topNavSection(section) {
   const authItem = section.contains.find(isAuth)
   const navItems = section.contains.filter(s => !isLogoItem(s) && !isCta(s) && !isAuth(s))
 
-  return `<div class="flex items-center px-4" style="height:56px;border-bottom:1px solid var(--wf-border)">
-    ${logoItem ? `<span class="text-sm font-bold text-foreground select-none flex-shrink-0" style="margin-right:24px">${displayLabel(logoItem)}</span>` : ''}
-    <nav class="flex items-center gap-1 flex-1">
-      ${navItems.map(item => `<span class="text-sm text-muted-foreground select-none" style="padding:8px 12px;border-radius:6px">${item}</span>`).join('')}
+  return `<div class="sc-header">
+    ${logoItem ? `<span class="sc-header-logo" style="margin-right:16px">${displayLabel(logoItem)}</span>` : ''}
+    <nav class="sc-nav" style="flex:1">
+      ${navItems.map((item, i) => `<span class="sc-nav-item${i === 0 ? ' sc-nav-item--active' : ''}">${item}</span>`).join('')}
     </nav>
-    <div class="flex items-center gap-2 flex-shrink-0">
-      ${authItem ? `<span class="text-sm text-muted-foreground select-none" style="padding:8px 12px">${authItem}</span>` : ''}
-      ${ctaItem ? `<button class="wf-btn wf-btn--sm">${displayLabel(ctaItem)}</button>` : ''}
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      ${authItem ? `<span class="sc-nav-item">${authItem}</span>` : ''}
+      ${ctaItem ? `<button class="sc-btn sc-btn--sm">${displayLabel(ctaItem)}</button>` : ''}
     </div>
   </div>`
 }
@@ -237,11 +274,11 @@ function bottomNavSection(section, screenLabel) {
       ? item.toLowerCase() === screenLabel.toLowerCase() ||
         screenLabel.toLowerCase().includes(item.toLowerCase())
       : i === 0
-    const color = active ? 'var(--wf-text)' : 'var(--wf-text-muted)'
+    const color = active ? 'var(--foreground)' : 'var(--muted-foreground)'
 
-    return `<div class="flex flex-col items-center gap-1" style="color:${color}">
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;color:${color}">
       ${navIcon(item)}
-      <span class="text-xs font-medium select-none">${item}</span>
+      <span style="font-size:11px;font-weight:${active ? '600' : '500'};user-select:none">${item}</span>
     </div>`
   }).join('')
 }
@@ -249,29 +286,42 @@ function bottomNavSection(section, screenLabel) {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 function sidebarSection(section, screenLabel) {
-  return `<div class="flex flex-col gap-1">
-    ${section.label ? sectionLabel(section.label) : ''}
-    ${section.contains.map((item, i) => {
-      const active = screenLabel
-        ? item.toLowerCase() === screenLabel.toLowerCase() ||
-          screenLabel.toLowerCase().includes(item.toLowerCase())
-        : i === 0
-      const bg = active ? 'background:var(--wf-bg);box-shadow:0 1px 2px rgba(0,0,0,0.06)' : ''
-      const color = active ? 'var(--wf-text)' : 'var(--wf-text-muted)'
+  const items = section.contains
+  const logoItem = items.find(isLogo)
+  const navItems = items.filter(s => !isLogo(s))
 
-      return `<div class="flex items-center gap-2 text-sm font-medium select-none" style="padding:8px 12px;border-radius:6px;color:${color};${bg}">
-        <span class="flex-shrink-0">${navIcon(item)}</span>
-        <span>${item}</span>
-      </div>`
-    }).join('')}
+  return `<div class="sc-sidebar">
+    <div class="sc-sidebar-header">
+      ${logoItem
+        ? `<span class="sc-header-logo">${displayLabel(logoItem)}</span>`
+        : `<span class="sc-header-logo">${screenLabel || 'App'}</span>`
+      }
+    </div>
+    <div class="sc-sidebar-content">
+      ${navItems.map((item, i) => {
+        const cleanLabel = item
+          .replace(/\s*(nav\s+)?(link|button|item)\s*$/i, '')
+          .replace(/\s+active\s*$/i, '')
+          .trim() || item
+        const isActive = /\bactive\b/i.test(item) || (screenLabel
+          ? cleanLabel.toLowerCase() === screenLabel.toLowerCase() ||
+            screenLabel.toLowerCase().includes(cleanLabel.toLowerCase())
+          : i === 0)
+
+        return `<div class="sc-sidebar-item${isActive ? ' sc-sidebar-item--active' : ''}">
+          <span style="flex-shrink:0;display:flex;align-items:center">${navIcon(cleanLabel)}</span>
+          <span>${cleanLabel}</span>
+        </div>`
+      }).join('')}
+    </div>
   </div>`
 }
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
 
 function formSection(section) {
-  return `<div class="flex flex-col items-start gap-4">
-    ${section.label ? sectionLabel(section.label) : ''}
+  return `<div style="display:flex;flex-direction:column;align-items:stretch;gap:16px;padding:20px">
+    ${section.label ? `<h3 style="font-size:18px;font-weight:600;color:var(--foreground);letter-spacing:-0.01em;user-select:none">${section.label}</h3>` : ''}
     ${section.contains.map(item => smartItem(item)).join('')}
   </div>`
 }
@@ -294,20 +344,20 @@ function chatSection(section) {
     .replace(/\s*bubble\s*(sent|received)?\s*/i, '')
     .trim()
 
-  return `<div class="flex flex-col gap-2 px-4" style="padding-top:16px;padding-bottom:12px">
+  return `<div style="display:flex;flex-direction:column;gap:8px;padding:16px">
     ${section.contains.map((item, i) => {
       if (isTimestamp(item)) {
-        return `<div class="flex justify-center py-3">
-          <span class="text-xs text-muted-foreground bg-muted select-none" style="padding:4px 12px;border-radius:9999px">${msgText(item) || item}</span>
+        return `<div style="display:flex;justify-content:center;padding:8px 0">
+          <span style="font-size:12px;color:var(--muted-foreground);background:var(--muted);padding:4px 12px;border-radius:9999px;user-select:none">${msgText(item) || item}</span>
         </div>`
       }
       if (isTyping(item)) {
-        return `<div class="flex items-end gap-2" style="margin-top:4px">
-          <div style="width:32px;height:32px;border-radius:50%;background:var(--wf-muted);border:1px solid var(--wf-border);flex-shrink:0"></div>
-          <div style="background:var(--wf-muted);border:1px solid var(--wf-border);border-radius:16px 16px 16px 0;padding:12px 16px;display:flex;align-items:center;gap:4px">
-            <span style="width:8px;height:8px;border-radius:50%;background:var(--wf-text-muted);opacity:0.5;flex-shrink:0"></span>
-            <span style="width:8px;height:8px;border-radius:50%;background:var(--wf-text-muted);opacity:0.5;flex-shrink:0"></span>
-            <span style="width:8px;height:8px;border-radius:50%;background:var(--wf-text-muted);opacity:0.5;flex-shrink:0"></span>
+        return `<div style="display:flex;align-items:flex-end;gap:8px;margin-top:4px">
+          <div class="sc-avatar" style="width:28px;height:28px;font-size:10px">...</div>
+          <div style="background:var(--muted);border-radius:16px 16px 16px 0;padding:10px 14px;display:flex;align-items:center;gap:4px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--muted-foreground);opacity:0.4"></span>
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--muted-foreground);opacity:0.4"></span>
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--muted-foreground);opacity:0.4"></span>
           </div>
         </div>`
       }
@@ -316,22 +366,22 @@ function chatSection(section) {
       const text = msgText(item)
       const prevSent = i > 0 ? isSent(section.contains[i - 1]) : null
       const grouped  = prevSent === sent
-      const mt = grouped ? '4px' : '12px'
+      const mt = grouped ? '2px' : '8px'
 
       if (sent) {
-        return `<div class="flex" style="justify-content:flex-end;padding-left:56px;margin-top:${mt}">
-          <div style="background:var(--wf-text);color:var(--wf-primary-fg);border-radius:16px 16px 0 16px;padding:12px 16px;max-width:80%">
-            <p class="text-base select-none" style="line-height:1.6">${text}</p>
+        return `<div style="display:flex;justify-content:flex-end;padding-left:56px;margin-top:${mt}">
+          <div style="background:var(--primary);color:var(--primary-foreground);border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:80%">
+            <p style="font-size:14px;line-height:1.5;user-select:none">${text}</p>
           </div>
         </div>`
       }
-      return `<div class="flex items-end gap-2" style="padding-right:56px;margin-top:${mt}">
+      return `<div style="display:flex;align-items:flex-end;gap:8px;padding-right:56px;margin-top:${mt}">
         ${grouped
-          ? `<div style="width:32px;flex-shrink:0"></div>`
-          : `<div style="width:32px;height:32px;border-radius:50%;background:var(--wf-muted);border:1px solid var(--wf-border);flex-shrink:0"></div>`
+          ? `<div style="width:28px;flex-shrink:0"></div>`
+          : `<div class="sc-avatar" style="width:28px;height:28px;font-size:10px">${text.slice(0, 1).toUpperCase()}</div>`
         }
-        <div style="background:var(--wf-muted);border:1px solid var(--wf-border);border-radius:16px 16px 16px 0;padding:12px 16px;max-width:80%">
-          <p class="text-base select-none" style="line-height:1.6">${text}</p>
+        <div style="background:var(--muted);border-radius:16px 16px 16px 4px;padding:10px 14px;max-width:80%">
+          <p style="font-size:14px;line-height:1.5;user-select:none">${text}</p>
         </div>
       </div>`
     }).join('')}
@@ -344,19 +394,28 @@ function listSection(section) {
   const hasTableHeaders = section.contains.some(s => /\bcolumn header\b/i.test(s))
   if (hasTableHeaders) return dataTableSection(section)
 
-  return `<div class="flex flex-col">
-    ${section.label ? `<div class="px-4" style="padding-top:12px;padding-bottom:4px">${sectionLabel(section.label)}</div>` : ''}
-    ${section.contains.map((item, i) => `<div>
-      <div class="flex items-center gap-3 px-4 py-3">
-        <div class="wf-avatar" style="width:40px;height:40px;font-size:13px">${displayLabel(item).slice(0, 2).toUpperCase()}</div>
-        <div class="flex-1 flex flex-col gap-1 min-w-0">
-          <div class="text-base font-medium text-foreground select-none leading-tight">${displayLabel(item)}</div>
-          <div style="height:8px;width:66%;background:var(--wf-border);opacity:0.6;border-radius:4px"></div>
+  // Simple list with items
+  return `<div style="display:flex;flex-direction:column">
+    ${section.label ? `<div style="padding:12px 16px 4px">${sectionLabel(section.label)}</div>` : ''}
+    ${section.contains.map((item, i) => {
+      const parts = item.split(/\s*—\s*/)
+      const primary = displayLabel(parts[0])
+      const secondary = parts[1] ? displayLabel(parts[1]) : null
+      const hasBadge = parts.some(p => /\bbadge\b/i.test(p))
+      const hasChevron = /·\s*chevron\b/i.test(item)
+
+      return `<div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px">
+          <div class="sc-avatar sc-avatar--lg">${primary.slice(0, 2).toUpperCase()}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500;color:var(--foreground);user-select:none;line-height:1.4">${primary}</div>
+            ${secondary ? `<div style="font-size:13px;color:var(--muted-foreground);user-select:none;margin-top:1px">${secondary}</div>` : ''}
+          </div>
+          ${hasChevron || !hasBadge ? `<span style="color:var(--muted-foreground);flex-shrink:0">${icon('chevron-right', 16)}</span>` : ''}
         </div>
-        ${icon('chevron-right', 18)}
-      </div>
-      ${i < section.contains.length - 1 ? `<div class="wf-separator"></div>` : ''}
-    </div>`).join('')}
+        ${i < section.contains.length - 1 ? `<div class="sc-separator" style="margin-left:68px"></div>` : ''}
+      </div>`
+    }).join('')}
   </div>`
 }
 
@@ -371,99 +430,91 @@ function dataTableSection(section) {
   const rows       = section.contains.filter(s => !isColHeader(s) && !isPaginate(s))
   const cols       = headers.map(h => h.replace(/\s*column header\s*/i, '').trim())
 
-  function renderCell(cell) {
-    const c = cell.trim()
-    const statusMatch = c.match(/^(fulfilled|processing|cancelled|pending|shipped|refunded)\s+badge$/i)
-    if (statusMatch) {
-      const status = statusMatch[1]
-      const color =
-        /fulfilled|shipped/i.test(status) ? '#16a34a' :
-        /cancelled|refunded/i.test(status) ? '#ef4444' :
-        /processing|pending/i.test(status) ? '#ca8a04' : 'var(--wf-text-muted)'
-      const label = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
-      return `<span class="wf-badge" style="color:${color};font-size:11px">${label}</span>`
+  function renderStatusBadge(text) {
+    const t = text.toLowerCase()
+    if (/fulfilled|shipped|positive|resolved|active|completed|success/i.test(t)) {
+      return `<span class="sc-badge sc-badge--success">${text}</span>`
     }
-    if (/\blink\b$/i.test(c)) {
-      const label = c.replace(/\s*link\s*$/i, '').trim() || 'View'
-      return `<span class="text-xs select-none" style="color:#3b82f6;cursor:default">${label}</span>`
+    if (/cancelled|refunded|failed|rejected|destructive/i.test(t)) {
+      return `<span class="sc-badge sc-badge--destructive">${text}</span>`
     }
-    return `<span class="text-xs text-foreground select-none">${c}</span>`
+    if (/processing|pending|monitoring|warning/i.test(t)) {
+      return `<span class="sc-badge sc-badge--warning">${text}</span>`
+    }
+    return `<span class="sc-badge">${text}</span>`
   }
 
-  let tableHtml = '<div class="flex flex-col w-full">'
+  let html = '<div class="sc-card">'
 
   if (section.label) {
-    tableHtml += `<div style="padding:12px 12px 4px" class="wf-section__label">${section.label}</div>`
+    html += `<div class="sc-card-header"><div class="sc-card-title">${section.label}</div></div>`
   }
 
-  tableHtml += '<div class="w-full overflow-x-auto"><table style="width:100%;font-size:11px;border-collapse:collapse">'
+  html += '<div class="sc-card-content" style="padding:0"><table class="sc-table">'
 
   if (cols.length > 0) {
-    tableHtml += '<thead><tr style="border-bottom:1px solid var(--wf-border)">'
+    html += '<thead><tr>'
     cols.forEach(col => {
-      tableHtml += `<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--wf-text-muted);text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;user-select:none">${col}</th>`
+      html += `<th class="sc-th">${col}</th>`
     })
-    tableHtml += '</tr></thead>'
+    html += '</tr></thead>'
   }
 
-  tableHtml += '<tbody>'
+  html += '<tbody>'
   rows.forEach(row => {
     const cells = row.split(/\s*—\s*/).map(s => s.trim())
-    tableHtml += '<tr style="border-bottom:1px solid rgba(228,228,231,0.4)">'
-    cells.forEach(cell => {
+    html += '<tr>'
+    cells.forEach((cell, ci) => {
       const c = cell.trim()
-      const statusMatch = c.match(/^(fulfilled|processing|cancelled|pending|shipped|refunded)\s+badge$/i)
+      const badgeMatch = c.match(/^(.+?)\s+badge$/i)
       let cellContent
-      if (statusMatch) {
-        const status = statusMatch[1]
-        const color =
-          /fulfilled|shipped/i.test(status) ? '#16a34a' :
-          /cancelled|refunded/i.test(status) ? '#ef4444' :
-          /processing|pending/i.test(status) ? '#ca8a04' : 'var(--wf-text-muted)'
-        const label = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
-        cellContent = `<span class="wf-badge" style="color:${color};font-size:11px">${label}</span>`
+      if (badgeMatch) {
+        cellContent = renderStatusBadge(badgeMatch[1])
       } else if (/\blink\b$/i.test(c)) {
         const label = c.replace(/\s*link\s*$/i, '').trim() || 'View'
-        cellContent = `<span style="font-size:11px;color:#3b82f6;cursor:default;user-select:none">${label}</span>`
+        cellContent = `<span style="font-size:14px;color:var(--chart-1);user-select:none">${label}</span>`
       } else {
-        cellContent = `<span style="font-size:11px;color:var(--wf-text);user-select:none">${c}</span>`
+        cellContent = `<span style="user-select:none">${c}</span>`
       }
-      tableHtml += `<td style="padding:8px 12px;white-space:nowrap">${cellContent}</td>`
+      html += `<td class="sc-td">${cellContent}</td>`
     })
-    tableHtml += '</tr>'
+    html += '</tr>'
   })
-  tableHtml += '</tbody></table></div>'
+  html += '</tbody></table></div>'
 
   if (pagination.length > 0) {
-    tableHtml += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--wf-border)">'
+    html += `<div class="sc-card-footer" style="justify-content:space-between;padding:12px 24px;border-top:1px solid var(--border)">`
     pagination.forEach(item => {
       const isPageLabel = /\bpage\b/i.test(item) && !/\bbutton\b/i.test(item)
       if (isPageLabel) {
-        tableHtml += `<span style="font-size:11px;color:var(--wf-text-muted);user-select:none">${item}</span>`
+        html += `<span style="font-size:13px;color:var(--muted-foreground);user-select:none">${item}</span>`
       } else {
-        tableHtml += `<button class="wf-btn wf-btn--outline wf-btn--sm" style="height:24px;font-size:11px;padding:0 8px">${item.replace(/\s*button\s*$/i, '').trim()}</button>`
+        html += `<button class="sc-btn sc-btn--outline sc-btn--xs">${item.replace(/\s*button\s*$/i, '').trim()}</button>`
       }
     })
-    tableHtml += '</div>'
+    html += '</div>'
   }
 
-  tableHtml += '</div>'
-  return tableHtml
+  html += '</div>'
+  return html
 }
 
 // ─── Grid ─────────────────────────────────────────────────────────────────────
 
 function gridSection(section) {
-  return `<div class="flex flex-col gap-3">
+  return `<div style="display:flex;flex-direction:column;gap:12px">
     ${section.label ? sectionLabel(section.label) : ''}
-    <div class="grid grid-cols-2 gap-2">
-      ${section.contains.map(item => `<div class="wf-card">
-        <div class="wf-image-placeholder w-full" style="height:128px;border-radius:0;aspect-ratio:auto"></div>
-        <div class="wf-card__content">
-          <p class="text-sm font-medium text-foreground select-none">${displayLabel(item)}</p>
-          ${item.includes('—') ? `<p class="text-xs text-muted-foreground select-none" style="margin-top:4px">${item.split('—')[1]?.trim()}</p>` : ''}
-        </div>
-      </div>`).join('')}
+    <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:12px">
+      ${section.contains.map(item => {
+        const parts = item.split('—').map(s => s.trim())
+        return `<div class="sc-card">
+          <div class="sc-image-placeholder" style="height:140px;border-radius:0;aspect-ratio:auto"></div>
+          <div class="sc-card-content" style="padding:12px 16px">
+            <p style="font-size:14px;font-weight:500;color:var(--foreground);user-select:none">${displayLabel(parts[0])}</p>
+            ${parts[1] ? `<p style="font-size:13px;color:var(--muted-foreground);user-select:none;margin-top:4px">${parts[1]}</p>` : ''}
+          </div>
+        </div>`
+      }).join('')}
     </div>
   </div>`
 }
@@ -477,23 +528,30 @@ function footerSection(section) {
   const copyright   = section.contains.find(isCopyright)
   const links       = section.contains.filter(s => !isLogoItem(s) && !isCopyright(s))
 
-  return `<div class="flex flex-col gap-3 px-4 py-4">
-    <div class="flex items-center gap-4" style="flex-wrap:wrap">
-      ${logo ? `<span style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--wf-text);background:var(--wf-muted);border:1px solid var(--wf-border);border-radius:4px;padding:2px 8px;user-select:none;flex-shrink:0">LOGO</span>` : ''}
-      <div class="flex" style="flex-wrap:wrap;gap:16px 16px">
-        ${links.map(item => `<span class="text-xs text-muted-foreground select-none">${item}</span>`).join('')}
+  return `<div style="display:flex;flex-direction:column;gap:16px;padding:24px 32px">
+    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+      ${logo ? `<span class="sc-header-logo">${displayLabel(logo)}</span>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:20px">
+        ${links.map(item => `<span style="font-size:13px;color:var(--muted-foreground);user-select:none">${item}</span>`).join('')}
       </div>
     </div>
-    ${copyright ? `<div class="text-xs text-muted-foreground select-none" style="opacity:0.6">${copyright}</div>` : ''}
+    ${copyright ? `<div style="font-size:13px;color:var(--muted-foreground);opacity:0.6;user-select:none">${copyright}</div>` : ''}
   </div>`
 }
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function emptyStateSection(section) {
-  return `<div class="flex flex-col items-center gap-3" style="text-align:center">
-    <div style="width:64px;height:64px;border-radius:16px;background:var(--wf-muted);border:1px solid var(--wf-border);margin-bottom:4px"></div>
-    ${section.contains.map(item => smartItem(item)).join('')}
+  return `<div class="sc-empty">
+    <div class="sc-empty-icon">${icon('inbox', 48)}</div>
+    ${section.contains.map(item => {
+      const type = classify(item)
+      const text = displayLabel(item)
+      if (type === 'headline') return `<div class="sc-empty-title">${text}</div>`
+      if (type === 'subheadline' || type === 'text') return `<div class="sc-empty-description">${text}</div>`
+      if (type.startsWith('btn')) return `<div class="sc-empty-action">${smartItem(item)}</div>`
+      return smartItem(item)
+    }).join('')}
   </div>`
 }
 
@@ -503,9 +561,11 @@ function bannerSection(section) {
   const items   = section.contains.filter(c => !classify(c).startsWith('btn'))
   const actions = section.contains.filter(c =>  classify(c).startsWith('btn'))
 
-  return `<div class="flex flex-col items-start gap-2">
-    ${items.map(item => smartItem(item)).join('')}
-    ${actions.map(item => smartItem(item)).join('')}
+  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      ${items.map(item => `<span style="font-size:14px;color:var(--secondary-foreground);user-select:none">${displayLabel(item)}</span>`).join('')}
+    </div>
+    ${actions.length > 0 ? `<div style="display:flex;gap:8px;flex-shrink:0">${actions.map(item => smartItem(item)).join('')}</div>` : ''}
   </div>`
 }
 
@@ -516,8 +576,8 @@ function toolbarSection(section) {
 
   return section.contains.map(item =>
     isInput(item)
-      ? `<input class="wf-input flex-1" placeholder="${displayLabel(item)}" readonly>`
-      : `<span class="wf-btn wf-btn--ghost wf-btn--icon flex-shrink-0" title="${item}">${headerIcon(item)}</span>`
+      ? `<input class="sc-input" style="flex:1" placeholder="${displayLabel(item)}" readonly>`
+      : `<span class="sc-btn sc-btn--ghost sc-btn--icon" title="${item}">${headerIcon(item)}</span>`
   ).join('')
 }
 
@@ -525,13 +585,13 @@ function toolbarSection(section) {
 
 function sectionGroupSection(section) {
   return `<div>
-    ${section.label ? `<div class="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none" style="padding:12px 4px 8px">${section.label}</div>` : ''}
-    <div style="background:var(--wf-bg);border:1px solid var(--wf-border);border-radius:12px;overflow:hidden">
+    ${section.label ? `<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted-foreground);padding:12px 4px 8px;user-select:none">${section.label}</div>` : ''}
+    <div class="sc-card">
       ${section.contains.map((item, i) => `<div>
-        <div class="flex items-center px-4 py-3">
+        <div style="display:flex;align-items:center;padding:12px 16px">
           ${smartItem(item)}
         </div>
-        ${i < section.contains.length - 1 ? `<div style="height:1px;background:var(--wf-border);margin-left:16px"></div>` : ''}
+        ${i < section.contains.length - 1 ? `<div class="sc-separator"></div>` : ''}
       </div>`).join('')}
     </div>
   </div>`
@@ -540,7 +600,7 @@ function sectionGroupSection(section) {
 // ─── Action Row ───────────────────────────────────────────────────────────────
 
 function actionRowSection(section) {
-  return `<div class="flex flex-col items-start gap-2">
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
     ${section.contains.map(item => smartItem(item)).join('')}
   </div>`
 }
@@ -563,29 +623,34 @@ function statsRowSection(section) {
   const isRich = section.contains.some(s => s.includes(' — '))
 
   if (isRich) {
-    return `<div class="grid grid-cols-2 gap-2 p-3">
+    const count = section.contains.length
+    const gridCols = count <= 2 ? 2 : count <= 3 ? 3 : 4
+
+    return `<div style="display:grid;grid-template-columns:repeat(${gridCols}, 1fr);gap:16px">
       ${section.contains.map(item => {
         const { label, value, badge } = parseStatCard(item)
-        const trend = badge.startsWith('+') ? 'up' : badge.startsWith('-') ? 'down' : null
-        const badgeColor = trend === 'up' ? '#16a34a' : trend === 'down' ? '#ef4444' : 'var(--wf-text-muted)'
+        const trend = badge.startsWith('+') ? 'up' : badge.startsWith('-') ? 'down' : 'neutral'
 
-        return `<div class="flex flex-col gap-1" style="padding:12px;border-radius:8px;border:1px solid var(--wf-border);background:var(--wf-bg)">
-          <div class="text-xs text-muted-foreground select-none leading-tight">${label}</div>
-          <div class="text-lg font-bold text-foreground select-none">${value}</div>
-          ${badge ? `<span class="text-xs font-medium select-none" style="color:${badgeColor}">${badge}</span>` : ''}
+        return `<div class="sc-card">
+          <div class="sc-card-content" style="padding:16px 20px">
+            <div class="sc-stat-label">${label}</div>
+            <div class="sc-stat-value" style="margin-top:4px">${value}</div>
+            ${badge ? `<div class="sc-stat-change sc-stat-change--${trend}" style="margin-top:4px">${badge}</div>` : ''}
+          </div>
         </div>`
       }).join('')}
     </div>`
   }
 
-  return `<div class="flex flex-row" style="border-top:1px solid var(--wf-border);border-bottom:1px solid var(--wf-border)">
+  // Simple stat blocks
+  return `<div style="display:flex;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
     ${section.contains.map((item, i) => {
       const { value, label } = parseStatCard(item)
-      const borderRight = i < section.contains.length - 1 ? 'border-right:1px solid var(--wf-border)' : ''
+      const borderRight = i < section.contains.length - 1 ? 'border-right:1px solid var(--border)' : ''
 
-      return `<div class="flex-1 flex flex-col items-center gap-1" style="padding:16px;${borderRight}">
-        <div class="text-2xl font-bold text-foreground select-none">${value}</div>
-        <div class="text-xs text-muted-foreground select-none" style="text-align:center">${label}</div>
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:20px;${borderRight}">
+        <div class="sc-stat-value">${value}</div>
+        <div class="sc-stat-label">${label}</div>
       </div>`
     }).join('')}
   </div>`
@@ -597,16 +662,16 @@ function modalSection(section) {
   const actionItems = section.contains.filter(c => classify(c).startsWith('btn'))
   const bodyItems   = section.contains.filter(c => !classify(c).startsWith('btn'))
 
-  return `<div class="w-full flex items-center justify-center">
-    <div style="background:var(--wf-bg);border:1px solid var(--wf-border);border-radius:12px;width:85%;max-width:320px;box-shadow:0 4px 24px rgba(0,0,0,0.12);overflow:hidden">
-      <div class="flex items-center justify-between px-4 py-3" style="border-bottom:1px solid var(--wf-border)">
-        <span class="text-sm font-semibold text-foreground select-none">${section.label ?? 'Dialog'}</span>
-        <span class="wf-btn wf-btn--ghost wf-btn--icon" style="width:24px;height:24px">${icon('x', 14)}</span>
+  return `<div style="width:100%;display:flex;align-items:center;justify-content:center">
+    <div class="sc-card" style="width:85%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.12)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-size:16px;font-weight:600;color:var(--foreground);user-select:none">${section.label ?? 'Dialog'}</span>
+        <span class="sc-btn sc-btn--ghost sc-btn--icon" style="width:28px;height:28px">${icon('x', 16)}</span>
       </div>
-      <div class="px-4 py-3 flex flex-col gap-2">
+      <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
         ${bodyItems.map(item => smartItem(item)).join('')}
       </div>
-      ${actionItems.length > 0 ? `<div class="px-4 flex gap-2" style="padding-bottom:12px;padding-top:12px;justify-content:flex-end;border-top:1px solid var(--wf-border)">
+      ${actionItems.length > 0 ? `<div style="display:flex;gap:8px;padding:12px 20px 16px;justify-content:flex-end;border-top:1px solid var(--border)">
         ${actionItems.map(item => smartItem(item)).join('')}
       </div>` : ''}
     </div>
@@ -618,17 +683,16 @@ function modalSection(section) {
 function loaderSection(section) {
   const desc = section.contains[0] ? displayLabel(section.contains[0]) : null
 
-  // Simple loader: spinning ring + optional description
-  return `<div class="flex flex-col items-center justify-center gap-4" style="padding:80px 0">
-    <div style="width:40px;height:40px;border:3px solid var(--wf-border);border-top-color:var(--wf-text);border-radius:50%;animation:wf-loader-spin 0.8s linear infinite"></div>
-    ${desc ? `<p class="text-xs text-muted-foreground select-none" style="text-align:center;max-width:240px">${desc}</p>` : ''}
+  return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:80px 0">
+    <div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--foreground);border-radius:50%;animation:wf-loader-spin 0.8s linear infinite"></div>
+    ${desc ? `<p style="font-size:14px;color:var(--muted-foreground);user-select:none;text-align:center;max-width:240px">${desc}</p>` : ''}
   </div>`
 }
 
 // ─── Map ──────────────────────────────────────────────────────────────────────
 
 function mapSection(_section) {
-  return `<div class="wf-image-placeholder w-full" style="min-height:260px;border-radius:0;display:flex;align-items:center;justify-content:center">
+  return `<div class="sc-image-placeholder" style="min-height:260px;border-radius:0;display:flex;align-items:center;justify-content:center;color:var(--muted-foreground)">
     ${icon('map-pin', 32)}
   </div>`
 }
@@ -639,53 +703,53 @@ function floatingSearchSection(section) {
   const hasAvatar  = section.contains.some(s => /\bavatar\b/i.test(s))
   const searchItem = section.contains.find(s => !/\bavatar\b/i.test(s))
 
-  return `<div class="flex items-center gap-2 px-4 py-3">
-    <div class="flex-1 flex items-center gap-2" style="background:var(--wf-bg);border:1px solid var(--wf-border);border-radius:9999px;padding:8px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+  return `<div style="display:flex;align-items:center;gap:8px;padding:12px 16px">
+    <div style="flex:1;display:flex;align-items:center;gap:8px;background:var(--background);border:1px solid var(--border);border-radius:9999px;padding:8px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
       ${icon('search', 14)}
-      <span class="text-sm text-muted-foreground select-none flex-1">${displayLabel(searchItem ?? 'Search')}</span>
+      <span style="font-size:14px;color:var(--muted-foreground);user-select:none;flex:1">${displayLabel(searchItem ?? 'Search')}</span>
     </div>
-    ${hasAvatar ? `<div class="wf-avatar wf-avatar--sm" style="width:32px;height:32px;font-size:10px">Me</div>` : ''}
+    ${hasAvatar ? `<div class="sc-avatar">Me</div>` : ''}
   </div>`
 }
 
 // ─── Map Controls ─────────────────────────────────────────────────────────────
 
 function mapControlsSection(section) {
-  return `<div class="flex flex-col items-end gap-2 px-4 py-2">
-    ${section.contains.map(item => `<span class="wf-btn wf-btn--outline wf-btn--icon" style="border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)" title="${item}">${headerIcon(item)}</span>`).join('')}
+  return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;padding:8px 16px">
+    ${section.contains.map(item => `<span class="sc-btn sc-btn--outline sc-btn--icon" style="border-radius:var(--radius);box-shadow:0 1px 3px rgba(0,0,0,0.06)" title="${item}">${headerIcon(item)}</span>`).join('')}
   </div>`
 }
 
 // ─── Category Strip ───────────────────────────────────────────────────────────
 
 function categoryStripSection(section) {
-  return `<div class="flex items-center gap-2 overflow-x-auto px-4 py-3">
-    ${section.contains.map(item => `<span class="wf-badge whitespace-nowrap flex-shrink-0" style="padding:4px 12px;border-radius:9999px">${item}</span>`).join('')}
+  return `<div style="display:flex;align-items:center;gap:8px;overflow-x:auto;padding:12px 16px">
+    ${section.contains.map((item, i) => `<span class="sc-badge${i === 0 ? '' : ' sc-badge--outline'}" style="white-space:nowrap;flex-shrink:0;padding:4px 14px">${item}</span>`).join('')}
   </div>`
 }
 
 // ─── Place List ───────────────────────────────────────────────────────────────
 
 function placeListSection(section) {
-  return `<div class="flex flex-col">
-    ${section.label ? `<div class="px-4" style="padding-top:12px;padding-bottom:4px">${sectionLabel(section.label)}</div>` : ''}
+  return `<div style="display:flex;flex-direction:column">
+    ${section.label ? `<div style="padding:12px 16px 4px">${sectionLabel(section.label)}</div>` : ''}
     ${section.contains.map((item, i) => {
       const parts = item.split('—').map(s => s.trim())
       const name = parts[0]
       const distance = parts[1] || null
 
       return `<div>
-        <div class="flex items-center gap-3 px-4 py-3">
-          <div style="width:40px;height:40px;border-radius:12px;background:var(--wf-muted);border:1px solid var(--wf-border);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px">
+          <div style="width:40px;height:40px;border-radius:var(--radius);background:var(--muted);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--muted-foreground)">
             ${icon('map-pin', 16)}
           </div>
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-foreground select-none">${name}</div>
-            ${distance ? `<div class="text-xs text-muted-foreground select-none">${distance}</div>` : ''}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500;color:var(--foreground);user-select:none">${name}</div>
+            ${distance ? `<div style="font-size:13px;color:var(--muted-foreground);user-select:none;margin-top:2px">${distance}</div>` : ''}
           </div>
-          ${icon('chevron-right', 16)}
+          <span style="color:var(--muted-foreground);flex-shrink:0">${icon('chevron-right', 16)}</span>
         </div>
-        ${i < section.contains.length - 1 ? `<div class="wf-separator"></div>` : ''}
+        ${i < section.contains.length - 1 ? `<div class="sc-separator" style="margin-left:68px"></div>` : ''}
       </div>`
     }).join('')}
   </div>`
@@ -694,8 +758,8 @@ function placeListSection(section) {
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 function tabsSection(section) {
-  return `<div class="flex" style="border-bottom:1px solid var(--wf-border)">
-    ${section.contains.map((item, i) => `<div class="text-sm font-medium select-none whitespace-nowrap cursor-default" style="padding:12px 16px;${i === 0 ? 'color:var(--wf-text);border-bottom:2px solid var(--wf-text)' : 'color:var(--wf-text-muted)'}">${item}</div>`).join('')}
+  return `<div class="sc-tabs">
+    ${section.contains.map((item, i) => `<div class="sc-tab${i === 0 ? ' sc-tab--active' : ''}">${item}</div>`).join('')}
   </div>`
 }
 
@@ -704,21 +768,23 @@ function tabsSection(section) {
 function featureSection(section) {
   const isGrid = section.layout === 'grid' || section.type === 'feature-grid'
 
-  return `<div class="flex flex-col gap-3">
+  return `<div style="display:flex;flex-direction:column;gap:12px">
     ${section.label ? sectionLabel(section.label) : ''}
-    <div class="${isGrid ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-2'}">
+    <div style="display:${isGrid ? 'grid' : 'flex'};${isGrid ? 'grid-template-columns:repeat(2, 1fr)' : 'flex-direction:column'};gap:12px">
       ${section.contains.map(item => {
         const parts = item.split('—').map(s => s.trim())
         const title = parts[0]
         const desc  = parts[1] || null
 
-        return `<div class="flex items-start gap-3" style="padding:12px;border-radius:8px;border:1px solid var(--wf-border);background:var(--wf-bg)">
-          <div style="width:32px;height:32px;border-radius:8px;background:var(--wf-muted);border:1px solid var(--wf-border);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--wf-text-muted)">
-            ${headerIcon(title)}
-          </div>
-          <div class="flex flex-col gap-1 min-w-0">
-            <span class="text-sm font-medium text-foreground select-none">${title}</span>
-            ${desc ? `<span class="text-xs text-muted-foreground select-none">${desc}</span>` : ''}
+        return `<div class="sc-card">
+          <div class="sc-card-content" style="display:flex;align-items:flex-start;gap:12px;padding:16px">
+            <div style="width:36px;height:36px;border-radius:var(--radius);background:var(--muted);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--muted-foreground)">
+              ${headerIcon(title)}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+              <span style="font-size:14px;font-weight:500;color:var(--foreground);user-select:none">${title}</span>
+              ${desc ? `<span style="font-size:13px;color:var(--muted-foreground);user-select:none;line-height:1.4">${desc}</span>` : ''}
+            </div>
           </div>
         </div>`
       }).join('')}
@@ -748,13 +814,13 @@ function chartSection(section) {
   }
 
   // Named series
-  const lineItems = contains.filter(s => /\bline\s*—\s*(blue|violet|green|red|orange|purple)/i.test(s))
+  const lineItems = contains.filter(s => /\bline\s*—\s*(blue|violet|green|red|orange|purple|gray|grey)/i.test(s))
 
-  const tabs = tabItems.length > 0 ? `<div class="flex gap-1" style="justify-content:flex-end">
+  const tabs = tabItems.length > 0 ? `<div class="sc-tab-pills">
     ${tabItems.map(tab => {
       const label = tab.replace(/\s*selector\s+tab\s*/i, '').replace(/\s*\bactive\b\s*/i, '').trim()
       const isActive = /\bactive\b/i.test(tab)
-      return `<span class="text-xs select-none" style="padding:2px 8px;border-radius:4px;${isActive ? 'background:var(--wf-text);color:var(--wf-primary-fg);font-weight:500' : 'color:var(--wf-text-muted);border:1px solid var(--wf-border)'}">${label}</span>`
+      return `<span class="sc-tab-pill${isActive ? ' sc-tab-pill--active' : ''}">${label}</span>`
     }).join('')}
   </div>` : ''
 
@@ -762,15 +828,31 @@ function chartSection(section) {
     ? lineChartViz(axisLabels, lineItems)
     : barChartViz()
 
-  return `<div class="flex flex-col gap-2 w-full">
-    ${section.label ? `<div style="padding:0 16px">${sectionLabel(section.label)}</div>` : ''}
-    ${tabs ? `<div style="padding:0 16px">${tabs}</div>` : ''}
-    ${chart}
+  return `<div class="sc-card">
+    <div class="sc-card-header sc-card-header--row">
+      <div>
+        ${section.label ? `<div class="sc-card-title">${section.label}</div>` : ''}
+      </div>
+      ${tabs}
+    </div>
+    <div class="sc-card-content">
+      ${chart}
+    </div>
+    ${lineItems.length > 0 ? `<div class="sc-card-footer" style="padding-top:0">
+      ${lineItems.map(item => {
+        const name = item.split(/\s*—\s*/)[0]?.replace(/\s*line\s*/i, '').trim() ?? item
+        const colorMatch = item.match(/—\s*(blue|violet|green|red|orange|purple|gray|grey)/i)
+        const colorName = colorMatch?.[1]?.toLowerCase() ?? 'blue'
+        const colorMap = { blue: 'var(--chart-1)', green: 'var(--chart-2)', orange: 'var(--chart-3)', red: 'var(--chart-4)', violet: 'var(--chart-5)', purple: 'var(--chart-5)', gray: 'var(--muted-foreground)', grey: 'var(--muted-foreground)' }
+        const color = colorMap[colorName] || 'var(--chart-1)'
+        return `<div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:3px;border-radius:2px;background:${color}"></div><span style="font-size:12px;color:var(--muted-foreground);user-select:none">${name}</span></div>`
+      }).join('')}
+    </div>` : ''}
   </div>`
 }
 
 function lineChartViz(axisLabels, lineItems) {
-  const W = 400, H = 180, px = 10, py = 18
+  const W = 500, H = 200, px = 16, py = 20
   const blueData   = [38, 52, 45, 63, 58, 74]
   const violetData = [28, 34, 41, 36, 45, 50]
   const n = blueData.length
@@ -781,64 +863,75 @@ function lineChartViz(axisLabels, lineItems) {
   const areaD = (d) =>
     `${pathD(d)} L${toX(n - 1).toFixed(1)},${(H - py).toFixed(1)} L${toX(0).toFixed(1)},${(H - py).toFixed(1)} Z`
 
-  const seriesColors = lineItems.map(item =>
-    /blue/i.test(item) ? '#3b82f6' : /violet/i.test(item) ? '#8b5cf6' : '#10b981'
-  )
+  const colorMap = { blue: 'var(--chart-1)', green: 'var(--chart-2)', orange: 'var(--chart-3)', red: 'var(--chart-4)', violet: 'var(--chart-5)', purple: 'var(--chart-5)', gray: '#71717a', grey: '#71717a' }
+
+  const seriesColors = lineItems.map(item => {
+    const match = item.match(/—\s*(blue|violet|green|red|orange|purple|gray|grey)/i)
+    const name = match?.[1]?.toLowerCase() ?? 'blue'
+    return colorMap[name] || 'var(--chart-1)'
+  })
+
   const allData = [blueData, violetData]
 
-  // Build SVG as string
   let svgContent = ''
 
   // Grid lines
   ;[0.25, 0.5, 0.75].forEach(p => {
     const y = py + p * (H - py * 2)
-    svgContent += `<line x1="${px}" y1="${y}" x2="${W - px}" y2="${y}" stroke="var(--wf-border)" stroke-width="0.5" stroke-dasharray="3 2"/>`
+    svgContent += `<line x1="${px}" y1="${y.toFixed(1)}" x2="${W - px}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" opacity="0.6"/>`
   })
+
+  // Baseline
+  svgContent += `<line x1="${px}" y1="${H - py}" x2="${W - px}" y2="${H - py}" stroke="var(--border)" stroke-width="1"/>`
 
   // Areas + lines
   allData.forEach((d, si) => {
-    const color = seriesColors[si] ?? '#888'
-    svgContent += `<path d="${areaD(d)}" fill="${color}" fill-opacity="0.07"/>`
-    svgContent += `<path d="${pathD(d)}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
+    const color = seriesColors[si] ?? 'var(--chart-1)'
+    svgContent += `<path d="${areaD(d)}" fill="${color}" fill-opacity="0.08"/>`
+    svgContent += `<path d="${pathD(d)}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`
+    // Dots
+    d.forEach((v, i) => {
+      svgContent += `<circle cx="${toX(i).toFixed(1)}" cy="${toY(v).toFixed(1)}" r="3" fill="var(--background)" stroke="${color}" stroke-width="2"/>`
+    })
   })
 
   // Axis labels
   if (axisLabels) {
     axisLabels.slice(0, n).forEach((label, i) => {
-      svgContent += `<text x="${toX(i)}" y="${H - 2}" text-anchor="middle" font-size="7" fill="var(--wf-text-muted)" style="user-select:none">${label}</text>`
+      svgContent += `<text x="${toX(i).toFixed(1)}" y="${H - 2}" text-anchor="middle" font-size="11" font-family="-apple-system, BlinkMacSystemFont, sans-serif" fill="var(--muted-foreground)" style="user-select:none">${label}</text>`
     })
   }
 
-  const svgStr = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${svgContent}</svg>`
-
-  // Legend
-  let legendHtml = ''
-  if (lineItems.length > 0) {
-    const legendItems = lineItems.map((item, i) => {
-      const name = item.split(/\s*—\s*/)[0]?.replace(/\s*line\s*/i, '').trim() ?? item
-      const color = seriesColors[i] ?? '#888'
-      return `<div style="display:flex;align-items:center;gap:6px"><div style="width:16px;height:2px;border-radius:2px;background:${color}"></div><span style="font-size:11px;color:var(--wf-text-muted);user-select:none">${name}</span></div>`
-    }).join('')
-    legendHtml = `<div style="display:flex;gap:16px;padding:0 8px;margin-top:4px">${legendItems}</div>`
-  }
-
-  return `<div style="width:100%">${svgStr}${legendHtml}</div>`
+  return `<div style="width:100%"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${svgContent}</svg></div>`
 }
 
 function barChartViz() {
   const bars = [65, 45, 80, 55, 70, 40, 75]
-  let barHtml = ''
-  bars.forEach(h => {
-    barHtml += `<div style="flex:1;background:rgba(24,24,27,0.15);border:1px solid var(--wf-border);border-radius:2px 2px 0 0;height:${h}%"></div>`
-  })
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+  const W = 500, H = 200, px = 16, py = 20
+  const barW = 36
+  const gap = (W - px * 2 - barW * bars.length) / (bars.length - 1)
+
+  let svgContent = ''
 
   // Grid lines
-  let gridHtml = ''
   ;[0.25, 0.5, 0.75].forEach(p => {
-    gridHtml += `<div style="position:absolute;width:100%;border-top:1px solid rgba(228,228,231,0.6);top:${p * 100}%"></div>`
+    const y = py + p * (H - py * 2)
+    svgContent += `<line x1="${px}" y1="${y.toFixed(1)}" x2="${W - px}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" opacity="0.6"/>`
+  })
+  svgContent += `<line x1="${px}" y1="${H - py}" x2="${W - px}" y2="${H - py}" stroke="var(--border)" stroke-width="1"/>`
+
+  // Bars
+  bars.forEach((h, i) => {
+    const x = px + i * (barW + gap)
+    const barH = (h / 100) * (H - py * 2)
+    const y = H - py - barH
+    svgContent += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${barH.toFixed(1)}" rx="4" fill="var(--chart-1)" opacity="0.85"/>`
+    svgContent += `<text x="${(x + barW / 2).toFixed(1)}" y="${H - 2}" text-anchor="middle" font-size="11" font-family="-apple-system, BlinkMacSystemFont, sans-serif" fill="var(--muted-foreground)" style="user-select:none">${labels[i] || ''}</text>`
   })
 
-  return `<div style="width:100%;height:160px;background:var(--wf-muted);border:1px solid var(--wf-border);border-radius:8px;position:relative;overflow:hidden">${gridHtml}<div style="position:absolute;inset:16px 16px 0;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;height:100%;padding-bottom:0">${barHtml}</div></div>`
+  return `<div style="width:100%"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${svgContent}</svg></div>`
 }
 
 // ─── Onboarding ───────────────────────────────────────────────────────────────
@@ -847,21 +940,21 @@ function onboardingSection(section) {
   const stepItems = section.contains.filter(s => !classify(s).startsWith('btn'))
   const btnItems  = section.contains.filter(s =>  classify(s).startsWith('btn'))
 
-  return `<div class="flex flex-col items-center gap-6" style="text-align:center;padding:32px 16px">
-    <div class="wf-image-placeholder" style="width:96px;height:96px;border-radius:16px;aspect-ratio:auto"></div>
-    <div class="flex flex-col gap-2" style="max-width:280px">
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;padding:40px 20px">
+    <div class="sc-image-placeholder" style="width:96px;height:96px;border-radius:16px;aspect-ratio:auto"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;max-width:280px">
       ${stepItems.map(item => {
-        if (classify(item) === 'headline') return `<p class="text-xl font-bold text-foreground select-none">${displayLabel(item)}</p>`
+        if (classify(item) === 'headline') return `<h2 style="font-size:20px;font-weight:600;color:var(--foreground);user-select:none">${displayLabel(item)}</h2>`
         return smartItem(item)
       }).join('')}
     </div>
-    ${btnItems.length > 0 ? `<div class="flex flex-col items-center gap-2">
-      ${btnItems.map(item => smartItem(item)).join('')}
+    ${btnItems.length > 0 ? `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:280px">
+      ${btnItems.map(item => `<div style="width:100%">${smartItem(item)}</div>`).join('')}
     </div>` : ''}
-    <div class="flex gap-2">
-      <div style="height:8px;width:16px;border-radius:9999px;background:var(--wf-text)"></div>
-      <div style="height:8px;width:8px;border-radius:9999px;background:var(--wf-border)"></div>
-      <div style="height:8px;width:8px;border-radius:9999px;background:var(--wf-border)"></div>
+    <div style="display:flex;gap:6px">
+      <div style="height:8px;width:20px;border-radius:9999px;background:var(--primary)"></div>
+      <div style="height:8px;width:8px;border-radius:9999px;background:var(--border)"></div>
+      <div style="height:8px;width:8px;border-radius:9999px;background:var(--border)"></div>
     </div>
   </div>`
 }
@@ -869,29 +962,30 @@ function onboardingSection(section) {
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 
 function pricingSection(section) {
-  return `<div class="flex flex-col gap-3">
+  return `<div style="display:flex;flex-direction:column;gap:16px">
     ${section.label ? sectionLabel(section.label) : ''}
-    <div class="grid grid-cols-2 gap-3">
+    <div style="display:grid;grid-template-columns:repeat(${Math.min(section.contains.length, 3)}, 1fr);gap:16px">
       ${section.contains.map((item, i) => {
         const parts = item.split('—').map(s => s.trim())
         const name = parts[0]
         const price = parts[1] || null
         const featured = i === 1
 
-        const cardStyle = featured
-          ? 'border:1px solid var(--wf-text);background:var(--wf-text);color:var(--wf-primary-fg)'
-          : 'border:1px solid var(--wf-border);background:var(--wf-bg)'
-        const nameColor = featured ? 'opacity:0.7' : 'color:var(--wf-text-muted)'
-        const priceColor = featured ? '' : 'color:var(--wf-text)'
-        const barBg = featured ? 'rgba(255,255,255,0.2)' : 'var(--wf-border)'
-
-        return `<div class="flex flex-col gap-3" style="padding:16px;border-radius:12px;${cardStyle}">
-          <span class="text-xs font-semibold uppercase tracking-wider select-none" style="${nameColor}">${name}</span>
-          ${price ? `<span class="text-2xl font-bold select-none" style="${priceColor}">${price}</span>` : ''}
-          <div style="height:8px;border-radius:2px;background:${barBg};width:70%"></div>
-          <div style="height:8px;border-radius:2px;background:${barBg};width:55%"></div>
-          <div style="height:8px;border-radius:2px;background:${barBg};width:40%"></div>
-          <button class="${featured ? 'wf-btn wf-btn--outline' : 'wf-btn wf-btn--outline'} wf-btn--sm" style="margin-top:4px;${featured ? 'background:var(--wf-primary-fg);color:var(--wf-text);border-color:var(--wf-primary-fg)' : ''}">Get started</button>
+        return `<div class="sc-card" style="${featured ? 'border-color:var(--primary);box-shadow:0 2px 8px rgba(0,0,0,0.1)' : ''}">
+          <div class="sc-card-header">
+            <div class="sc-card-description" style="text-transform:uppercase;font-size:12px;font-weight:600;letter-spacing:0.05em">${name}</div>
+            ${price ? `<div style="font-size:30px;font-weight:700;color:var(--foreground);letter-spacing:-0.02em;margin-top:4px">${price}</div>` : ''}
+          </div>
+          <div class="sc-card-content">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="height:8px;border-radius:4px;background:var(--muted);width:85%"></div>
+              <div style="height:8px;border-radius:4px;background:var(--muted);width:70%"></div>
+              <div style="height:8px;border-radius:4px;background:var(--muted);width:55%"></div>
+            </div>
+          </div>
+          <div class="sc-card-footer">
+            <button class="sc-btn${featured ? '' : ' sc-btn--outline'}" style="width:100%">Get started</button>
+          </div>
         </div>`
       }).join('')}
     </div>
@@ -901,24 +995,23 @@ function pricingSection(section) {
 // ─── Testimonial ──────────────────────────────────────────────────────────────
 
 function testimonialSection(section) {
-  return `<div class="flex flex-col gap-4">
+  return `<div style="display:flex;flex-direction:column;gap:16px">
     ${section.label ? sectionLabel(section.label) : ''}
     ${section.contains.map(item => {
       const parts = item.split('—').map(s => s.trim())
       const quote  = parts[0]
       const author = parts[1] || null
 
-      return `<div class="flex flex-col gap-3" style="padding:16px;border-radius:12px;border:1px solid var(--wf-border);background:var(--wf-bg)">
-        <div class="flex flex-col gap-1">
-          <div style="height:8px;background:var(--wf-border);border-radius:2px;width:100%"></div>
-          <div style="height:8px;background:var(--wf-border);border-radius:2px;width:85%"></div>
-          <div style="height:8px;background:var(--wf-border);border-radius:2px;width:70%"></div>
+      return `<div class="sc-card">
+        <div class="sc-card-content">
+          <div style="display:flex;flex-direction:column;gap:12px">
+            ${quote ? `<p style="font-size:14px;color:var(--foreground);line-height:1.6;font-style:italic;user-select:none">"${quote}"</p>` : ''}
+            ${author ? `<div style="display:flex;align-items:center;gap:8px">
+              <div class="sc-avatar">${author.slice(0, 2).toUpperCase()}</div>
+              <span style="font-size:13px;font-weight:500;color:var(--foreground);user-select:none">${author}</span>
+            </div>` : ''}
+          </div>
         </div>
-        ${quote ? `<p class="text-sm text-muted-foreground select-none" style="font-style:italic">"${quote}"</p>` : ''}
-        ${author ? `<div class="flex items-center gap-2">
-          <div class="wf-avatar wf-avatar--sm">${author.slice(0, 2).toUpperCase()}</div>
-          <span class="text-xs font-medium text-foreground select-none">${author}</span>
-        </div>` : ''}
       </div>`
     }).join('')}
   </div>`
@@ -927,10 +1020,10 @@ function testimonialSection(section) {
 // ─── Gallery ──────────────────────────────────────────────────────────────────
 
 function gallerySection(section) {
-  return `<div class="flex flex-col gap-3">
+  return `<div style="display:flex;flex-direction:column;gap:12px">
     ${section.label ? sectionLabel(section.label) : ''}
-    <div class="grid grid-cols-3 gap-2">
-      ${section.contains.map(item => `<div class="wf-image-placeholder" style="aspect-ratio:1;border-radius:6px"></div>`).join('')}
+    <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px">
+      ${section.contains.map(() => `<div class="sc-image-placeholder" style="aspect-ratio:1;border-radius:var(--radius)"></div>`).join('')}
     </div>
   </div>`
 }
@@ -952,32 +1045,32 @@ function genericSection(section) {
   const isNav = !isChips && !isDetailList && items.every(s => s.length < 24 && /^[A-Z]/.test(s))
 
   if (isChips) {
-    return `<div class="flex flex-col gap-2 w-full">
+    return `<div style="display:flex;flex-direction:column;gap:8px;width:100%;padding:16px">
       ${section.label ? sectionLabel(section.label) : ''}
-      <div class="flex items-center gap-2" style="flex-wrap:wrap">
-        ${items.map(item => `<span class="wf-badge" style="border-radius:9999px;padding:4px 12px">${displayLabel(item)}</span>`).join('')}
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${items.map(item => `<span class="sc-badge">${displayLabel(item)}</span>`).join('')}
       </div>
     </div>`
   }
 
   if (isDetailList) {
-    return `<div class="flex flex-col gap-2 w-full">
+    return `<div style="display:flex;flex-direction:column;gap:8px;width:100%;padding:0 16px">
       ${section.label ? sectionLabel(section.label) : ''}
-      <div class="flex flex-col">
+      <div class="sc-card">
         ${items.map((item, i) => {
           const parts = item.split('—').map(s => s.trim())
           const name = parts[0]
           const detail = parts[1] || null
 
           return `<div>
-            <div class="flex items-center gap-3 py-3">
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-foreground select-none">${name}</div>
-                ${detail ? `<div class="text-xs text-muted-foreground select-none">${detail}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:500;color:var(--foreground);user-select:none">${name}</div>
+                ${detail ? `<div style="font-size:13px;color:var(--muted-foreground);user-select:none;margin-top:2px">${detail}</div>` : ''}
               </div>
-              ${icon('chevron-right', 16)}
+              <span style="color:var(--muted-foreground);flex-shrink:0">${icon('chevron-right', 16)}</span>
             </div>
-            ${i < items.length - 1 ? `<div class="wf-separator"></div>` : ''}
+            ${i < items.length - 1 ? `<div class="sc-separator"></div>` : ''}
           </div>`
         }).join('')}
       </div>
@@ -985,19 +1078,17 @@ function genericSection(section) {
   }
 
   if (isNav) {
-    return `<div class="flex flex-col gap-2 w-full">
+    return `<div style="display:flex;flex-direction:column;gap:8px;width:100%;padding:16px">
       ${section.label ? sectionLabel(section.label) : ''}
-      <div class="flex items-center gap-1" style="flex-wrap:wrap">
-        ${items.map(item => `<span class="text-sm text-muted-foreground select-none" style="padding:8px 12px;border-radius:6px">${item}</span>`).join('')}
-      </div>
+      <nav class="sc-nav" style="flex-wrap:wrap">
+        ${items.map((item, i) => `<span class="sc-nav-item${i === 0 ? ' sc-nav-item--active' : ''}">${item}</span>`).join('')}
+      </nav>
     </div>`
   }
 
   // Default: stack of smart items
-  return `<div class="flex flex-col gap-2 w-full">
+  return `<div style="display:flex;flex-direction:column;gap:8px;width:100%;padding:16px">
     ${section.label ? sectionLabel(section.label) : ''}
-    <div class="flex flex-col items-start gap-2">
-      ${items.map(item => smartItem(item)).join('')}
-    </div>
+    ${items.map(item => smartItem(item)).join('')}
   </div>`
 }

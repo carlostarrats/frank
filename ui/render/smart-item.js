@@ -1,5 +1,5 @@
 // Frank — SmartItem classification and rendering
-// Ports the SmartItem system from WireframeSection.tsx to plain JS + HTML string templates.
+// Classifies "contains" strings and renders them with shadcn-quality HTML.
 
 import { icon, headerIcon } from './icons.js'
 
@@ -54,73 +54,73 @@ export function smartItem(label) {
 
   switch (type) {
     case 'headline':
-      return `<p class="text-2xl font-bold text-foreground leading-tight select-none">${text}</p>`
+      return `<h2 style="font-size:24px;font-weight:600;color:var(--foreground);line-height:1.25;letter-spacing:-0.01em;user-select:none">${text}</h2>`
 
     case 'subheadline':
-      return `<p class="text-base text-muted-foreground leading-snug select-none">${text}</p>`
+      return `<p style="font-size:14px;color:var(--muted-foreground);line-height:1.5;user-select:none">${text}</p>`
 
     case 'body-text':
-      return `<div class="flex flex-col gap-1 w-full">
-        <div style="height:8px;background:var(--wf-border);border-radius:2px;width:100%"></div>
-        <div style="height:8px;background:var(--wf-border);border-radius:2px;width:91%"></div>
-        <div style="height:8px;background:var(--wf-border);border-radius:2px;width:76%"></div>
+      return `<div style="display:flex;flex-direction:column;gap:6px;width:100%">
+        <div style="height:8px;background:var(--muted);border-radius:4px;width:100%"></div>
+        <div style="height:8px;background:var(--muted);border-radius:4px;width:91%"></div>
+        <div style="height:8px;background:var(--muted);border-radius:4px;width:76%"></div>
       </div>`
 
     case 'btn-primary':
-      return `<button class="wf-btn">${text}</button>`
+      return `<button class="sc-btn">${text}</button>`
 
     case 'btn-secondary':
-      return `<button class="wf-btn wf-btn--outline">${text}</button>`
+      return `<button class="sc-btn sc-btn--outline">${text}</button>`
 
     case 'btn-destructive':
-      return `<button class="wf-btn wf-btn--outline">${text}</button>`
+      return `<button class="sc-btn sc-btn--destructive">${text}</button>`
 
     case 'toggle-on':
-      return `<div class="flex items-center justify-between w-full">
-        <span class="text-sm text-foreground select-none">${text}</span>
-        <div class="wf-switch wf-switch--on"></div>
+      return `<div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+        <span style="font-size:14px;color:var(--foreground);user-select:none">${text}</span>
+        <div class="sc-switch sc-switch--on"></div>
       </div>`
 
     case 'toggle-off':
-      return `<div class="flex items-center justify-between w-full">
-        <span class="text-sm text-foreground select-none">${text}</span>
-        <div class="wf-switch"></div>
+      return `<div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+        <span style="font-size:14px;color:var(--foreground);user-select:none">${text}</span>
+        <div class="sc-switch"></div>
       </div>`
 
     case 'row-chevron':
-      return `<div class="flex items-center justify-between w-full">
-        <span class="text-sm text-foreground select-none">${text}</span>
-        <span class="text-muted-foreground flex-shrink-0">${icon('chevron-right', 16)}</span>
+      return `<div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+        <span style="font-size:14px;color:var(--foreground);user-select:none">${text}</span>
+        <span style="color:var(--muted-foreground);flex-shrink:0">${icon('chevron-right', 16)}</span>
       </div>`
 
     case 'image':
-      return `<div class="wf-image-placeholder"></div>`
+      return `<div class="sc-image-placeholder"></div>`
 
     case 'avatar':
-      return `<div class="wf-avatar">${text.slice(0, 2).toUpperCase() || 'U'}</div>`
+      return `<div class="sc-avatar">${text.slice(0, 2).toUpperCase() || 'U'}</div>`
 
     case 'logo':
-      return `<span style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--wf-text);background:var(--wf-muted);border:1px solid var(--wf-border);border-radius:4px;padding:2px 8px;user-select:none">LOGO</span>`
+      return `<span class="sc-header-logo">${text || 'Logo'}</span>`
 
     case 'icon':
-      return `<span class="wf-btn wf-btn--ghost wf-btn--icon">${headerIcon(label)}</span>`
+      return `<span class="sc-btn sc-btn--ghost sc-btn--icon">${headerIcon(label)}</span>`
 
     case 'input':
-      return `<div class="flex flex-col gap-1 w-full">
-        <label class="wf-label">${text}</label>
-        <input class="wf-input" placeholder="${text}" readonly>
+      return `<div class="sc-field">
+        <label class="sc-label">${text}</label>
+        <input class="sc-input" placeholder="${text}" readonly>
       </div>`
 
     case 'stat-label':
-      return `<div class="text-sm text-foreground select-none">${text}</div>`
+      return `<div style="font-size:14px;color:var(--foreground);user-select:none">${text}</div>`
 
     case 'badge':
-      return `<span class="wf-badge">${text}</span>`
+      return `<span class="sc-badge">${text}</span>`
 
     case 'nav-item':
-      return `<span class="text-sm text-muted-foreground select-none" style="text-decoration:underline;text-underline-offset:2px">${text}</span>`
+      return `<span class="sc-nav-item">${text}</span>`
 
     default:
-      return `<div class="text-sm text-muted-foreground select-none">${text}</div>`
+      return `<div style="font-size:14px;color:var(--muted-foreground);user-select:none">${text}</div>`
   }
 }
