@@ -1,6 +1,7 @@
 // toolbar.js — Editor toolbar
 
 import { PLATFORM_DEFAULTS } from '../render/screen.js';
+import { exportScreenAsPng, exportScreenAsHtml } from './export.js';
 
 const PRESETS = [
   { label: 'iPhone 16', width: 390, height: 844 },
@@ -43,6 +44,7 @@ export function renderToolbar(container, options) {
         <button class="toolbar-btn toolbar-zoom-100" title="100%">1:1</button>
         <div class="toolbar-separator"></div>
         <button class="toolbar-btn toolbar-share" title="Share">Share${activeShare?.unseenNotes > 0 ? ` <span class="toolbar-badge">${activeShare.unseenNotes}</span>` : ''}</button>
+        <button class="toolbar-btn toolbar-export" title="Export">Export</button>
       </div>
     </div>
   `;
@@ -198,6 +200,70 @@ export function renderToolbar(container, options) {
       closeSharePopover();
     } else {
       showSharePopover();
+    }
+  });
+
+  // Export dropdown
+  let exportDropdown = null;
+
+  function closeExportDropdown() {
+    if (exportDropdown) {
+      exportDropdown.remove();
+      exportDropdown = null;
+    }
+  }
+
+  function showExportDropdown() {
+    closeExportDropdown();
+    const exportBtn = container.querySelector('.toolbar-export');
+    if (!exportBtn) return;
+    const rect = exportBtn.getBoundingClientRect();
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'export-dropdown';
+    dropdown.style.top = (rect.bottom + 4) + 'px';
+    dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+
+    dropdown.innerHTML = `
+      <button class="export-dropdown-item" data-action="png">Export as PNG</button>
+      <button class="export-dropdown-item" data-action="html">Export as HTML</button>
+      <div class="export-dropdown-divider"></div>
+      <button class="export-dropdown-item" data-action="print">Print / Save as PDF</button>
+    `;
+
+    document.body.appendChild(dropdown);
+    exportDropdown = dropdown;
+
+    dropdown.querySelector('[data-action="png"]').addEventListener('click', () => {
+      closeExportDropdown();
+      exportScreenAsPng(screen, screenId);
+    });
+
+    dropdown.querySelector('[data-action="html"]').addEventListener('click', () => {
+      closeExportDropdown();
+      exportScreenAsHtml(screen, screenId);
+    });
+
+    dropdown.querySelector('[data-action="print"]').addEventListener('click', () => {
+      closeExportDropdown();
+      window.print();
+    });
+
+    setTimeout(() => {
+      document.addEventListener('click', function closeOutside(e) {
+        if (!dropdown.contains(e.target) && e.target !== exportBtn) {
+          closeExportDropdown();
+          document.removeEventListener('click', closeOutside);
+        }
+      });
+    }, 0);
+  }
+
+  container.querySelector('.toolbar-export').addEventListener('click', () => {
+    if (exportDropdown) {
+      closeExportDropdown();
+    } else {
+      showExportDropdown();
     }
   });
 
