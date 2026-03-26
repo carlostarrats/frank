@@ -4,7 +4,7 @@
 
 # Frank
 
-> A terminal companion for Claude Code that renders wireframes as you design — then hands them off to become real code.
+> The prototype layer between conversation and code. AI generates wireframes, you iterate visually, share for feedback, and hand off to become real code.
 
 **Status: Beta.** Core functionality works. Rough edges exist. Not ready for general use.
 
@@ -12,11 +12,24 @@
 
 ---
 
+## Who this is for
+
+Designers and makers who work in code. If you use AI coding assistants to build UI, Frank gives you:
+
+- **Instant preview** — see your layout alongside the terminal without publishing, deploying, or opening a design tool
+- **Interactive iteration** — drag sections, try different layouts, save what works
+- **Shareable prototypes** — send a link, get feedback from teammates or clients in the browser, no app needed
+- **Code handoff** — when the design is right, the schema becomes the blueprint the AI builds from
+
+## The gap
+
+There's no tool where an AI generates a visual prototype, you iterate on it interactively, share it for team feedback, and then hand it off as a code blueprint. Figma requires design skills. Excalidraw has no prototyping or AI generation. v0 goes straight from prompt to code with no shared visual artifact in between. Frank sits in the middle — the iteration and alignment step that doesn't exist anywhere else.
+
+---
+
 ## What it does
 
-When you ask Claude Code to design a screen or flow, Frank renders a wireframe in a floating native panel alongside your terminal. You iterate visually — "move the chart above the table", "make it mobile", "add a sidebar" — and Frank re-renders instantly. When the layout is right, you tell Claude to build it, and Claude uses the wireframe schema as a structural blueprint to generate real components in your project.
-
-Frank is the sketch layer. Wireframes are disposable — they communicate layout and content hierarchy. The real code happens in your actual project.
+When you ask Claude Code to design a screen or flow, Frank renders a high-fidelity wireframe in a browser tab alongside your terminal. You iterate visually — "move the chart above the table", "make it mobile", "add a sidebar" — and Frank re-renders instantly. Share it with teammates for feedback. When the layout is right, tell Claude to build it — the wireframe schema becomes the structural blueprint.
 
 ---
 
@@ -24,16 +37,17 @@ Frank is the sketch layer. Wireframes are disposable — they communicate layout
 
 ```
 1. Talk to Claude    →  "Design a dashboard with stats, a chart, and a recent orders table"
-2. Frank renders     →  Wireframe appears instantly in the companion panel
+2. Frank renders     →  Wireframe appears instantly in the browser
 3. Iterate visually  →  "Move the chart above the table" — Claude updates, Frank re-renders
-4. Build it          →  "Build this out in Next.js" — Claude uses the schema as the blueprint
+4. Share             →  Send a link, teammates comment on specific sections
+5. Build it          →  "Build this out in Next.js" — Claude uses the schema as the blueprint
 ```
 
 ---
 
 ## What it renders
 
-30+ section types with dedicated renderers:
+30+ section types with shadcn/ui-quality rendering:
 
 | Section | What it looks like |
 |---|---|
@@ -54,23 +68,25 @@ Frank is the sketch layer. Wireframes are disposable — they communicate layout
 | `footer` | Logo + links + copyright |
 | ...and more | `banner`, `toolbar`, `action-row`, `loader`, `map`, `onboarding`, `testimonial`, `gallery`, `feature-grid` |
 
-- Web platform renders full-width — no device frame
-- Mobile/tablet renders inside a device frame (iPhone/iPad dimensions)
-- Tab bar for navigating multiple screens
-- `Cmd+Shift+L` to show/hide the panel
+- Web platform renders with sidebar + content layouts at real dimensions
+- Mobile/tablet renders at fixed device dimensions
+- Wireframes render at fixed viewport sizes on a zoomable canvas
 
 ---
 
-## Design intelligence
+## Features
 
-Frank doesn't just render schemas — it teaches Claude how to design. When Frank is running, Claude gets injected design knowledge:
-
-- **Section vocabulary** — what Frank can render and when to use each section type
-- **Contains syntax** — how to write content strings that render correctly (headlines, buttons, inputs, badges, toggles, charts, data tables)
-- **Design taste** — visual hierarchy, composition rules, proportion limits, platform-specific patterns
-- **Realistic content** — "$84,320" not "$X,XXX", "Sarah Johnson" not "User Name"
-
-This means Claude produces better wireframes out of the box — proper information hierarchy, appropriate section types, realistic data, and platform-aware layouts.
+- **Multi-screen projects** — manage multiple screens per project, saved as `.frank.json` files
+- **Screen gallery** — thumbnail grid + flow map showing connections between screens
+- **Section-level comments** — click a section to comment on it, notes anchor to specific parts
+- **Sharing** — generate a link, reviewers comment in the browser with guided feedback prompts
+- **Cover notes** — attach context when sharing ("focus on the payment screen, rest is rough")
+- **Prototype preview** — click through hotspot connections between screens
+- **Handoff view** — see all screens, notes, and decisions before telling the AI to build
+- **Export** — PNG, standalone HTML, or print to PDF
+- **Stars** — snapshot screen states, restore later, compare versions
+- **Undo/redo** — 10-state stack per screen
+- **Drag to reorder** — move sections by dragging
 
 ---
 
@@ -81,26 +97,26 @@ Claude Code writes schema → /tmp/frank/render-<timestamp>.json
          ↓
   frank daemon watches /tmp/frank/ (FSEvents, ~10ms)
          ↓
-  WebSocket → Tauri panel (ws://localhost:42069)
+  daemon merges screen into active project → ~/Documents/Frank/*.frank.json
+         ↓
+  WebSocket → browser UI (ws://localhost:42069)
          ↓
   Plain JS validates + renders wireframe (<5ms)
 ```
 
-No network traffic. No API calls. Everything stays on your machine.
+Local by default. No data leaves your machine unless you explicitly share a prototype.
 
 ### Tech stack
 
 | Layer | Technology |
 |---|---|
-| Companion panel | [Tauri v2](https://v2.tauri.app/) (native macOS window) |
-| Panel UI | Plain JavaScript ES modules — zero dependencies, zero build step |
-| Wireframe rendering | HTML string templates + plain CSS |
+| UI | Plain JS ES modules — zero dependencies, zero build step |
+| Wireframe rendering | shadcn/ui-inspired HTML templates + CSS |
 | Icons | SVG icon functions inspired by [Lucide](https://lucide.dev/) |
 | Output interception | Claude Code hooks (file watcher daemon) |
-| Panel/daemon communication | WebSocket (localhost:42069) |
-| Distribution | Build from source (Homebrew planned) |
-
-The frontend was originally built with React + Vite + shadcn + Tailwind + Framer Motion. It was rebuilt as plain JavaScript with no framework, no bundler, and no build step — inspired by the philosophy of [Arrow.js](https://github.com/standardagents/arrow-js), a reactive UI library that proved zero-dependency frontends can be fast, simple, and maintainable. Arrow.js's approach to reactive templates without a build step directly influenced Frank's architecture pivot.
+| Daemon | Node.js — HTTP server (port 42068) + WebSocket (port 42069) |
+| Project storage | `.frank.json` files in `~/Documents/Frank/` |
+| Share storage | Local JSON files in `~/.frank/shares/` (mock backend) |
 
 ---
 
@@ -109,10 +125,6 @@ The frontend was originally built with React + Vite + shadcn + Tailwind + Framer
 ```bash
 git clone https://github.com/carlostarrats/frank
 cd frank
-
-# Build and install the panel app
-cargo tauri build
-cp -r src-tauri/target/release/bundle/macos/frank.app /Applications/frank.app
 
 # Build and install the daemon CLI
 cd daemon && npm install && npm run build && cd ..
@@ -124,144 +136,73 @@ npm install -g ./daemon
 ## Usage
 
 ```bash
-frank start   # starts daemon, launches panel, injects CLAUDE.md block
+frank start   # starts daemon, opens browser, injects CLAUDE.md block
 frank stop    # stops daemon, removes CLAUDE.md block
 ```
 
-`frank start` is the only command you should need. Open Claude Code, ask for a wireframe, it appears.
-
----
-
-## Schema
-
-Frank renders from a JSON schema. Claude writes it; the panel consumes it.
-
-**Single screen:**
-
-```json
-{
-  "schema": "v1",
-  "type": "screen",
-  "label": "Dashboard",
-  "timestamp": "2026-03-05T00:00:00Z",
-  "platform": "web",
-  "sections": [
-    {
-      "type": "header",
-      "contains": ["Brand logo wordmark", "Dashboard nav link", "Search input", "User avatar"]
-    },
-    {
-      "type": "stats-row",
-      "contains": [
-        "Total Revenue stat card — $84,320 value — +12.4% badge",
-        "Orders stat card — 1,284 value — +8.1% badge"
-      ]
-    },
-    {
-      "type": "list",
-      "label": "Recent Orders",
-      "contains": [
-        "Order # column header", "Customer column header", "Status column header",
-        "#ORD-001 — Sarah Johnson — Fulfilled badge",
-        "Previous button", "Page 1 of 12", "Next button"
-      ]
-    }
-  ]
-}
-```
-
-**Multi-screen flow:**
-
-```json
-{
-  "schema": "v1",
-  "type": "flow",
-  "label": "Onboarding",
-  "timestamp": "2026-03-05T00:00:00Z",
-  "platform": "mobile",
-  "screens": [
-    { "label": "Welcome", "sections": [...] },
-    { "label": "Create Account", "sections": [...] }
-  ]
-}
-```
-
----
-
-## Design to code
-
-The wireframe schema is the bridge between visual design and real implementation:
-
-1. **Sketch** — Ask Claude for a wireframe. Frank renders it instantly.
-2. **Iterate** — Refine the layout conversationally. Claude updates the schema, Frank re-renders.
-3. **Export** — Copy the schema as markdown or save as a file.
-4. **Build** — Tell Claude to build from the wireframe. Claude already knows the structure — it wrote the schema. It translates section types into real components for whatever stack you're using.
-
-The schema captures layout intent — what sections exist, what they contain, how they're arranged. It's a structural blueprint, not a pixel-perfect spec.
+`frank start` is the only command you need. Open Claude Code, ask for a wireframe, it appears in the browser at `http://localhost:42068`.
 
 ---
 
 ## Privacy
 
-- No data leaves your machine. Ever.
-- No telemetry, no analytics, no crash reporting.
-- Reads only local files Claude Code writes to `/tmp/frank/`.
-- No account, no API key, no network calls.
+- Local by default — no data leaves your machine unless you choose to share
+- No telemetry, no analytics, no crash reporting
+- No account, no API key
+- Sharing is opt-in: when you share, the prototype is stored locally in `~/.frank/shares/`
 
 ---
 
 ## Development
 
-The frontend has no build step — plain JS files are served directly to Tauri's webview.
+The frontend has no build step — plain JS files served by the daemon's HTTP server.
 
 ```bash
-# Serve the UI for browser testing (no Tauri needed)
-npx serve ui -p 8080
+# Start the daemon (serves UI + handles WebSocket)
+frank start
 
-# Test with sample wireframe
-open http://localhost:8080?test
+# The UI is at http://localhost:42068
+# Changes to ui/ files are live — just refresh the browser
 
-# Tauri dev with hot reload
-cargo tauri dev
-
-# Build for distribution
-cargo tauri build
+# Rebuild daemon after TypeScript changes
+cd daemon && npm run build
 ```
 
 ### Project structure
 
 ```
 frank/
-├── ui/                   # Plain JS frontend (no build step, no dependencies)
+├── ui/                   # Plain JS frontend (no build step, no framework)
 │   ├── index.html        # Entry point
-│   ├── app.js            # Main app: tabs, WebSocket, state, actions menu
-│   ├── screen.js         # Device frame wrapper + chrome detection
-│   ├── sections.js       # 30+ section renderers (HTML string templates)
-│   ├── smart-item.js     # Item classification + rendering
-│   ├── icons.js          # 57 SVG icon functions
+│   ├── workspace.js      # App shell: view router, state, WebSocket
 │   ├── validate.js       # Schema validation
-│   └── style.css         # All styles: panel chrome + wireframe tokens + utilities
-├── daemon/               # Node.js CLI + file watcher
+│   ├── views/            # Home, gallery, editor, preview, handoff
+│   ├── render/           # Section renderers, screen layout, icons
+│   ├── core/             # Sync, project state, undo, stars
+│   ├── components/       # Canvas, toolbar, comments, flow map, export
+│   ├── viewer/           # Share viewer (standalone page for reviewers)
+│   └── styles/           # CSS tokens, wireframe components, workspace
+├── daemon/               # Node.js CLI + HTTP server + WebSocket + file I/O
 │   ├── src/cli.ts        # frank start / frank stop
-│   ├── src/server.ts     # FSEvents watcher + WebSocket server
-│   └── src/inject.ts     # CLAUDE.md injection/removal
-├── src-tauri/            # Tauri shell (minimal Rust — infrastructure only)
-│   ├── src/lib.rs        # Window + hotkey (Cmd+Shift+L) + show/hide
-│   └── tauri.conf.json   # App configuration
+│   ├── src/server.ts     # HTTP + WebSocket server, file watcher, note sync
+│   ├── src/projects.ts   # Project file I/O (sole file writer)
+│   ├── src/shares.ts     # Share storage (mock backend)
+│   ├── src/inject.ts     # CLAUDE.md injection/removal
+│   └── src/protocol.ts   # Shared types and constants
 ├── CLAUDE.md
-└── package.json
+├── DIRECTION.md          # Product direction
+└── PROGRESS.md
 ```
 
 ---
 
 ## Credits
 
-- [Arrow.js](https://github.com/standardagents/arrow-js) by Standard Agents — the reactive UI framework whose zero-dependency, no-build-step philosophy directly inspired Frank's architecture. Arrow.js proved that modern UIs don't need heavyweight frameworks.
-- [Tauri](https://v2.tauri.app/) — native app shell
+- [shadcn/ui](https://ui.shadcn.com/) — the component design system that inspired Frank's rendering quality and visual language
 - [Lucide](https://lucide.dev/) — icon paths used in the SVG icon system
 
 ---
 
 ## License
 
-MIT
+[PolyForm Shield 1.0.0](LICENSE) — free to use, modify, and distribute, but you cannot use it to build a competing product.

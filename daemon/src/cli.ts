@@ -2,12 +2,12 @@
 // Frank CLI entry point.
 //
 // Commands:
-//   frank start   — inject CLAUDE.md, start daemon, launch panel
+//   frank start   — inject CLAUDE.md, start daemon, open browser
 //   frank stop    — remove CLAUDE.md injection
 
 import fs from 'fs';
 import { execFile } from 'child_process';
-import { SCHEMA_DIR, PANEL_APP_CANDIDATES } from './protocol.js';
+import { SCHEMA_DIR, HTTP_PORT } from './protocol.js';
 
 const command = process.argv[2];
 
@@ -40,7 +40,11 @@ async function runStart(): Promise<void> {
   const { startServer } = await import('./server.js');
   startServer();
 
-  launchPanel();
+  const url = `http://localhost:${HTTP_PORT}`;
+  execFile('open', [url], (err) => {
+    if (err) console.warn('[frank] could not open browser:', err.message);
+    else console.log(`[frank] opened ${url}`);
+  });
 
   console.log('[frank] ready — wireframes will appear as you design with Claude Code');
   console.log('[frank] press Ctrl+C to stop');
@@ -61,17 +65,4 @@ async function runStop(): Promise<void> {
   const { removeClaudeMd } = await import('./inject.js');
   removeClaudeMd();
   console.log('[frank] stopped');
-}
-
-function launchPanel(): void {
-  const appPath = PANEL_APP_CANDIDATES.find(p => fs.existsSync(p));
-  if (!appPath) {
-    console.warn('[frank] panel app not found at /Applications/frank.app');
-    return;
-  }
-  // -F forces a fresh launch even if the app is already running
-  execFile('open', ['-F', appPath], (err) => {
-    if (err) console.warn('[frank] could not launch panel:', err.message);
-    else console.log('[frank] panel launched');
-  });
 }

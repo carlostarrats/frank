@@ -6,13 +6,23 @@
 
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
+import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
-import { WEBSOCKET_PORT, SCHEMA_DIR, type PanelMessage } from './protocol.js';
+import { WEBSOCKET_PORT, HTTP_PORT, SCHEMA_DIR, type PanelMessage, type AppMessage } from './protocol.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const UI_DIR = path.resolve(__dirname, '../../ui');
+import { listProjects, loadProject, saveProject, createProject, archiveProject, mergeScreenIntoProject, mergeNotesIntoProject, getGitUserName } from './projects.js';
+import { updateInjectionProjectPath } from './inject.js';
+import { createShare, getShare, addNote, readShareFile } from './shares.js';
 
 const panelClients = new Set<WebSocket>();
 let lastSchema: unknown = null;
+let activeProjectPath: string | null = null;
 
 // ─── Default design tokens (shadcn/ui zinc palette) ───────────────────────────
 // Auto-injected into every schema so downstream tools have exact values.
@@ -71,10 +81,17 @@ const DEFAULT_TOKENS = {
 export function startServer(): void {
   startFileWatcher();
   startWebSocketServer();
+  startHttpServer();
+
+  // Sync share notes every 30 seconds
+  setInterval(() => syncShareNotes(), 30000);
+  // Also sync on startup (after a short delay for connection)
+  setTimeout(() => syncShareNotes(), 3000);
 
   console.log(`[frank] daemon started`);
   console.log(`[frank] watching:    ${SCHEMA_DIR}`);
-  console.log(`[frank] panel port:  ws://localhost:${WEBSOCKET_PORT}`);
+  console.log(`[frank] websocket:   ws://localhost:${WEBSOCKET_PORT}`);
+  console.log(`[frank] ui:          http://localhost:${HTTP_PORT}`);
 }
 
 // ─── File watcher (replaces hook handler) ────────────────────────────────────
@@ -117,13 +134,42 @@ function handleSchemaFile(content: string): void {
   let schema: Record<string, unknown>;
   try {
     schema = JSON.parse(content) as Record<string, unknown>;
-  } catch {
-    return;
-  }
+  } catch { return; }
 
   if (schema.schema !== 'v1') return;
-  if (schema.type !== 'screen' && schema.type !== 'flow') return;
+  // Accept screen, flow, or any v1 schema the AI writes
+  if (!schema.type) return;
 
+  if (activeProjectPath) {
+    // Merge into active project
+    try {
+      const updatedProject = mergeScreenIntoProject(activeProjectPath, schema);
+      broadcast({ type: 'project-updated', project: updatedProject, filePath: activeProjectPath });
+      console.log(`[frank] merged screen into ${activeProjectPath}`);
+    } catch (e: any) {
+      console.warn('[frank] merge failed:', e.message);
+      // Fall back to legacy broadcast
+      broadcastLegacy(schema);
+    }
+  } else {
+    // No active project — create one
+    const label = (schema.label as string) || 'Untitled';
+    try {
+      const { project, filePath } = createProject(label);
+      activeProjectPath = filePath;
+      const updatedProject = mergeScreenIntoProject(filePath, schema);
+      broadcast({ type: 'project-updated', project: updatedProject, filePath });
+      updateInjectionProjectPath(filePath);
+      console.log(`[frank] created project ${filePath} with first screen`);
+    } catch (e: any) {
+      console.warn('[frank] project creation failed:', e.message);
+      broadcastLegacy(schema);
+    }
+  }
+}
+
+// Legacy broadcast for backward compat (no active project, creation failed)
+function broadcastLegacy(schema: Record<string, unknown>): void {
   const stamped = {
     ...schema,
     timestamp: new Date().toISOString(),
@@ -133,7 +179,124 @@ function handleSchemaFile(content: string): void {
   broadcast({ type: 'render', schema: stamped });
 }
 
-// ─── WebSocket server (sends to Tauri panel) ─────────────────────────────────
+// ─── HTTP server (serves ui/ directory) ───────────────────────────────────────
+
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.js':   'application/javascript',
+  '.css':  'text/css',
+  '.svg':  'image/svg+xml',
+  '.png':  'image/png',
+  '.json': 'application/json',
+  '.ico':  'image/x-icon',
+};
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (chunk: Buffer) => body += chunk.toString());
+    req.on('end', () => resolve(body));
+  });
+}
+
+function startHttpServer(): void {
+  const server = http.createServer(async (req, res) => {
+    // CORS headers for all responses
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Handle OPTIONS preflight
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    // API routes
+    const url = new URL(req.url || '/', `http://localhost`);
+
+    if (url.pathname === '/api/share' && req.method === 'POST') {
+      try {
+        const body = JSON.parse(await readBody(req));
+        const result = createShare(body.project, body.coverNote || '', body.oldRevokeToken, body.oldShareId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (e: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    if (url.pathname.startsWith('/api/share/') && req.method === 'GET') {
+      const shareId = url.pathname.split('/api/share/')[1];
+      if (shareId) {
+        const result = getShare(shareId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } else {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'missing share id' }));
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/note' && req.method === 'POST') {
+      try {
+        const body = JSON.parse(await readBody(req));
+        const result = addNote(body.shareId, {
+          screenId: body.screenId,
+          section: body.section ?? null,
+          author: body.author,
+          text: body.text,
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (e: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // Static file serving
+    let urlPath = req.url?.split('?')[0] || '/';
+    if (urlPath.endsWith('/')) urlPath += 'index.html';
+
+    const filePath = path.join(UI_DIR, urlPath);
+
+    // Prevent directory traversal
+    if (!filePath.startsWith(UI_DIR)) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
+
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+
+      const ext = path.extname(filePath);
+      const mime = MIME_TYPES[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(data);
+    });
+  });
+
+  server.listen(HTTP_PORT, () => {
+    console.log(`[frank] http server listening on port ${HTTP_PORT}`);
+  });
+
+  server.on('error', (err) => {
+    console.error(`[frank] http server error:`, err.message);
+  });
+}
+
+// ─── WebSocket server (sends to panel) ───────────────────────────────────────
 
 function startWebSocketServer(): void {
   const wss = new WebSocketServer({ port: WEBSOCKET_PORT });
@@ -146,7 +309,68 @@ function startWebSocketServer(): void {
 
     ws.on('message', (data) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type: string; prompt?: string };
+        const msg = JSON.parse(data.toString()) as AppMessage;
+
+        if (msg.type === 'list-projects') {
+          try {
+            const projects = listProjects();
+            ws.send(JSON.stringify({ requestId: msg.requestId, projects }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'load-project') {
+          try {
+            const project = loadProject(msg.filePath);
+            activeProjectPath = msg.filePath;
+            ws.send(JSON.stringify({ requestId: msg.requestId, project, filePath: msg.filePath }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'save-project') {
+          try {
+            const filePath = saveProject(msg.project as Record<string, unknown>);
+            ws.send(JSON.stringify({ requestId: msg.requestId, success: true, filePath }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, success: false, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'create-project') {
+          try {
+            const { project, filePath } = createProject(msg.label);
+            activeProjectPath = filePath;
+            ws.send(JSON.stringify({ requestId: msg.requestId, project, filePath }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'archive-project') {
+          try {
+            archiveProject(msg.filePath);
+            if (activeProjectPath === msg.filePath) activeProjectPath = null;
+            ws.send(JSON.stringify({ requestId: msg.requestId, success: true }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ requestId: msg.requestId, success: false, error: e.message }));
+          }
+          return;
+        }
+
+        if (msg.type === 'project-changed') {
+          activeProjectPath = msg.filePath || null;
+          if (activeProjectPath) updateInjectionProjectPath(activeProjectPath);
+          console.log(`[frank] active project: ${activeProjectPath}`);
+          return;
+        }
+
         if (msg.type === 'inject' && typeof msg.prompt === 'string') {
           applyEdit(msg.prompt);
         }
@@ -180,6 +404,43 @@ function broadcast(message: PanelMessage): void {
   console.log(`[frank] broadcast ${message.type} to ${panelClients.size} panel(s)`);
 }
 
+
+// ─── Share note sync (polls share files, merges into project) ────────────────
+
+function syncShareNotes(): void {
+  if (!activeProjectPath) return;
+  try {
+    const content = fs.readFileSync(activeProjectPath, 'utf8');
+    const project = JSON.parse(content);
+    const activeShare = project.activeShare;
+    if (!activeShare?.id) return;
+
+    const share = readShareFile(activeShare.id);
+    if (!share || !share.notes || share.notes.length === 0) return;
+
+    const { newNotes } = mergeNotesIntoProject(
+      activeProjectPath,
+      share.notes,
+      activeShare.lastSyncedNoteId || null
+    );
+
+    if (newNotes.length > 0) {
+      // Push each note to connected clients grouped by screen
+      const byScreen = new Map<string, typeof newNotes>();
+      for (const note of newNotes) {
+        const existing = byScreen.get(note.screenId) || [];
+        existing.push(note);
+        byScreen.set(note.screenId, existing);
+      }
+      for (const [screenId, notes] of byScreen) {
+        broadcast({ type: 'notes-updated', screenId, notes } as any);
+      }
+      console.log(`[frank] synced ${newNotes.length} new note(s) from share ${activeShare.id}`);
+    }
+  } catch (e) {
+    // Silent fail — sync is best-effort
+  }
+}
 
 // ─── Edit application via claude -p ──────────────────────────────────────────
 

@@ -21,7 +21,7 @@ Open source, MIT, Mac-first v1. Progress tracked in `PROGRESS.md`.
 
 ### Tauri Layer
 - **Thin shell only**: native window + hotkey in Rust
-- All logic lives in ArrowJS — rendering, tabs, schema, exports
+- All logic lives in plain JS — rendering, views, project state
 - Do not put application logic in Rust/Tauri. Treat it as infrastructure.
 
 ### Schema
@@ -30,11 +30,22 @@ Open source, MIT, Mac-first v1. Progress tracked in `PROGRESS.md`.
 - Schema is versioned from day one (`"schema": "v1"`)
 - Never render without a valid schema
 
-### ArrowJS Frontend
+### Daemon as Sole File Writer
+- The daemon is the sole file writer — the UI never touches the filesystem
+- All file I/O (load, save, create, watch) goes through the daemon via WebSocket
+- Projects are stored as `.frank.json` files in `~/Documents/Frank/`
+- The daemon watches `~/Documents/Frank/` for external changes and pushes updates to the UI
+
+### Plain JS Frontend
 - **No build step.** The `ui/` directory is served directly to Tauri's webview.
-- ArrowJS loaded from CDN (`https://esm.sh/@arrow-js/core`)
+- **No framework.** Plain DOM — innerHTML for static renders, event listeners for interaction.
 - Plain JS ES modules — no TypeScript, no bundler, no transpilation
 - Plain CSS with custom properties — no Tailwind, no CSS-in-JS
+
+### Three Views
+- **Home** — project picker: list projects, create new
+- **Gallery** — screen thumbnails + flow map for the active project
+- **Editor** — zoomable canvas + wireframe + comments for a single screen
 
 ---
 
@@ -43,10 +54,11 @@ Open source, MIT, Mac-first v1. Progress tracked in `PROGRESS.md`.
 | Layer | Technology |
 |---|---|
 | Companion panel | Tauri v2 (native macOS window) |
-| Panel UI | ArrowJS (~5KB, zero deps, no build step) |
-| Wireframe rendering | ArrowJS templates + plain CSS |
+| Panel UI | Plain JS ES modules (no framework, no build step) |
+| Wireframe rendering | innerHTML templates + plain CSS |
 | Output interception | Claude Code hooks system |
 | Panel/daemon communication | WebSocket (localhost:42069) |
+| Project storage | `.frank.json` files in `~/Documents/Frank/` |
 | Export: image | DOM-to-PNG |
 | Distribution | Build from source (Homebrew planned) |
 
@@ -56,23 +68,47 @@ Open source, MIT, Mac-first v1. Progress tracked in `PROGRESS.md`.
 
 ```
 frank/
-├── ui/                   # ArrowJS frontend (no build step, served directly)
-│   ├── index.html        # Entry point — loads app.js as ES module
-│   ├── app.js            # Main app: reactive state, WebSocket, tabs, menus
-│   ├── screen.js         # Device frame wrapper + chrome detection
-│   ├── sections.js       # 30+ dedicated section renderers
-│   ├── smart-item.js     # SmartItem classifier + renderer (classify, displayLabel, smartItem)
-│   ├── icons.js          # SVG icon functions (replaces Lucide React)
-│   ├── validate.js       # Schema validation (port of validate.ts)
-│   └── style.css         # All styles: panel chrome + wireframe tokens + components + utilities
-├── daemon/               # Node.js CLI + file watcher
+├── ui/                   # Plain JS frontend (no build step, no framework)
+│   ├── index.html        # Entry point
+│   ├── workspace.js      # App shell: view router, state, WebSocket
+│   ├── validate.js       # Schema validation
+│   ├── views/
+│   │   ├── home.js       # Project picker
+│   │   ├── gallery.js    # Screen thumbnails + flow map
+│   │   └── editor.js     # Single screen workspace
+│   ├── render/
+│   │   ├── sections.js   # 30+ section renderers
+│   │   ├── smart-item.js # Item classifier + renderer
+│   │   ├── icons.js      # SVG icon functions
+│   │   └── screen.js     # Device frame wrapper — fixed dimensions
+│   ├── core/
+│   │   ├── sync.js       # WebSocket client — all file I/O through daemon
+│   │   ├── project.js    # In-memory project state manager
+│   │   ├── undo.js       # 10-state undo stack per screen
+│   │   └── stars.js      # Snapshot management
+│   ├── components/
+│   │   ├── canvas.js     # Zoomable canvas background
+│   │   ├── comments.js   # Comment panel
+│   │   ├── toolbar.js    # Editor toolbar
+│   │   └── flow-map.js   # Visual connection graph
+│   └── styles/
+│       ├── tokens.css    # Design tokens, resets, utilities
+│       ├── wireframe.css # Wireframe component classes
+│       ├── workspace.css # App chrome styles
+│       └── flow-map.css  # Flow map styles
+├── ui-v0/                # Archived v0 frontend (reference only)
+├── daemon/               # Node.js CLI + file watcher + project file I/O
 │   ├── src/cli.ts        # frank start / frank stop
-│   ├── src/server.ts     # FSEvents watcher + WebSocket server
-│   └── src/inject.ts     # CLAUDE.md injection/removal
+│   ├── src/server.ts     # WebSocket server + file watcher + project ops
+│   ├── src/inject.ts     # CLAUDE.md injection/removal + active project tracking
+│   ├── src/projects.ts   # Project file I/O (sole file writer)
+│   └── src/protocol.ts   # Shared types and constants
 ├── src-tauri/            # Tauri shell (infrastructure only)
-│   ├── src/lib.rs        # Window + hotkey (Cmd+Shift+L) + show/hide
-│   └── tauri.conf.json   # App config
-└── CLAUDE.md
+│   ├── src/lib.rs        # Window + hotkey (Cmd+Shift+L)
+│   └── tauri.conf.json   # App config (points to ../ui)
+├── CLAUDE.md
+├── DIRECTION.md          # Product direction
+└── PROGRESS.md
 ```
 
 ---
@@ -81,7 +117,7 @@ frank/
 
 - **Schema first**: never build a renderer before the schema it consumes is defined
 - **Conservative classification**: render 5 things perfectly > attempt 20 and miss some
-- **No persistence**: session-scoped only, nothing written to disk between sessions
+- **Projects persist**: stored as `.frank.json` files in `~/Documents/Frank/`
 - **No data leaves the machine**: no network calls except user-initiated exports
 - **Static renders only**: no interaction, no hover states, no animation in wireframes
 - **No dock icon, no menu bar**: panel is invisible until there is something to render
@@ -92,18 +128,19 @@ frank/
 ## Coding Conventions
 
 - Plain JavaScript ES modules (no TypeScript in the frontend)
-- ArrowJS `reactive()` for state, `html` tagged templates for DOM
-- Functions returning `html` templates (not classes, not components in the React sense)
-- SVG icons as string functions via `icon(name)` and `rawHtml()` helper
+- Plain DOM — innerHTML for static renders, event listeners for interaction
+- No ArrowJS, no framework — functions returning HTML strings for rendering
+- SVG icons as string functions via `icon(name)` from `icons.js`
 - CSS custom properties for all design tokens
-- CSS utility classes in `style.css` for common layouts (flex, gap, padding, typography)
+- CSS utility classes in `styles/tokens.css` for common layouts (flex, gap, padding, typography)
+- All file I/O goes through the daemon via WebSocket — the UI never touches the filesystem
 - Keep Rust surface area minimal — if logic can live in JS, it lives in JS
 
 ---
 
 ## Wireframe Renderer Rules
 
-These rules apply to every section renderer in `ui/sections.js`. Violating them produces renders that look broken. No exceptions.
+These rules apply to every section renderer in `ui/render/sections.js`. Violating them produces renders that look broken. No exceptions.
 
 ### Use wireframe component classes. Never write raw styled divs.
 
@@ -137,22 +174,22 @@ Use `.p-2` / `.p-3` / `.p-4` and `.px-*` / `.py-*` variants.
 
 ### Mobile device is a fixed viewport.
 
+- Wireframes render at fixed device dimensions (not fluid to window).
 - Mobile: `min-height: 650px`. Tablet: `min-height: 960px`.
-- `screen.js` detects the first non-chrome section and gives it `flex: 1` to fill space.
+- `render/screen.js` detects the first non-chrome section and gives it `flex: 1` to fill space.
 - Chrome sections: `header`, `top-nav`, `toolbar`, `bottom-nav`, `banner`
 - Fill sections: everything else (`list`, `content`, `chat`, `form`, `grid`, `empty-state`)
 
-### Icons — use the `icon()` and `rawHtml()` helpers.
+### Icons — use the `icon()` helper.
 
 ```js
 import { icon, headerIcon, navIcon } from './icons.js'
-import { rawHtml } from './smart-item.js'
 
-// In a template:
-html`<span>${rawHtml(icon('search', 16))}</span>`
+// In a template string:
+`<span>${icon('search', 16)}</span>`
 ```
 
-Never inline raw SVG paths. Always use `icon(name, size)` from `icons.js`.
+Never inline raw SVG paths. Always use `icon(name, size)` from `render/icons.js`.
 
 ---
 
