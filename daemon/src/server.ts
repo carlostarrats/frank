@@ -16,9 +16,9 @@ import { WEBSOCKET_PORT, HTTP_PORT, SCHEMA_DIR, type PanelMessage, type AppMessa
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const UI_DIR = path.resolve(__dirname, '../../ui');
-import { listProjects, loadProject, saveProject, createProject, archiveProject, mergeScreenIntoProject, getGitUserName } from './projects.js';
+import { listProjects, loadProject, saveProject, createProject, archiveProject, mergeScreenIntoProject, mergeNotesIntoProject, getGitUserName } from './projects.js';
 import { updateInjectionProjectPath } from './inject.js';
-import { createShare, getShare, addNote } from './shares.js';
+import { createShare, getShare, addNote, readShareFile } from './shares.js';
 
 const panelClients = new Set<WebSocket>();
 let lastSchema: unknown = null;
@@ -82,6 +82,11 @@ export function startServer(): void {
   startFileWatcher();
   startWebSocketServer();
   startHttpServer();
+
+  // Sync share notes every 30 seconds
+  setInterval(() => syncShareNotes(), 30000);
+  // Also sync on startup (after a short delay for connection)
+  setTimeout(() => syncShareNotes(), 3000);
 
   console.log(`[frank] daemon started`);
   console.log(`[frank] watching:    ${SCHEMA_DIR}`);
@@ -399,6 +404,43 @@ function broadcast(message: PanelMessage): void {
   console.log(`[frank] broadcast ${message.type} to ${panelClients.size} panel(s)`);
 }
 
+
+// ─── Share note sync (polls share files, merges into project) ────────────────
+
+function syncShareNotes(): void {
+  if (!activeProjectPath) return;
+  try {
+    const content = fs.readFileSync(activeProjectPath, 'utf8');
+    const project = JSON.parse(content);
+    const activeShare = project.activeShare;
+    if (!activeShare?.id) return;
+
+    const share = readShareFile(activeShare.id);
+    if (!share || !share.notes || share.notes.length === 0) return;
+
+    const { newNotes } = mergeNotesIntoProject(
+      activeProjectPath,
+      share.notes,
+      activeShare.lastSyncedNoteId || null
+    );
+
+    if (newNotes.length > 0) {
+      // Push each note to connected clients grouped by screen
+      const byScreen = new Map<string, typeof newNotes>();
+      for (const note of newNotes) {
+        const existing = byScreen.get(note.screenId) || [];
+        existing.push(note);
+        byScreen.set(note.screenId, existing);
+      }
+      for (const [screenId, notes] of byScreen) {
+        broadcast({ type: 'notes-updated', screenId, notes } as any);
+      }
+      console.log(`[frank] synced ${newNotes.length} new note(s) from share ${activeShare.id}`);
+    }
+  } catch (e) {
+    // Silent fail — sync is best-effort
+  }
+}
 
 // ─── Edit application via claude -p ──────────────────────────────────────────
 

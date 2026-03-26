@@ -101,6 +101,55 @@ function atomicWrite(filePath: string, content: string): void {
   fs.renameSync(tmpPath, filePath);
 }
 
+export interface ShareNote {
+  id: string;
+  screenId: string;
+  section: number | null;
+  author: string;
+  text: string;
+  ts: string;
+}
+
+export function mergeNotesIntoProject(projectFilePath: string, shareNotes: ShareNote[], lastSyncedNoteId: string | null): { newNotes: ShareNote[]; lastNoteId: string | null } {
+  const content = fs.readFileSync(projectFilePath, 'utf8');
+  const project = JSON.parse(content) as Record<string, unknown>;
+  const screens = (project.screens || {}) as Record<string, Record<string, unknown>>;
+
+  // Find notes newer than lastSyncedNoteId
+  let startIndex = 0;
+  if (lastSyncedNoteId) {
+    const idx = shareNotes.findIndex(n => n.id === lastSyncedNoteId);
+    if (idx >= 0) startIndex = idx + 1;
+  }
+
+  const newNotes = shareNotes.slice(startIndex);
+  if (newNotes.length === 0) return { newNotes: [], lastNoteId: lastSyncedNoteId };
+
+  // Merge into correct screens
+  for (const note of newNotes) {
+    if (screens[note.screenId]) {
+      const screen = screens[note.screenId];
+      const notes = (screen.notes || []) as Array<{ id: string }>;
+      // Don't add duplicates
+      if (!notes.find(n => n.id === note.id)) {
+        notes.push(note as unknown as { id: string });
+      }
+      screen.notes = notes;
+    }
+  }
+
+  // Update activeShare
+  const activeShare = project.activeShare as Record<string, unknown> | null;
+  if (activeShare) {
+    activeShare.lastSyncedNoteId = newNotes[newNotes.length - 1].id;
+    activeShare.unseenNotes = ((activeShare.unseenNotes as number) || 0) + newNotes.length;
+  }
+
+  project.savedAt = new Date().toISOString();
+  atomicWrite(projectFilePath, JSON.stringify(project, null, 2));
+  return { newNotes, lastNoteId: newNotes[newNotes.length - 1].id };
+}
+
 export function getGitUserName(): string {
   try {
     const { execSync } = require('child_process');
