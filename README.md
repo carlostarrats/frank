@@ -276,4 +276,4 @@ frank/
 
 ## License
 
-MIT
+[PolyForm Shield 1.0.0](LICENSE) -- free to use, modify, and distribute, but you cannot use it to build a competing product.
