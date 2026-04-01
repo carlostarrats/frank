@@ -4,6 +4,8 @@
 // Commands:
 //   frank start   — inject CLAUDE.md, start daemon, open browser
 //   frank stop    — remove CLAUDE.md injection
+//   frank connect — connect to Frank Cloud instance (Phase 2)
+//   frank status  — show daemon and connection status (Phase 2)
 
 import fs from 'fs';
 import { execFile } from 'child_process';
@@ -20,12 +22,23 @@ switch (command) {
     await runStop();
     break;
 
+  case 'connect':
+    console.log('[frank] connect: coming in Phase 2 (cloud sharing)');
+    console.log('[frank] usage: frank connect <cloud-url> --key <api-key>');
+    process.exit(0);
+
+  case 'status':
+    console.log('[frank] status: coming in Phase 2');
+    process.exit(0);
+
   default:
-    console.log('Frank');
+    console.log('Frank — collaboration layer for any web content');
     console.log('');
     console.log('Usage:');
-    console.log('  frank start   Start Frank (run this when you begin a session)');
-    console.log('  frank stop    Stop Frank and remove Claude Code hooks');
+    console.log('  frank start     Start Frank and open the browser');
+    console.log('  frank stop      Stop Frank and remove Claude Code hooks');
+    console.log('  frank connect   Connect to your Frank Cloud instance');
+    console.log('  frank status    Show daemon and connection status');
     process.exit(0);
 }
 
