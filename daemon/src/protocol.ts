@@ -62,6 +62,12 @@ export interface DeleteCommentRequest { type: 'delete-comment'; commentId: strin
 export interface ProxyUrlRequest { type: 'proxy-url'; url: string; requestId?: number; }
 export interface UploadShareRequest { type: 'upload-share'; snapshot: unknown; coverNote: string; contentType: string; oldShareId?: string; oldRevokeToken?: string; requestId?: number; }
 export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; }
+export interface SaveSnapshotRequest { type: 'save-snapshot'; html: string; screenshot: string | null; trigger: 'manual' | 'share' | 'ai-applied'; triggeredBy?: string; requestId?: number; }
+export interface ListSnapshotsRequest { type: 'list-snapshots'; requestId?: number; }
+export interface StarSnapshotRequest { type: 'star-snapshot'; snapshotId: string; label: string; requestId?: number; }
+export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch'; remixedText?: string; dismissReason?: string; requestId?: number; }
+export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackIds: string[]; curationIds: string[]; instruction: string; requestId?: number; }
+export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
 
 export type AppMessage =
   | ListProjectsRequest
@@ -73,7 +79,13 @@ export type AppMessage =
   | DeleteCommentRequest
   | ProxyUrlRequest
   | UploadShareRequest
-  | CloudStatusRequest;
+  | CloudStatusRequest
+  | SaveSnapshotRequest
+  | ListSnapshotsRequest
+  | StarSnapshotRequest
+  | CurateCommentRequest
+  | LogAiInstructionRequest
+  | ExportProjectRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -123,6 +135,12 @@ export interface CloudStatusMessage {
   cloudUrl: string | null;
 }
 
+export interface SnapshotSavedMessage { type: 'snapshot-saved'; requestId?: number; snapshot: unknown; }
+export interface SnapshotListMessage { type: 'snapshot-list'; requestId?: number; snapshots: unknown[]; }
+export interface CurationDoneMessage { type: 'curation-done'; requestId?: number; curation: unknown; }
+export interface AiInstructionLoggedMessage { type: 'ai-instruction-logged'; requestId?: number; instruction: unknown; }
+export interface ExportReadyMessage { type: 'export-ready'; requestId?: number; data: unknown; }
+
 export type DaemonMessage =
   | ProjectListMessage
   | ProjectLoadedMessage
@@ -130,7 +148,12 @@ export type DaemonMessage =
   | ProxyReadyMessage
   | ErrorMessage
   | ShareUploadedMessage
-  | CloudStatusMessage;
+  | CloudStatusMessage
+  | SnapshotSavedMessage
+  | SnapshotListMessage
+  | CurationDoneMessage
+  | AiInstructionLoggedMessage
+  | ExportReadyMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 

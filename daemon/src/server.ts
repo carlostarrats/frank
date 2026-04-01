@@ -12,7 +12,12 @@ import {
   addScreen, loadComments, addComment, deleteComment, saveProject,
 } from './projects.js';
 import { proxyRequest } from './proxy.js';
-import { uploadShare, isCloudConnected, getCloudUrl } from './cloud.js';
+import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments } from './cloud.js';
+import { mergeCloudComments } from './projects.js';
+import { saveSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
+import { addCuration, applyCurationToComments } from './curation.js';
+import { addAiInstruction } from './ai-chain.js';
+import { exportProject } from './export.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,6 +33,10 @@ export function startServer(): void {
   fs.mkdirSync(FRANK_DIR, { recursive: true });
   startWebSocketServer();
   startHttpServer();
+  // Sync cloud comments every 30 seconds
+  setInterval(() => syncCloudComments(), 30000);
+  setTimeout(() => syncCloudComments(), 5000); // Initial sync after startup
+
   console.log(`[frank] daemon started`);
   console.log(`[frank] websocket:   ws://localhost:${WEBSOCKET_PORT}`);
   console.log(`[frank] ui:          http://localhost:${HTTP_PORT}`);
@@ -289,6 +298,104 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       });
       break;
     }
+
+    case 'save-snapshot': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        const meta = saveSnapshot(activeProjectId, msg.html, msg.screenshot, msg.trigger, msg.triggeredBy);
+        reply({ type: 'snapshot-saved', snapshot: meta });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'list-snapshots': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        reply({ type: 'snapshot-list', snapshots: listSnapshots(activeProjectId) });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'star-snapshot': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        starSnapshot(activeProjectId, msg.snapshotId, msg.label);
+        reply({ type: 'snapshot-list', snapshots: listSnapshots(activeProjectId) });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'curate-comment': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        const localComments = loadComments(activeProjectId);
+        const origTexts = msg.commentIds.map(id => localComments.find(c => c.id === id)?.text || '');
+        const statusMap: Record<string, 'approved' | 'dismissed' | 'remixed'> = {
+          approve: 'approved', dismiss: 'dismissed', remix: 'remixed', batch: 'approved',
+        };
+        const curation = addCuration(activeProjectId, msg.commentIds, msg.action, origTexts, msg.remixedText || '', msg.dismissReason || '');
+        applyCurationToComments(activeProjectId, msg.commentIds, statusMap[msg.action]);
+        const updatedComments = loadComments(activeProjectId);
+        reply({ type: 'curation-done', curation });
+        broadcast({ type: 'project-loaded', projectId: activeProjectId, project: loadProject(activeProjectId), comments: updatedComments } as any);
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'log-ai-instruction': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        const instruction = addAiInstruction(activeProjectId, msg.feedbackIds, msg.curationIds, msg.instruction);
+        reply({ type: 'ai-instruction-logged', instruction });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'export-project': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        const data = exportProject(activeProjectId);
+        reply({ type: 'export-ready', data });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+  }
+}
+
+async function syncCloudComments(): Promise<void> {
+  if (!activeProjectId) return;
+  try {
+    const project = loadProject(activeProjectId);
+    if (!project.activeShare?.id) return;
+
+    const cloudComments = await fetchShareComments(project.activeShare.id);
+    if (cloudComments.length === 0) return;
+
+    const { newCount } = mergeCloudComments(activeProjectId, cloudComments);
+    if (newCount > 0) {
+      // Update unseen count
+      project.activeShare.unseenNotes = (project.activeShare.unseenNotes || 0) + newCount;
+      saveProject(activeProjectId, project);
+
+      // Broadcast to connected clients
+      const allComments = loadComments(activeProjectId);
+      broadcast({ type: 'project-loaded', projectId: activeProjectId, project, comments: allComments } as any);
+      console.log(`[frank] synced ${newCount} new comment(s) from cloud`);
+    }
+  } catch {
+    // Silent fail — sync is best-effort
   }
 }
 

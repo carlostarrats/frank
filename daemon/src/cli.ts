@@ -8,6 +8,7 @@
 //   frank status  — show daemon and connection status (Phase 2)
 
 import fs from 'fs';
+import path from 'path';
 import { execFile } from 'child_process';
 import { FRANK_DIR, HTTP_PORT } from './protocol.js';
 
@@ -58,6 +59,27 @@ switch (command) {
     process.exit(0);
   }
 
+  case 'export': {
+    const projectArg = process.argv[3];
+    if (!projectArg) {
+      console.log('Usage: frank export <project-id>');
+      console.log('Find project IDs with: ls ~/.frank/projects/');
+      process.exit(1);
+    }
+    const { exportProject } = await import('./export.js');
+    try {
+      const data = exportProject(projectArg);
+      const outPath = path.join(process.env.HOME || '', '.frank', 'exports', `${projectArg}-${Date.now()}.json`);
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, JSON.stringify(data, null, 2), 'utf8');
+      console.log(`[frank] exported to ${outPath}`);
+    } catch (e: any) {
+      console.error(`[frank] export failed: ${e.message}`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
+
   default:
     console.log('Frank — collaboration layer for any web content');
     console.log('');
@@ -66,7 +88,7 @@ switch (command) {
     console.log('  frank stop      Stop Frank and remove Claude Code hooks');
     console.log('  frank connect   Connect to your Frank Cloud instance');
     console.log('  frank status    Show daemon and connection status');
-    console.log('  frank export    Export project (coming in Phase 3)');
+    console.log('  frank export    Export project data as structured JSON');
     process.exit(0);
 }
 
