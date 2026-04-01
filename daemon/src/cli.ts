@@ -7,7 +7,7 @@
 
 import fs from 'fs';
 import { execFile } from 'child_process';
-import { SCHEMA_DIR, HTTP_PORT } from './protocol.js';
+import { FRANK_DIR, HTTP_PORT } from './protocol.js';
 
 const command = process.argv[2];
 
@@ -32,7 +32,7 @@ switch (command) {
 async function runStart(): Promise<void> {
   console.log('[frank] starting...');
 
-  fs.mkdirSync(SCHEMA_DIR, { recursive: true });
+  fs.mkdirSync(FRANK_DIR, { recursive: true });
 
   const { injectClaudeMd } = await import('./inject.js');
   injectClaudeMd();
@@ -46,7 +46,7 @@ async function runStart(): Promise<void> {
     else console.log(`[frank] opened ${url}`);
   });
 
-  console.log('[frank] ready — wireframes will appear as you design with Claude Code');
+  console.log('[frank] ready — open a project and start annotating');
   console.log('[frank] press Ctrl+C to stop');
 
   process.on('SIGINT', async () => {
