@@ -2,6 +2,8 @@
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { renderToolbar } from '../components/toolbar.js';
+import { setupOverlay, toggleCommentMode, disableCommentMode } from '../overlay/overlay.js';
+import { renderComments, showCommentInput } from '../components/comments.js';
 
 export function renderViewer(container, { onBack }) {
   const project = projectManager.get();
@@ -31,6 +33,17 @@ export function renderViewer(container, { onBack }) {
     });
   }
 
+  // Render comment panel in sidebar
+  const screenId = Object.keys(project.screens || {})[0] || null;
+  renderComments(sidebar, {
+    screenId,
+    onCommentModeToggle() {
+      const isActive = toggleCommentMode();
+      const btn = document.querySelector('#toggle-comment-mode');
+      if (btn) btn.textContent = isActive ? '✕ Cancel' : '+ Add';
+    },
+  });
+
   const contentEl = container.querySelector('#viewer-content');
 
   if (project.contentType === 'url' && project.url) {
@@ -58,6 +71,24 @@ async function loadUrlContent(container, url) {
   `;
 
   const iframe = container.querySelector('#content-iframe');
+
+  iframe.addEventListener('load', () => {
+    setupOverlay(iframe, {
+      onCommentCreate(anchor, targetElement) {
+        // Open sidebar if not already open
+        const sidebar = document.querySelector('#viewer-sidebar');
+        if (sidebar && !sidebar.classList.contains('open')) {
+          sidebar.classList.add('open');
+        }
+        // Show comment input with the anchor
+        showCommentInput(sidebar, anchor, (anchor, text) => {
+          const screenId = Object.keys(projectManager.get()?.screens || {})[0] || 'default';
+          sync.addComment(screenId, anchor, text);
+          disableCommentMode();
+        });
+      },
+    });
+  });
 
   iframe.addEventListener('error', () => fallbackToProxy(container, url));
 
