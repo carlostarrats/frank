@@ -283,16 +283,86 @@ function autoAddScreen(newUrl) {
 }
 
 function showSnapshotFlash() {
-  const existing = document.querySelector('.snapshot-flash');
-  if (existing) existing.remove();
-
-  const flash = document.createElement('div');
-  flash.className = 'snapshot-flash';
   const wrapper = document.querySelector('#iframe-wrapper') || document.querySelector('.viewer-content');
   if (!wrapper) return;
-  wrapper.appendChild(flash);
 
-  flash.addEventListener('animationend', () => flash.remove());
+  // Remove any existing canvas
+  wrapper.querySelector('.snapshot-particles')?.remove();
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'snapshot-particles';
+  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:10000;';
+  wrapper.appendChild(canvas);
+
+  const ctx = canvas.getContext('2d');
+  const rect = wrapper.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const particles = [];
+  const count = 1000;
+
+  // Spawn particles from edges
+  for (let i = 0; i < count; i++) {
+    const edge = Math.floor(Math.random() * 4);
+    let x, y, vx, vy;
+    const speed = 0.45 + Math.random() * 1.2;
+
+    if (edge === 0) {        // top
+      x = Math.random() * w; y = 0;
+      vx = (Math.random() - 0.5) * 1.5; vy = speed;
+    } else if (edge === 1) { // bottom
+      x = Math.random() * w; y = h;
+      vx = (Math.random() - 0.5) * 1.5; vy = -speed;
+    } else if (edge === 2) { // left
+      x = 0; y = Math.random() * h;
+      vx = speed; vy = (Math.random() - 0.5) * 1.5;
+    } else {                 // right
+      x = w; y = Math.random() * h;
+      vx = -speed; vy = (Math.random() - 0.5) * 1.5;
+    }
+
+    particles.push({
+      x, y, vx, vy,
+      size: 0.5 + Math.random() * 1.5,
+      life: 1,
+      decay: 0.006 + Math.random() * 0.010,
+      delay: Math.random() * 15, // stagger spawn in frames
+    });
+  }
+
+  let frame = 0;
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+    let alive = false;
+
+    for (const p of particles) {
+      if (frame < p.delay) { alive = true; continue; }
+      if (p.life <= 0) continue;
+      alive = true;
+
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= p.decay;
+
+      const alpha = Math.max(0, p.life);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.fill();
+    }
+
+    frame++;
+    if (alive) {
+      requestAnimationFrame(animate);
+    } else {
+      canvas.remove();
+    }
+  }
+
+  requestAnimationFrame(animate);
 }
 
 function escapeHtml(text) {
