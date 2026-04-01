@@ -121,10 +121,11 @@ After install, the `frank` command is available globally in your terminal.
 Open your terminal and run:
 
 ```bash
-frank start     # start daemon, open browser at localhost:42068
-frank stop      # stop daemon, remove Claude Code hooks
-frank status    # show daemon and cloud connection status
-frank export    # export project data as structured JSON
+frank start       # start daemon, open browser at localhost:42068
+frank stop        # stop daemon, remove Claude Code hooks
+frank status      # show daemon and cloud connection status
+frank export      # export project data as structured JSON
+frank uninstall   # remove all Frank data (with confirmation)
 ```
 
 `frank start` launches the daemon and opens `http://localhost:42068` in your default browser. Paste a URL, start commenting. When you're done, hit `Ctrl+C` in the terminal or run `frank stop`.
