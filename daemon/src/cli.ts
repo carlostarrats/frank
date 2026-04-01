@@ -10,7 +10,14 @@
 import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
+import { fileURLToPath } from 'url';
 import { FRANK_DIR, HTTP_PORT } from './protocol.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PKG_PATH = path.resolve(__dirname, '../package.json');
+const CURRENT_VERSION = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8')).version;
+const PKG_NAME = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8')).name;
 
 const command = process.argv[2];
 
@@ -80,20 +87,28 @@ switch (command) {
     process.exit(0);
   }
 
+  case 'uninstall':
+    await runUninstall();
+    break;
+
   default:
-    console.log('Frank — collaboration layer for any web content');
+    console.log(`Frank v${CURRENT_VERSION} — collaboration layer for any web content`);
     console.log('');
     console.log('Usage:');
-    console.log('  frank start     Start Frank and open the browser');
-    console.log('  frank stop      Stop Frank and remove Claude Code hooks');
-    console.log('  frank connect   Connect to your Frank Cloud instance');
-    console.log('  frank status    Show daemon and connection status');
-    console.log('  frank export    Export project data as structured JSON');
+    console.log('  frank start       Start Frank and open the browser');
+    console.log('  frank stop        Stop Frank and remove Claude Code hooks');
+    console.log('  frank connect     Connect to your Frank Cloud instance');
+    console.log('  frank status      Show daemon and connection status');
+    console.log('  frank export      Export project data as structured JSON');
+    console.log('  frank uninstall   Remove all Frank data and uninstall');
     process.exit(0);
 }
 
 async function runStart(): Promise<void> {
   console.log('[frank] starting...');
+
+  // Non-blocking update check
+  checkForUpdate();
 
   fs.mkdirSync(FRANK_DIR, { recursive: true });
 
@@ -122,6 +137,62 @@ async function runStart(): Promise<void> {
     await runStop();
     process.exit(0);
   });
+}
+
+async function checkForUpdate(): Promise<void> {
+  try {
+    const res = await fetch(`https://registry.npmjs.org/${PKG_NAME}/latest`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return;
+    const data = await res.json() as { version: string };
+    const latest = data.version;
+    if (latest && latest !== CURRENT_VERSION) {
+      console.log(`[frank] update available: ${CURRENT_VERSION} → ${latest}`);
+      console.log(`[frank] run: npm update -g ${PKG_NAME}`);
+    }
+  } catch {
+    // Silent fail — network might be unavailable
+  }
+}
+
+async function runUninstall(): Promise<void> {
+  const readline = await import('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+  const projectCount = fs.existsSync(path.join(FRANK_DIR, 'projects'))
+    ? fs.readdirSync(path.join(FRANK_DIR, 'projects')).length
+    : 0;
+
+  console.log('[frank] this will permanently delete:');
+  console.log(`  - All Frank data in ~/.frank/ (${projectCount} project${projectCount !== 1 ? 's' : ''}, snapshots, exports)`);
+  console.log('  - Claude Code integration (CLAUDE.md injection)');
+  console.log('  - The global frank command');
+  console.log('');
+
+  const answer = await new Promise<string>(resolve => {
+    rl.question('[frank] type "delete everything" to confirm: ', resolve);
+  });
+  rl.close();
+
+  if (answer.trim() !== 'delete everything') {
+    console.log('[frank] uninstall cancelled');
+    process.exit(0);
+  }
+
+  // Remove CLAUDE.md injection
+  const { removeClaudeMd } = await import('./inject.js');
+  removeClaudeMd();
+
+  // Delete ~/.frank/
+  if (fs.existsSync(FRANK_DIR)) {
+    fs.rmSync(FRANK_DIR, { recursive: true, force: true });
+    console.log('[frank] deleted ~/.frank/');
+  }
+
+  console.log('[frank] data removed. To finish uninstalling, run:');
+  console.log('  npm uninstall -g frank-daemon');
+  process.exit(0);
 }
 
 async function runStop(): Promise<void> {

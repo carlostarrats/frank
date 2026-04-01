@@ -7,6 +7,7 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
     <div class="home">
       <div class="home-header">
         <img src="frank-logo.svg" alt="Frank" class="home-logo">
+        <span class="home-version">v1.0</span>
       </div>
       <div class="home-content">
         <div class="home-new" id="home-new"></div>

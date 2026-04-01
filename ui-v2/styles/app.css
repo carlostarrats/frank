@@ -76,10 +76,22 @@
   width: 100%;
 }
 
+.home-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
 .home-logo {
   height: 36px;
-  margin-bottom: 32px;
   filter: brightness(0) invert(1);
+}
+
+.home-version {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 .home-content {

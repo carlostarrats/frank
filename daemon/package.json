@@ -1,6 +1,6 @@
 {
   "name": "frank-daemon",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Frank daemon — Claude Code hooks integration and panel server",
   "type": "module",
   "bin": {
@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

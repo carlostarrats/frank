@@ -2,7 +2,9 @@
 
 > A collaboration layer for any web content. Point it at any URL, comment on specific elements, share for feedback, route feedback to AI, and capture the complete decision-making process.
 
-**Status: Beta.** Core functionality works. Rough edges exist.
+**v1.0 Beta** — Core functionality works. Rough edges exist.
+
+**Frank is a terminal tool.** You start it from the command line, and it opens a browser-based UI at `localhost:42068`. Requires [Node.js](https://nodejs.org/) (v18+).
 
 
 <img width="1312" height="1061" alt="Screenshot 2026-03-31 at 11 40 53 PM" src="https://github.com/user-attachments/assets/7b0a5030-cb9d-47fe-aec7-e1ba6ffb2d1e" />
@@ -87,6 +89,19 @@ All data lives locally in `~/.frank/`. Nothing is sent anywhere unless you expli
 
 ---
 
+## Prerequisites
+
+Frank requires **[Node.js](https://nodejs.org/) v18 or later**. If you don't have it:
+
+```bash
+# Check if you have Node.js
+node --version
+
+# If not installed, get it from https://nodejs.org
+# or via Homebrew on macOS:
+brew install node
+```
+
 ## Install
 
 ```bash
@@ -97,18 +112,22 @@ npm run build
 npm install -g .
 ```
 
+After install, the `frank` command is available globally in your terminal.
+
 ---
 
 ## Usage
 
+Open your terminal and run:
+
 ```bash
-frank start     # start daemon, open browser
+frank start     # start daemon, open browser at localhost:42068
 frank stop      # stop daemon, remove Claude Code hooks
 frank status    # show daemon and cloud connection status
 frank export    # export project data as structured JSON
 ```
 
-`frank start` opens `http://localhost:42068`. Paste a URL, start commenting.
+`frank start` launches the daemon and opens `http://localhost:42068` in your default browser. Paste a URL, start commenting. When you're done, hit `Ctrl+C` in the terminal or run `frank stop`.
 
 ### Connect to cloud (for sharing)
 
