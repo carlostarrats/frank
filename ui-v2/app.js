@@ -3,6 +3,7 @@ import sync from './core/sync.js';
 import projectManager from './core/project.js';
 import { renderHome } from './views/home.js';
 import { renderViewer } from './views/viewer.js';
+import { renderTimeline } from './views/timeline.js';
 import { setupAiRouting } from './components/ai-routing.js';
 
 const state = {
@@ -40,7 +41,17 @@ function switchView(view) {
       },
     });
   }
+
+  if (view === 'timeline') {
+    renderTimeline(document.getElementById('view-timeline'), {
+      onBack() { switchView('viewer'); },
+    });
+  }
 }
+
+window.addEventListener('frank:open-timeline', () => {
+  if (projectManager.get()) switchView('timeline');
+});
 
 // Listen for pushed messages from daemon
 sync.onMessage((msg) => {

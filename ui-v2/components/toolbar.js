@@ -8,12 +8,22 @@ export function renderToolbar(container, { projectName, url, onBack }) {
       <span class="toolbar-title">${escapeHtml(projectName)}</span>
       <span class="toolbar-url">${escapeHtml(url || '')}</span>
       <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn" id="toolbar-snapshot" title="Take snapshot">📸</button>
+      <button class="toolbar-btn" id="toolbar-timeline" title="Timeline">📋</button>
       <button class="toolbar-btn" id="toolbar-comment-toggle" title="Toggle comments">💬</button>
       <button class="toolbar-btn" id="toolbar-share" title="Share">Share</button>
     </div>
   `;
 
   container.querySelector('#toolbar-back').addEventListener('click', onBack);
+
+  container.querySelector('#toolbar-snapshot')?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('frank:take-snapshot'));
+  });
+
+  container.querySelector('#toolbar-timeline')?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('frank:open-timeline'));
+  });
 
   const shareBtn = container.querySelector('#toolbar-share');
   shareBtn.addEventListener('click', () => {
