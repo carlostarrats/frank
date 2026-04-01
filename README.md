@@ -1,11 +1,11 @@
 # Frank
 
-<img width="1312" height="1061" alt="Screenshot 2026-03-31 at 11 40 53 PM" src="https://github.com/user-attachments/assets/7b0a5030-cb9d-47fe-aec7-e1ba6ffb2d1e" />
-
-
 > A collaboration layer for any web content. Point it at any URL, comment on specific elements, share for feedback, route feedback to AI, and capture the complete decision-making process.
 
 **Status: Beta.** Core functionality works. Rough edges exist.
+
+
+<img width="1312" height="1061" alt="Screenshot 2026-03-31 at 11 40 53 PM" src="https://github.com/user-attachments/assets/7b0a5030-cb9d-47fe-aec7-e1ba6ffb2d1e" />
 
 ---
 
