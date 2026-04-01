@@ -22,14 +22,41 @@ switch (command) {
     await runStop();
     break;
 
-  case 'connect':
-    console.log('[frank] connect: coming in Phase 2 (cloud sharing)');
-    console.log('[frank] usage: frank connect <cloud-url> --key <api-key>');
-    process.exit(0);
+  case 'connect': {
+    const urlArg = process.argv[3];
+    const keyFlag = process.argv.indexOf('--key');
+    const keyArg = keyFlag >= 0 ? process.argv[keyFlag + 1] : undefined;
 
-  case 'status':
-    console.log('[frank] status: coming in Phase 2');
+    if (!urlArg || !keyArg) {
+      console.log('Usage: frank connect <cloud-url> --key <api-key>');
+      console.log('Example: frank connect https://my-frank.vercel.app --key sk_abc123');
+      process.exit(1);
+    }
+
+    const { saveCloudConfig, healthCheck } = await import('./cloud.js');
+    saveCloudConfig(urlArg.replace(/\/$/, ''), keyArg);
+    console.log(`[frank] saved cloud config`);
+
+    const result = await healthCheck();
+    if (result.ok) {
+      console.log(`[frank] connected to ${urlArg}`);
+    } else {
+      console.error(`[frank] connection failed: ${result.error}`);
+      process.exit(1);
+    }
     process.exit(0);
+  }
+
+  case 'status': {
+    const { isCloudConnected, getCloudUrl, healthCheck } = await import('./cloud.js');
+    console.log('[frank] status');
+    console.log(`  cloud: ${isCloudConnected() ? `connected (${getCloudUrl()})` : 'not connected'}`);
+    if (isCloudConnected()) {
+      const check = await healthCheck();
+      console.log(`  health: ${check.ok ? 'ok' : check.error}`);
+    }
+    process.exit(0);
+  }
 
   default:
     console.log('Frank — collaboration layer for any web content');
@@ -39,6 +66,7 @@ switch (command) {
     console.log('  frank stop      Stop Frank and remove Claude Code hooks');
     console.log('  frank connect   Connect to your Frank Cloud instance');
     console.log('  frank status    Show daemon and connection status');
+    console.log('  frank export    Export project (coming in Phase 3)');
     process.exit(0);
 }
 
