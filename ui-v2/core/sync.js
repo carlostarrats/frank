@@ -83,6 +83,18 @@ const sync = {
   getCloudStatus() {
     return send({ type: 'cloud-status' });
   },
+  saveSnapshot(html, screenshot, trigger, triggeredBy) {
+    return send({ type: 'save-snapshot', html, screenshot, trigger, triggeredBy });
+  },
+  listSnapshots() { return send({ type: 'list-snapshots' }); },
+  starSnapshot(snapshotId, label) { return send({ type: 'star-snapshot', snapshotId, label }); },
+  curateComment(commentIds, action, remixedText, dismissReason) {
+    return send({ type: 'curate-comment', commentIds, action, remixedText, dismissReason });
+  },
+  logAiInstruction(feedbackIds, curationIds, instruction) {
+    return send({ type: 'log-ai-instruction', feedbackIds, curationIds, instruction });
+  },
+  exportProject() { return send({ type: 'export-project' }); },
 };
 
 export default sync;

@@ -3,7 +3,8 @@ import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { renderToolbar } from '../components/toolbar.js';
 import { setupOverlay, toggleCommentMode, disableCommentMode } from '../overlay/overlay.js';
-import { renderComments, showCommentInput } from '../components/comments.js';
+import { renderCuration } from '../components/curation.js';
+import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
 
@@ -35,15 +36,25 @@ export function renderViewer(container, { onBack }) {
     });
   }
 
-  // Render comment panel in sidebar
+  // Render curation panel in sidebar
   const screenId = Object.keys(project.screens || {})[0] || null;
-  renderComments(sidebar, {
+  renderCuration(sidebar, {
     screenId,
     onCommentModeToggle() {
       const isActive = toggleCommentMode();
       const btn = document.querySelector('#toggle-comment-mode');
       if (btn) btn.textContent = isActive ? '✕ Cancel' : '+ Add';
     },
+  });
+
+  // Manual snapshot trigger from toolbar
+  window.addEventListener('frank:take-snapshot', async () => {
+    const iframe = document.querySelector('#content-iframe');
+    if (!iframe) return;
+    const snapshot = await captureSnapshot(iframe);
+    if (snapshot) {
+      await sync.saveSnapshot(snapshot.html, null, 'manual');
+    }
   });
 
   // Share flow: capture snapshot → check sensitive → upload
