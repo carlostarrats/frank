@@ -145,3 +145,34 @@ export function deleteComment(projectId: string, commentId: string): boolean {
   atomicWrite(commentsJsonPath(projectId), JSON.stringify(filtered, null, 2));
   return true;
 }
+
+export function mergeCloudComments(
+  projectId: string,
+  cloudComments: Array<{ id: string; author: string; screenId: string; anchor: unknown; text: string; ts: string }>,
+): { newCount: number; lastId: string | null } {
+  const existing = loadComments(projectId);
+  const existingIds = new Set(existing.map(c => c.id));
+  let newCount = 0;
+
+  for (const cc of cloudComments) {
+    if (!existingIds.has(cc.id)) {
+      existing.push({
+        id: cc.id,
+        screenId: cc.screenId,
+        anchor: cc.anchor as any,
+        author: cc.author,
+        text: cc.text,
+        ts: cc.ts,
+        status: 'pending',
+      });
+      newCount++;
+    }
+  }
+
+  if (newCount > 0) {
+    atomicWrite(commentsJsonPath(projectId), JSON.stringify(existing, null, 2));
+  }
+
+  const lastId = cloudComments.length > 0 ? cloudComments[cloudComments.length - 1].id : null;
+  return { newCount, lastId };
+}
