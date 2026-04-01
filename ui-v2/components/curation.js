@@ -65,6 +65,13 @@ export function renderCuration(container, { screenId, onCommentModeToggle }) {
             <button class="btn-primary" id="remix-save">Save Remix</button>
           </div>
         </div>
+        <div class="comment-input-area" id="comment-input-area" style="display:none">
+          <textarea class="input comment-textarea" id="comment-text" placeholder="Add a comment..." rows="3"></textarea>
+          <div class="comment-input-actions">
+            <button class="btn-ghost" id="cancel-comment">Cancel</button>
+            <button class="btn-primary" id="submit-comment">Comment</button>
+          </div>
+        </div>
       </div>
     `;
 

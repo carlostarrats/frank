@@ -50,16 +50,25 @@ export function setupOverlay(iframeEl, callbacks) {
 
 export function enableCommentMode() {
   commentMode = true;
-  const overlay = document.querySelector('.overlay');
-  if (overlay) overlay.classList.add('comment-mode');
+  // Set crosshair cursor on the iframe itself (not the overlay — overlay has pointer-events: none)
+  if (currentIframe) {
+    try {
+      const doc = currentIframe.contentDocument;
+      if (doc) doc.body.style.cursor = 'crosshair';
+    } catch { /* cross-origin */ }
+  }
 }
 
 export function disableCommentMode() {
   commentMode = false;
   clearHighlight();
   clearSelected();
-  const overlay = document.querySelector('.overlay');
-  if (overlay) overlay.classList.remove('comment-mode');
+  if (currentIframe) {
+    try {
+      const doc = currentIframe.contentDocument;
+      if (doc) doc.body.style.cursor = '';
+    } catch { /* cross-origin */ }
+  }
 }
 
 export function toggleCommentMode() {

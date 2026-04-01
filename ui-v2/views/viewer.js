@@ -135,22 +135,19 @@ async function loadUrlContent(container, url) {
 
   const iframe = container.querySelector('#content-iframe');
 
-  iframe.addEventListener('load', () => {
-    setupOverlay(iframe, {
-      onCommentCreate(anchor, targetElement) {
-        // Open sidebar if not already open
-        const sidebar = document.querySelector('#viewer-sidebar');
-        if (sidebar && !sidebar.classList.contains('open')) {
-          sidebar.classList.add('open');
-        }
-        // Show comment input with the anchor
-        showCommentInput(sidebar, anchor, (anchor, text) => {
-          const screenId = Object.keys(projectManager.get()?.screens || {})[0] || 'default';
-          sync.addComment(screenId, anchor, text);
-          disableCommentMode();
-        });
-      },
-    });
+  // Setup overlay immediately — it listens for load events internally
+  setupOverlay(iframe, {
+    onCommentCreate(anchor, targetElement) {
+      const sidebar = document.querySelector('#viewer-sidebar');
+      if (sidebar && !sidebar.classList.contains('open')) {
+        sidebar.classList.add('open');
+      }
+      showCommentInput(sidebar, anchor, (anchor, text) => {
+        const screenId = Object.keys(projectManager.get()?.screens || {})[0] || 'default';
+        sync.addComment(screenId, anchor, text);
+        disableCommentMode();
+      });
+    },
   });
 
   iframe.addEventListener('error', () => fallbackToProxy(container, url));

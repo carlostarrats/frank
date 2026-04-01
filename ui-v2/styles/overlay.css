@@ -20,6 +20,5 @@
   display: none;
 }
 
-.overlay.comment-mode {
-  cursor: crosshair;
-}
+/* pointer-events stay none — clicks pass through to iframe contentDocument
+   where overlay.js attaches its listeners. Cursor set via JS on the iframe. */
