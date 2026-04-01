@@ -4,6 +4,8 @@ import projectManager from '../core/project.js';
 import { renderToolbar } from '../components/toolbar.js';
 import { setupOverlay, toggleCommentMode, disableCommentMode } from '../overlay/overlay.js';
 import { renderComments, showCommentInput } from '../components/comments.js';
+import { captureSnapshot, detectSensitiveContent } from '../overlay/snapshot.js';
+import { updateSharePopover } from '../components/share-popover.js';
 
 export function renderViewer(container, { onBack }) {
   const project = projectManager.get();
@@ -42,6 +44,56 @@ export function renderViewer(container, { onBack }) {
       const btn = document.querySelector('#toggle-comment-mode');
       if (btn) btn.textContent = isActive ? '✕ Cancel' : '+ Add';
     },
+  });
+
+  // Share flow: capture snapshot → check sensitive → upload
+  window.addEventListener('frank:capture-snapshot', async (e) => {
+    const iframe = document.querySelector('#content-iframe');
+    if (!iframe) return;
+
+    const snapshot = await captureSnapshot(iframe);
+    if (!snapshot) {
+      updateSharePopover({ error: 'Could not capture snapshot' });
+      return;
+    }
+
+    // Check for sensitive content
+    const warnings = detectSensitiveContent(snapshot.html);
+    if (warnings.length > 0) {
+      const proceed = confirm(`Warning: ${warnings.join(', ')}. Share anyway?`);
+      if (!proceed) {
+        updateSharePopover({ error: 'Cancelled' });
+        return;
+      }
+    }
+
+    try {
+      const result = await sync.uploadShare(
+        snapshot,
+        e.detail.coverNote,
+        projectManager.get()?.contentType || 'url',
+      );
+      if (result.error) {
+        updateSharePopover({ error: result.error });
+      } else {
+        // Update project state
+        const project = projectManager.get();
+        if (project) {
+          project.activeShare = {
+            id: result.shareId,
+            revokeToken: result.revokeToken,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+            coverNote: e.detail.coverNote,
+            lastSyncedNoteId: null,
+            unseenNotes: 0,
+          };
+        }
+        updateSharePopover(result);
+      }
+    } catch (err) {
+      updateSharePopover({ error: err.message });
+    }
   });
 
   const contentEl = container.querySelector('#viewer-content');

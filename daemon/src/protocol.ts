@@ -60,6 +60,8 @@ export interface AddScreenRequest { type: 'add-screen'; route: string; label: st
 export interface AddCommentRequest { type: 'add-comment'; screenId: string; anchor: CommentAnchor; text: string; requestId?: number; }
 export interface DeleteCommentRequest { type: 'delete-comment'; commentId: string; requestId?: number; }
 export interface ProxyUrlRequest { type: 'proxy-url'; url: string; requestId?: number; }
+export interface UploadShareRequest { type: 'upload-share'; snapshot: unknown; coverNote: string; contentType: string; oldShareId?: string; oldRevokeToken?: string; requestId?: number; }
+export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; }
 
 export type AppMessage =
   | ListProjectsRequest
@@ -69,7 +71,9 @@ export type AppMessage =
   | AddScreenRequest
   | AddCommentRequest
   | DeleteCommentRequest
-  | ProxyUrlRequest;
+  | ProxyUrlRequest
+  | UploadShareRequest
+  | CloudStatusRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -104,12 +108,29 @@ export interface ErrorMessage {
   error: string;
 }
 
+export interface ShareUploadedMessage {
+  type: 'share-uploaded';
+  requestId?: number;
+  shareId: string;
+  revokeToken: string;
+  url: string;
+}
+
+export interface CloudStatusMessage {
+  type: 'cloud-status';
+  requestId?: number;
+  connected: boolean;
+  cloudUrl: string | null;
+}
+
 export type DaemonMessage =
   | ProjectListMessage
   | ProjectLoadedMessage
   | CommentAddedMessage
   | ProxyReadyMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | ShareUploadedMessage
+  | CloudStatusMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 

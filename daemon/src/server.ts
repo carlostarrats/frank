@@ -9,9 +9,10 @@ import {
 } from './protocol.js';
 import {
   listProjects, loadProject, createProject, deleteProject,
-  addScreen, loadComments, addComment, deleteComment,
+  addScreen, loadComments, addComment, deleteComment, saveProject,
 } from './projects.js';
 import { proxyRequest } from './proxy.js';
+import { uploadShare, isCloudConnected, getCloudUrl } from './cloud.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -245,6 +246,47 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
+      break;
+    }
+
+    case 'upload-share': {
+      (async () => {
+        try {
+          const project = activeProjectId ? loadProject(activeProjectId) : null;
+          const oldShareId = project?.activeShare?.id;
+          const oldRevokeToken = project?.activeShare?.revokeToken;
+          const result = await uploadShare(msg.snapshot, msg.coverNote, msg.contentType, oldShareId, oldRevokeToken);
+          if ('error' in result) {
+            reply({ type: 'error', error: result.error });
+          } else {
+            // Update project with active share
+            if (project && activeProjectId) {
+              project.activeShare = {
+                id: result.shareId,
+                revokeToken: result.revokeToken,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                coverNote: msg.coverNote,
+                lastSyncedNoteId: null,
+                unseenNotes: 0,
+              };
+              saveProject(activeProjectId, project);
+            }
+            reply({ type: 'share-uploaded', shareId: result.shareId, revokeToken: result.revokeToken, url: result.url });
+          }
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'cloud-status': {
+      reply({
+        type: 'cloud-status',
+        connected: isCloudConnected(),
+        cloudUrl: getCloudUrl(),
+      });
       break;
     }
   }

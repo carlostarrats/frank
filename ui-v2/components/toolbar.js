@@ -1,4 +1,5 @@
 // toolbar.js — Top toolbar for the viewer
+import { showSharePopover } from './share-popover.js';
 
 export function renderToolbar(container, { projectName, url, onBack }) {
   container.innerHTML = `
@@ -8,11 +9,16 @@ export function renderToolbar(container, { projectName, url, onBack }) {
       <span class="toolbar-url">${escapeHtml(url || '')}</span>
       <div class="toolbar-spacer"></div>
       <button class="toolbar-btn" id="toolbar-comment-toggle" title="Toggle comments">💬</button>
-      <button class="toolbar-btn" id="toolbar-share" disabled title="Share (Phase 2)">Share</button>
+      <button class="toolbar-btn" id="toolbar-share" title="Share">Share</button>
     </div>
   `;
 
   container.querySelector('#toolbar-back').addEventListener('click', onBack);
+
+  const shareBtn = container.querySelector('#toolbar-share');
+  shareBtn.addEventListener('click', () => {
+    showSharePopover(shareBtn, { onClose() {} });
+  });
 }
 
 function escapeHtml(text) {
