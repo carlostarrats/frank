@@ -1,0 +1,25 @@
+/* Overlay and highlight styles */
+.element-highlight {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  border: 2px dashed rgba(74, 158, 255, 0.5);
+  border-radius: 2px;
+  background: rgba(74, 158, 255, 0.05);
+  transition: all 0.1s;
+  display: none;
+}
+
+.element-selected {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  border-radius: 2px;
+  background: rgba(74, 158, 255, 0.1);
+  display: none;
+}
+
+.overlay.comment-mode {
+  cursor: crosshair;
+}
