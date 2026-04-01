@@ -76,10 +76,10 @@
   width: 100%;
 }
 
-.home-title {
-  font-size: 24px;
-  font-weight: 700;
+.home-logo {
+  height: 36px;
   margin-bottom: 32px;
+  filter: brightness(0) invert(1);
 }
 
 .home-content {
