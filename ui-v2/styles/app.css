@@ -299,3 +299,16 @@
 .share-popover .v-btn-primary { background: var(--accent); color: #fff; border: none; }
 .share-popover .v-btn-primary:hover { opacity: 0.9; }
 .share-popover .v-btn-ghost { border: none; }
+
+/* AI routing modal */
+.ai-routing-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; }
+.ai-routing-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+.ai-routing-dialog { position: relative; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; width: 560px; max-height: 80vh; overflow-y: auto; }
+.ai-routing-dialog h3 { margin-bottom: 16px; font-size: 16px; }
+.ai-routing-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; }
+.ai-routing-feedback { background: var(--bg-surface); border-radius: 6px; padding: 12px; margin-bottom: 16px; max-height: 200px; overflow-y: auto; }
+.ai-routing-comment { font-size: 13px; margin-bottom: 8px; line-height: 1.4; }
+.ai-routing-comment:last-child { margin-bottom: 0; }
+.ai-routing-anchor { font-family: monospace; font-size: 10px; color: var(--text-muted); background: var(--bg-elevated); padding: 1px 4px; border-radius: 3px; margin-left: 4px; }
+.ai-routing-textarea { width: 100%; resize: vertical; min-height: 100px; margin-bottom: 12px; }
+.ai-routing-actions { display: flex; gap: 8px; justify-content: flex-end; }

@@ -3,6 +3,7 @@ import sync from './core/sync.js';
 import projectManager from './core/project.js';
 import { renderHome } from './views/home.js';
 import { renderViewer } from './views/viewer.js';
+import { setupAiRouting } from './components/ai-routing.js';
 
 const state = {
   currentView: 'home',
@@ -50,4 +51,5 @@ sync.onMessage((msg) => {
 
 // Boot
 sync.connect();
+setupAiRouting();
 setTimeout(() => switchView('home'), 100);
