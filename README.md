@@ -1,122 +1,86 @@
-
-<img width="1274" height="1005" alt="Screenshot 2026-03-25 at 9 46 52 PM" src="https://github.com/user-attachments/assets/cecd04e7-2d47-4631-b355-9501bec12763" />
-
-
 # Frank
 
-> The prototype layer between conversation and code. AI generates wireframes, you iterate visually, share for feedback, and hand off to become real code.
+> A collaboration layer for any web content. Point it at any URL, comment on specific elements, share for feedback, route feedback to AI, and capture the complete decision-making process.
 
-**Status: Beta.** Core functionality works. Rough edges exist. Not ready for general use.
-
-<!-- demo gif goes here -->
-
----
-
-## Who this is for
-
-Designers and makers who work in code. If you use AI coding assistants to build UI, Frank gives you:
-
-- **Instant preview** — see your layout alongside the terminal without publishing, deploying, or opening a design tool
-- **Interactive iteration** — drag sections, try different layouts, save what works
-- **Shareable prototypes** — send a link, get feedback from teammates or clients in the browser, no app needed
-- **Code handoff** — when the design is right, the schema becomes the blueprint the AI builds from
-
-## The gap
-
-There's no tool where an AI generates a visual prototype, you iterate on it interactively, share it for team feedback, and then hand it off as a code blueprint. Figma requires design skills. Excalidraw has no prototyping or AI generation. v0 goes straight from prompt to code with no shared visual artifact in between. Frank sits in the middle — the iteration and alignment step that doesn't exist anywhere else.
+**Status: Beta.** Core functionality works. Rough edges exist.
 
 ---
 
 ## What it does
 
-When you ask Claude Code to design a screen or flow, Frank renders a high-fidelity wireframe in a browser tab alongside your terminal. You iterate visually — "move the chart above the table", "make it mobile", "add a sidebar" — and Frank re-renders instantly. Share it with teammates for feedback. When the layout is right, tell Claude to build it — the wireframe schema becomes the structural blueprint.
-
----
-
-## The workflow
+Frank wraps any URL — localhost, staging, production — with a commenting overlay. Click any element to leave feedback. Share a link so reviewers can comment in the browser. Curate the feedback (approve, dismiss, rewrite), then send it to your AI assistant as a structured prompt. Everything is captured: every comment, every decision, every snapshot.
 
 ```
-1. Talk to Claude    →  "Design a dashboard with stats, a chart, and a recent orders table"
-2. Frank renders     →  Wireframe appears instantly in the browser
-3. Iterate visually  →  "Move the chart above the table" — Claude updates, Frank re-renders
-4. Share             →  Send a link, teammates comment on specific sections
-5. Build it          →  "Build this out in Next.js" — Claude uses the schema as the blueprint
+Point at what you're building (any URL)
+       |
+Comment on specific elements (click to anchor)
+       |
+Share with reviewers (real internet link)
+       |
+Reviewers comment with guided prompts (no app needed)
+       |
+You curate feedback (approve / dismiss / remix)
+       |
+Route to AI with context (structured clipboard copy)
+       |
+AI iterates -> take snapshot -> repeat
 ```
-
----
-
-## What it renders
-
-30+ section types with shadcn/ui-quality rendering:
-
-| Section | What it looks like |
-|---|---|
-| `header` | App bar — logo, nav links, search, user avatar |
-| `hero` | Large headline + subtext + CTA + optional image |
-| `stats-row` | KPI cards with label, value, and change badge |
-| `chart` | Line/bar chart with axis labels and time-period tabs |
-| `list` | Mobile list rows OR data table (auto-detected from content) |
-| `form` | Stacked form fields with labels |
-| `grid` | 2-column card grid |
-| `bottom-nav` | Mobile tab bar with icons |
-| `sidebar` | Vertical nav with grouped items |
-| `chat` | Message bubbles (sent/received) |
-| `empty-state` | Centered icon + headline + CTA |
-| `modal` | Overlay dialog |
-| `tabs` | Horizontal tab selector |
-| `pricing` | Pricing tier cards |
-| `footer` | Logo + links + copyright |
-| ...and more | `banner`, `toolbar`, `action-row`, `loader`, `map`, `onboarding`, `testimonial`, `gallery`, `feature-grid` |
-
-- Web platform renders with sidebar + content layouts at real dimensions
-- Mobile/tablet renders at fixed device dimensions
-- Wireframes render at fixed viewport sizes on a zoomable canvas
 
 ---
 
 ## Features
 
-- **Multi-screen projects** — manage multiple screens per project, saved as `.frank.json` files
-- **Screen gallery** — thumbnail grid + flow map showing connections between screens
-- **Section-level comments** — click a section to comment on it, notes anchor to specific parts
-- **Sharing** — generate a link, reviewers comment in the browser with guided feedback prompts
-- **Cover notes** — attach context when sharing ("focus on the payment screen, rest is rough")
-- **Prototype preview** — click through hotspot connections between screens
-- **Handoff view** — see all screens, notes, and decisions before telling the AI to build
-- **Export** — PNG, standalone HTML, or print to PDF
-- **Stars** — snapshot screen states, restore later, compare versions
-- **Undo/redo** — 10-state stack per screen
-- **Drag to reorder** — move sections by dragging
+- **Wrap any URL** — localhost dev server, Vercel preview, production site, even PDFs and images
+- **Element-level commenting** — click any element, comment anchors via CSS selector + DOM path + coordinates
+- **Smart element detection** — clicks bubble up to the nearest meaningful element (card, button, heading — not the tiny span your cursor landed on)
+- **Self-hosted sharing** — deploy Frank Cloud to your own Vercel account, get real internet links
+- **Reviewer experience** — reviewers open the link, see the page, comment with guided prompts ("How does this feel?", "What's missing?", "What would you change?")
+- **Feedback curation** — approve, dismiss, or remix each comment before sending to AI
+- **AI routing** — format curated feedback as a structured prompt, copy to clipboard
+- **Snapshots** — capture page state at meaningful moments, star important ones
+- **Timeline** — chronological view of snapshots, comments, and decisions
+- **Structured export** — one-click JSON export of the entire project for AI review
+- **Content proxy** — automatically proxies sites that block iframe embedding
+- **Multi-page tracking** — detects navigation within the iframe, prompts to add new screens
+- **Data capture** — always-on by default, toggleable per project
 
 ---
 
 ## Architecture
 
+Two packages. One local, one cloud.
+
 ```
-Claude Code writes schema → /tmp/frank/render-<timestamp>.json
-         ↓
-  frank daemon watches /tmp/frank/ (FSEvents, ~10ms)
-         ↓
-  daemon merges screen into active project → ~/Documents/Frank/*.frank.json
-         ↓
-  WebSocket → browser UI (ws://localhost:42069)
-         ↓
-  Plain JS validates + renders wireframe (<5ms)
+LOCAL (your machine)                         CLOUD (your Vercel account)
++---------------------------+                +---------------------------+
+| Frank Daemon (Node.js)    |  -- HTTPS -->  | Frank Cloud (Vercel)      |
+| - HTTP server (42068)     |                | - POST /api/share         |
+| - WebSocket (42069)       |  <-- poll --   | - POST /api/comment       |
+| - Content proxy           |                | - GET  /api/share/:id     |
+| - Project I/O (~/.frank/) |                | - Share viewer page       |
+| - Snapshot capture        |                | - Vercel Blob storage     |
+| - Comment sync            |                +---------------------------+
++---------------------------+
+        |
+        v
+  Browser UI (localhost:42068)
+  - iframe wrapper + overlay
+  - Commenting + curation panel
+  - Timeline view
+  - Share popover
 ```
 
-Local by default. No data leaves your machine unless you explicitly share a prototype.
+All data lives locally in `~/.frank/`. Nothing is sent anywhere unless you explicitly hit Share. Cloud is optional — everything except sharing works offline.
 
 ### Tech stack
 
 | Layer | Technology |
 |---|---|
-| UI | Plain JS ES modules — zero dependencies, zero build step |
-| Wireframe rendering | shadcn/ui-inspired HTML templates + CSS |
-| Icons | SVG icon functions inspired by [Lucide](https://lucide.dev/) |
-| Output interception | Claude Code hooks (file watcher daemon) |
-| Daemon | Node.js — HTTP server (port 42068) + WebSocket (port 42069) |
-| Project storage | `.frank.json` files in `~/Documents/Frank/` |
-| Share storage | Local JSON files in `~/.frank/shares/` (mock backend) |
+| Browser UI | Plain JS ES modules — no framework, no build step |
+| Daemon | Node.js + TypeScript — HTTP + WebSocket server |
+| Cloud | Vercel serverless functions + Blob storage |
+| Share viewer | Plain JS — same commenting overlay for reviewers |
+| Storage | JSON files in `~/.frank/projects/` |
 
 ---
 
@@ -124,11 +88,10 @@ Local by default. No data leaves your machine unless you explicitly share a prot
 
 ```bash
 git clone https://github.com/carlostarrats/frank
-cd frank
-
-# Build and install the daemon CLI
-cd daemon && npm install && npm run build && cd ..
-npm install -g ./daemon
+cd frank/daemon
+npm install
+npm run build
+npm install -g .
 ```
 
 ---
@@ -136,33 +99,44 @@ npm install -g ./daemon
 ## Usage
 
 ```bash
-frank start   # starts daemon, opens browser, injects CLAUDE.md block
-frank stop    # stops daemon, removes CLAUDE.md block
+frank start     # start daemon, open browser
+frank stop      # stop daemon, remove Claude Code hooks
+frank status    # show daemon and cloud connection status
+frank export    # export project data as structured JSON
 ```
 
-`frank start` is the only command you need. Open Claude Code, ask for a wireframe, it appears in the browser at `http://localhost:42068`.
+`frank start` opens `http://localhost:42068`. Paste a URL, start commenting.
+
+### Connect to cloud (for sharing)
+
+1. Deploy Frank Cloud to your Vercel account (see `frank-cloud/README.md`)
+2. Connect locally:
+
+```bash
+frank connect https://your-frank-cloud.vercel.app --key YOUR_API_KEY
+```
+
+Now the Share button generates real internet links.
 
 ---
 
 ## Privacy
 
-- Local by default — no data leaves your machine unless you choose to share
-- No telemetry, no analytics, no crash reporting
-- No account, no API key
-- Sharing is opt-in: when you share, the prototype is stored locally in `~/.frank/shares/`
+- **Local by default** — all project data stays in `~/.frank/` on your machine
+- **No telemetry, no analytics, no accounts**
+- **Sharing is opt-in** — when you share, a snapshot is uploaded to YOUR Vercel Blob storage (not ours)
+- **Self-hosted cloud** — you deploy and own the sharing infrastructure
+- **Sensitive content detection** — Frank warns before sharing if it detects emails, API keys, or passwords in the page
 
 ---
 
 ## Development
 
-The frontend has no build step — plain JS files served by the daemon's HTTP server.
+The frontend has no build step — plain JS files served directly by the daemon.
 
 ```bash
-# Start the daemon (serves UI + handles WebSocket)
 frank start
-
-# The UI is at http://localhost:42068
-# Changes to ui/ files are live — just refresh the browser
+# UI is at http://localhost:42068 — edit ui-v2/ files, refresh browser
 
 # Rebuild daemon after TypeScript changes
 cd daemon && npm run build
@@ -172,37 +146,37 @@ cd daemon && npm run build
 
 ```
 frank/
-├── ui/                   # Plain JS frontend (no build step, no framework)
-│   ├── index.html        # Entry point
-│   ├── workspace.js      # App shell: view router, state, WebSocket
-│   ├── validate.js       # Schema validation
-│   ├── views/            # Home, gallery, editor, preview, handoff
-│   ├── render/           # Section renderers, screen layout, icons
-│   ├── core/             # Sync, project state, undo, stars
-│   ├── components/       # Canvas, toolbar, comments, flow map, export
-│   ├── viewer/           # Share viewer (standalone page for reviewers)
-│   └── styles/           # CSS tokens, wireframe components, workspace
-├── daemon/               # Node.js CLI + HTTP server + WebSocket + file I/O
-│   ├── src/cli.ts        # frank start / frank stop
-│   ├── src/server.ts     # HTTP + WebSocket server, file watcher, note sync
-│   ├── src/projects.ts   # Project file I/O (sole file writer)
-│   ├── src/shares.ts     # Share storage (mock backend)
-│   ├── src/inject.ts     # CLAUDE.md injection/removal
-│   └── src/protocol.ts   # Shared types and constants
-├── CLAUDE.md
-├── DIRECTION.md          # Product direction
-└── PROGRESS.md
++-- ui-v2/                  # Browser UI (plain JS, no build step)
+|   +-- index.html          # Entry point
+|   +-- app.js              # App shell, view router
+|   +-- core/               # WebSocket client, project state
+|   +-- views/              # Home, viewer, timeline
+|   +-- overlay/            # Element detection, anchoring, highlighting
+|   +-- components/         # Toolbar, curation panel, share popover, AI routing
+|   +-- styles/             # CSS tokens, app chrome, overlay, curation
++-- daemon/                 # Node.js daemon (TypeScript)
+|   +-- src/cli.ts          # CLI commands
+|   +-- src/server.ts       # HTTP + WebSocket server
+|   +-- src/projects.ts     # Project file I/O
+|   +-- src/cloud.ts        # Cloud client (share upload, comment fetch)
+|   +-- src/snapshots.ts    # Snapshot storage
+|   +-- src/curation.ts     # Curation log
+|   +-- src/ai-chain.ts     # AI instruction chain
+|   +-- src/export.ts       # Structured JSON export
+|   +-- src/proxy.ts        # Content proxy for iframe-restricted URLs
+|   +-- src/protocol.ts     # Shared types
+|   +-- src/inject.ts       # CLAUDE.md injection
++-- frank-cloud/            # Deployable Vercel project (self-hosted sharing)
+|   +-- api/                # Serverless functions (share, comment, health)
+|   +-- public/viewer/      # Share viewer page
+|   +-- README.md           # Deploy guide with security checklist
++-- docs/                   # Specs, plans, test plan
++-- CLAUDE.md
++-- DIRECTION-v2.md         # Product direction
 ```
-
----
-
-## Credits
-
-- [shadcn/ui](https://ui.shadcn.com/) — the component design system that inspired Frank's rendering quality and visual language
-- [Lucide](https://lucide.dev/) — icon paths used in the SVG icon system
 
 ---
 
 ## License
 
-[PolyForm Shield 1.0.0](LICENSE) — free to use, modify, and distribute, but you cannot use it to build a competing product.
+[PolyForm Shield 1.0.0](LICENSE) — free to use, source available, cannot be used to build a competing product.
