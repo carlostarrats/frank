@@ -227,3 +227,30 @@
   max-width: 300px;
 }
 .toolbar-spacer { flex: 1; }
+
+/* Navigation prompt */
+.nav-prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  animation: slideDown 0.2s;
+}
+.nav-prompt code {
+  font-family: monospace;
+  background: var(--bg-surface);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+.nav-prompt-name {
+  width: 150px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

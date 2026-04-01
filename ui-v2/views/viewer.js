@@ -102,6 +102,33 @@ async function loadUrlContent(container, url) {
       fallbackToProxy(container, url);
     }
   }, 3000);
+
+  // --- Multi-page tracking ---
+  let lastUrl = url;
+
+  const navInterval = setInterval(() => {
+    try {
+      const currentUrl = iframe.contentWindow.location.href;
+      if (currentUrl !== lastUrl) {
+        lastUrl = currentUrl;
+        handleNavigation(currentUrl, container);
+      }
+    } catch {
+      // Cross-origin — can't read URL
+    }
+  }, 1000);
+
+  // Clean up interval when view changes
+  const viewerEl = container.closest('.view');
+  if (viewerEl) {
+    const observer = new MutationObserver(() => {
+      if (!viewerEl.classList.contains('active')) {
+        clearInterval(navInterval);
+        observer.disconnect();
+      }
+    });
+    observer.observe(viewerEl, { attributes: true, attributeFilter: ['class'] });
+  }
 }
 
 async function fallbackToProxy(container, url) {
@@ -150,6 +177,51 @@ function loadImageContent(container, filePath) {
       <div class="overlay" id="overlay"></div>
     </div>
   `;
+}
+
+function handleNavigation(newUrl, container) {
+  const project = projectManager.get();
+  if (!project) return;
+
+  let route;
+  try {
+    route = new URL(newUrl).pathname;
+  } catch {
+    return;
+  }
+
+  const existing = Object.values(project.screens).find(s => s.route === route);
+  if (existing) return;
+
+  showNavigationPrompt(container, route, (label) => {
+    sync.addScreen(route, label).then(data => {
+      projectManager.setFromLoaded({ ...data, projectId: projectManager.getId() });
+    });
+  });
+}
+
+function showNavigationPrompt(container, route, onAdd) {
+  // Remove any existing prompt
+  container.querySelector('.nav-prompt')?.remove();
+
+  const prompt = document.createElement('div');
+  prompt.className = 'nav-prompt';
+  prompt.innerHTML = `
+    <span>New page: <code>${escapeHtml(route)}</code></span>
+    <input type="text" class="input nav-prompt-name" placeholder="Screen name" value="${route.split('/').filter(Boolean).pop() || 'page'}">
+    <button class="btn-primary nav-prompt-add">Add Screen</button>
+    <button class="btn-ghost nav-prompt-dismiss">Dismiss</button>
+  `;
+  container.prepend(prompt);
+
+  prompt.querySelector('.nav-prompt-add').addEventListener('click', () => {
+    const label = prompt.querySelector('.nav-prompt-name').value.trim() || route;
+    onAdd(label);
+    prompt.remove();
+  });
+  prompt.querySelector('.nav-prompt-dismiss').addEventListener('click', () => prompt.remove());
+
+  setTimeout(() => { if (prompt.parentNode) prompt.remove(); }, 10000);
 }
 
 function escapeHtml(text) {
