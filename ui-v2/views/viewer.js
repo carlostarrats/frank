@@ -32,7 +32,9 @@ export function renderViewer(container, { onBack }) {
   const commentToggle = container.querySelector('#toolbar-comment-toggle');
   if (commentToggle) {
     commentToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
+      const isOpen = sidebar.classList.toggle('open');
+      commentToggle.innerHTML = isOpen ? '✕' : '💬';
+      commentToggle.title = isOpen ? 'Close comments' : 'Toggle comments';
     });
   }
 
@@ -51,6 +53,7 @@ export function renderViewer(container, { onBack }) {
   window.addEventListener('frank:take-snapshot', async () => {
     const iframe = document.querySelector('#content-iframe');
     if (!iframe) return;
+    showSnapshotFlash();
     const snapshot = await captureSnapshot(iframe);
     if (snapshot) {
       await sync.saveSnapshot(snapshot.html, null, 'manual');
@@ -165,13 +168,33 @@ async function loadUrlContent(container, url) {
 
   // --- Multi-page tracking ---
   let lastUrl = url;
+  let userClicked = false;
+  let loadTime = Date.now();
+
+  // Track user clicks inside the iframe
+  iframe.addEventListener('load', () => {
+    try {
+      iframe.contentDocument.addEventListener('click', () => {
+        userClicked = true;
+      }, true);
+    } catch {
+      // Cross-origin — can't attach listener
+    }
+  });
 
   const navInterval = setInterval(() => {
     try {
       const currentUrl = iframe.contentWindow.location.href;
       if (currentUrl !== lastUrl) {
+        const wasUserClick = userClicked;
+        const timeSinceLoad = Date.now() - loadTime;
         lastUrl = currentUrl;
-        handleNavigation(currentUrl, container);
+        userClicked = false;
+
+        // Ignore auto-redirects: no user click, or happened within 2s of page load
+        if (!wasUserClick || timeSinceLoad < 2000) return;
+
+        autoAddScreen(currentUrl);
       }
     } catch {
       // Cross-origin — can't read URL
@@ -239,7 +262,7 @@ function loadImageContent(container, filePath) {
   `;
 }
 
-function handleNavigation(newUrl, container) {
+function autoAddScreen(newUrl) {
   const project = projectManager.get();
   if (!project) return;
 
@@ -253,35 +276,23 @@ function handleNavigation(newUrl, container) {
   const existing = Object.values(project.screens).find(s => s.route === route);
   if (existing) return;
 
-  showNavigationPrompt(container, route, (label) => {
-    sync.addScreen(route, label).then(data => {
-      projectManager.setFromLoaded({ ...data, projectId: projectManager.getId() });
-    });
+  const label = route.split('/').filter(Boolean).pop() || 'page';
+  sync.addScreen(route, label).then(data => {
+    projectManager.setFromLoaded({ ...data, projectId: projectManager.getId() });
   });
 }
 
-function showNavigationPrompt(container, route, onAdd) {
-  // Remove any existing prompt
-  container.querySelector('.nav-prompt')?.remove();
+function showSnapshotFlash() {
+  const existing = document.querySelector('.snapshot-flash');
+  if (existing) existing.remove();
 
-  const prompt = document.createElement('div');
-  prompt.className = 'nav-prompt';
-  prompt.innerHTML = `
-    <span>New page: <code>${escapeHtml(route)}</code></span>
-    <input type="text" class="input nav-prompt-name" placeholder="Screen name" value="${route.split('/').filter(Boolean).pop() || 'page'}">
-    <button class="btn-primary nav-prompt-add">Add Screen</button>
-    <button class="btn-ghost nav-prompt-dismiss">Dismiss</button>
-  `;
-  container.prepend(prompt);
+  const flash = document.createElement('div');
+  flash.className = 'snapshot-flash';
+  const wrapper = document.querySelector('#iframe-wrapper') || document.querySelector('.viewer-content');
+  if (!wrapper) return;
+  wrapper.appendChild(flash);
 
-  prompt.querySelector('.nav-prompt-add').addEventListener('click', () => {
-    const label = prompt.querySelector('.nav-prompt-name').value.trim() || route;
-    onAdd(label);
-    prompt.remove();
-  });
-  prompt.querySelector('.nav-prompt-dismiss').addEventListener('click', () => prompt.remove());
-
-  setTimeout(() => { if (prompt.parentNode) prompt.remove(); }, 10000);
+  flash.addEventListener('animationend', () => flash.remove());
 }
 
 function escapeHtml(text) {

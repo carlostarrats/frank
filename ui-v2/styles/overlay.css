@@ -22,3 +22,19 @@
 
 /* pointer-events stay none — clicks pass through to iframe contentDocument
    where overlay.js attaches its listeners. Cursor set via JS on the iframe. */
+
+/* Snapshot flash — inset glow that fades */
+.snapshot-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10000;
+  border-radius: 2px;
+  animation: snapshot-glow 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes snapshot-glow {
+  0%   { box-shadow: inset 0 0 0 0 rgba(255, 255, 255, 0); }
+  30%  { box-shadow: inset 0 0 80px 24px rgba(255, 255, 255, 0.6); }
+  100% { box-shadow: inset 0 0 0 0 rgba(255, 255, 255, 0); }
+}

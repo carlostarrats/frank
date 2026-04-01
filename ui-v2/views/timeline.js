@@ -5,10 +5,10 @@ import projectManager from '../core/project.js';
 export function renderTimeline(container, { onBack }) {
   container.innerHTML = `
     <div class="toolbar">
-      <button class="btn-ghost" id="timeline-back">← Back</button>
       <span class="toolbar-title">Timeline</span>
       <div class="toolbar-spacer"></div>
-      <button class="btn-primary" id="timeline-export">Export JSON</button>
+      <button class="toolbar-btn toolbar-comment-btn" id="timeline-back" title="Close timeline">✕</button>
+      <button class="toolbar-btn" id="timeline-export">Export</button>
     </div>
     <div class="timeline-body" id="timeline-body">
       <div class="viewer-loading">Loading timeline...</div>
