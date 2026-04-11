@@ -165,6 +165,18 @@ frank start
 cd daemon && npm run build
 ```
 
+### Testing
+
+The daemon has a test suite covering all core modules (82 tests). Tests use [Vitest](https://vitest.dev/) and run against temp directories — they never touch `~/.frank/`.
+
+```bash
+cd daemon
+npm test           # run all tests once
+npm run test:watch # run in watch mode
+```
+
+Covered modules: projects (CRUD, comments, merge), snapshots (save, list, star, delete), curation (approve, dismiss, remix, batch), AI chain (instructions, snapshot linking), export (full project export, timeline), proxy (URL validation), cloud (config, connection), inject (CLAUDE.md injection/removal).
+
 ### Project structure
 
 ```
@@ -195,7 +207,7 @@ frank/
 |   +-- README.md           # Deploy guide with security checklist
 +-- docs/                   # Specs, plans, test plan
 +-- CLAUDE.md
-+-- DIRECTION-v2.md         # Product direction
++-- PROGRESS.md
 ```
 
 ---

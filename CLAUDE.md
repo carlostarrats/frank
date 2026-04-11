@@ -85,6 +85,7 @@ frank/
 │       ├── curation.css      # Curation panel styles
 │       └── timeline.css      # Timeline view styles
 ├── daemon/                   # Node.js daemon (TypeScript)
+│   ├── vitest.config.ts      # Test configuration
 │   ├── src/cli.ts            # frank start / stop / connect / status / export
 │   ├── src/server.ts         # HTTP + WebSocket server, proxy routing, handlers
 │   ├── src/protocol.ts       # Shared types and constants
@@ -95,16 +96,15 @@ frank/
 │   ├── src/curation.ts       # Curation log (approve, dismiss, remix, batch)
 │   ├── src/ai-chain.ts       # AI instruction chain logging
 │   ├── src/export.ts         # Structured JSON export
-│   └── src/inject.ts         # CLAUDE.md injection/removal
+│   ├── src/inject.ts         # CLAUDE.md injection/removal
+│   └── src/*.test.ts         # Tests for each module (vitest)
 ├── frank-cloud/              # Self-hosted Vercel project for sharing
 │   ├── api/                  # Serverless functions (share, comment, health)
 │   ├── public/viewer/        # Share viewer page for reviewers
 │   ├── vercel.json           # Routes, headers, security
 │   └── README.md             # Deploy guide with security checklist
-├── ui/                       # Archived v1 wireframe UI
-├── ui-v0/                    # Archived v0 frontend
 ├── CLAUDE.md
-├── DIRECTION-v2.md           # Product direction
+├── PROGRESS.md
 └── README.md
 ```
 
@@ -144,6 +144,24 @@ frank/
 
 ---
 
+## Testing
+
+The daemon has a Vitest test suite (82 tests across 8 files). Tests use temp directories — never touch real `~/.frank/`.
+
+```bash
+cd daemon
+npm test           # run all tests once
+npm run test:watch # watch mode
+```
+
+Test files live alongside source: `src/*.test.ts`. Each test file mocks `./protocol.js` to redirect `PROJECTS_DIR` to a temp directory. The `inject.test.ts` file additionally mocks `os.homedir()` using `vi.hoisted()`.
+
+**Covered modules:** `projects.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`.
+
+After changing any daemon module, run `npm test` to verify nothing broke.
+
+---
+
 ## After changing UI code
 
 After any change to files in `ui-v2/`:
@@ -151,4 +169,5 @@ After any change to files in `ui-v2/`:
 
 After any change to files in `daemon/src/`:
 1. `cd daemon && npm run build`
-2. Restart the daemon: kill existing process, run `frank start`
+2. Run `npm test` to verify tests pass
+3. Restart the daemon: kill existing process, run `frank start`
