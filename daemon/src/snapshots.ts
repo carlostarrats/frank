@@ -11,6 +11,10 @@ export interface SnapshotMeta {
   label: string;
   frankVersion: string;
   ts: string;
+  // v2: optional references to state captured alongside the DOM snapshot.
+  // Absent on v1 snapshots; readers must not require them.
+  canvasState?: unknown;
+  aiConversationIds?: string[];
 }
 
 function snapshotsDir(projectId: string): string {

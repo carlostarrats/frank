@@ -82,7 +82,8 @@ frank/
 │   │   ├── curation.js       # Feedback curation panel (approve/dismiss/remix)
 │   │   ├── comments.js       # Comment input (used by overlay callback)
 │   │   ├── share-popover.js  # Share link management
-│   │   ├── ai-routing.js     # AI instruction editor + clipboard copy
+│   │   ├── ai-routing.js     # AI instruction editor + clipboard copy (fallback for non-Claude providers)
+│   │   ├── ai-panel.js       # In-app AI conversation panel — streams Claude responses, persists turns
 │   │   └── url-input.js      # URL/file input with validation
 │   └── styles/
 │       ├── tokens.css        # Design tokens, resets
@@ -105,6 +106,8 @@ frank/
 │   ├── src/export.ts         # Structured JSON export
 │   ├── src/inject.ts         # CLAUDE.md injection/removal
 │   ├── src/canvas.ts         # Canvas state I/O (one JSON blob per project)
+│   ├── src/ai-conversations.ts  # Per-project AI conversation storage (size + msg count caps)
+│   ├── src/ai-providers/claude.ts  # Claude API client, context builder with token budget
 │   └── src/*.test.ts         # Tests for each module (vitest)
 ├── frank-cloud/              # Self-hosted Vercel project for sharing
 │   ├── api/                  # Serverless functions (share, comment, health)
@@ -147,9 +150,18 @@ frank/
 | View | What it shows |
 |---|---|
 | **Home** | Project list — create new (URL input or "New canvas"), open existing, delete |
-| **Viewer** | Content in iframe + commenting overlay + curation sidebar |
+| **Viewer** | Content in iframe + commenting overlay + curation sidebar + AI panel sidebar |
 | **Canvas** | Konva-backed sketching: select, rectangle, sticky, text, pen, arrow. Pan (space+drag), zoom (wheel). State persists to `~/.frank/projects/{id}/canvas-state.json`. Opened automatically when `project.contentType === 'canvas'`. |
 | **Timeline** | Chronological view of snapshots, comments, curations, AI instructions |
+
+## AI panel
+
+- Persistent Claude conversation docked as a second right-side sidebar in the viewer. Toggle via the "AI" button in the toolbar.
+- Claude API key lives in `~/.frank/config.json` under `aiProviders.claude.apiKey`. The daemon enforces `0600` permissions on every write and never logs the key.
+- Conversations persist at `~/.frank/projects/{id}/ai-conversations/{conversationId}.json`. Size-first caps: soft warn at 2 MB / 100 messages (banner), hard cap at 5 MB / 200 messages (forces a new conversation with `continuedFrom` linking back).
+- `buildContext()` in `ai-providers/claude.ts` assembles each turn's prompt within a per-section token budget (preamble 500 / canvas 3000 / comments 2000 / snapshots 1000 / remainder for history). Logs per-section char counts without content.
+- Streaming responses flow daemon → WebSocket → UI: `ai-stream-started` → `ai-stream-delta` × N → `ai-stream-ended` (or `ai-stream-error`).
+- Clipboard-based AI routing (`ai-routing.js`) still works as a fallback for users of non-Claude providers — the "Copy as prompt" button on curated comments is unchanged.
 
 ---
 

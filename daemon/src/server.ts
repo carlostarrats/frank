@@ -19,6 +19,15 @@ import { addCuration, applyCurationToComments } from './curation.js';
 import { addAiInstruction } from './ai-chain.js';
 import { exportProject } from './export.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
+import {
+  getClaudeApiKey, setClaudeApiKey, clearClaudeApiKey,
+} from './cloud.js';
+import {
+  createConversation, loadConversation, listConversations, appendMessage,
+  ConversationFullError, capStatusOf,
+} from './ai-conversations.js';
+import { buildContext, streamChat } from './ai-providers/claude.js';
+import Anthropic from '@anthropic-ai/sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -393,6 +402,195 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         reply({ type: 'error', error: e.message });
       }
       break;
+    }
+
+    case 'get-ai-config': {
+      reply({
+        type: 'ai-config',
+        providers: { claude: { configured: !!getClaudeApiKey() } },
+      });
+      break;
+    }
+
+    case 'set-ai-api-key': {
+      try {
+        if (msg.provider !== 'claude') throw new Error(`Unknown provider: ${msg.provider}`);
+        if (!msg.apiKey || !msg.apiKey.trim()) throw new Error('API key is empty');
+        setClaudeApiKey(msg.apiKey.trim());
+        console.log(`[frank] Claude API key configured (0600 enforced)`);
+        reply({ type: 'ai-config', providers: { claude: { configured: true } } });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'clear-ai-api-key': {
+      try {
+        if (msg.provider !== 'claude') throw new Error(`Unknown provider: ${msg.provider}`);
+        clearClaudeApiKey();
+        console.log('[frank] Claude API key cleared');
+        reply({ type: 'ai-config', providers: { claude: { configured: false } } });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'list-ai-conversations': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        reply({ type: 'ai-conversation-list', conversations: listConversations(activeProjectId) });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'load-ai-conversation': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        const conversation = loadConversation(activeProjectId, msg.conversationId);
+        if (!conversation) { reply({ type: 'error', error: 'Conversation not found' }); break; }
+        reply({ type: 'ai-conversation-loaded', conversation });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'send-ai-message': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      handleSendAiMessage(ws, activeProjectId, msg);
+      break;
+    }
+  }
+}
+
+async function handleSendAiMessage(
+  ws: WebSocket,
+  projectId: string,
+  msg: { type: 'send-ai-message'; conversationId?: string; continuedFrom?: string; message: string; feedbackIds?: string[]; requestId?: number },
+): Promise<void> {
+  const replyError = (error: string, conversationId: string | null = null) => {
+    ws.send(JSON.stringify({ type: 'ai-stream-error', conversationId, error, requestId: msg.requestId }));
+  };
+
+  const apiKey = getClaudeApiKey();
+  if (!apiKey) {
+    replyError('Claude API key is not configured. Open settings and add one.');
+    return;
+  }
+
+  // Load or create the conversation.
+  let conversation;
+  try {
+    if (msg.conversationId) {
+      conversation = loadConversation(projectId, msg.conversationId);
+      if (!conversation) { replyError('Conversation not found'); return; }
+      if (conversation.capReached) {
+        replyError('Conversation is full — start a new one to continue.', conversation.id);
+        return;
+      }
+    } else {
+      conversation = createConversation(projectId, {
+        model: 'claude-opus-4-7',
+        provider: 'claude',
+        continuedFrom: msg.continuedFrom ?? null,
+      });
+    }
+  } catch (e: any) { replyError(e.message); return; }
+
+  // Append the user message first so it's persisted even if the provider fails.
+  try {
+    appendMessage(projectId, conversation.id, 'user', msg.message);
+  } catch (e: any) {
+    if (e instanceof ConversationFullError) {
+      ws.send(JSON.stringify({
+        type: 'conversation-full',
+        conversationId: conversation.id,
+        reason: e.reason,
+        requestId: msg.requestId,
+      }));
+      return;
+    }
+    replyError(e.message, conversation.id);
+    return;
+  }
+
+  const reloaded = loadConversation(projectId, conversation.id);
+  if (!reloaded) { replyError('Conversation vanished mid-turn', conversation.id); return; }
+
+  const context = buildContext({
+    projectId,
+    conversation: reloaded,
+    userMessage: msg.message,
+    feedbackIds: msg.feedbackIds,
+  });
+
+  ws.send(JSON.stringify({
+    type: 'ai-stream-started',
+    conversationId: conversation.id,
+    model: conversation.model,
+    contextTokens: context.report.approxTokens,
+    requestId: msg.requestId,
+  }));
+
+  try {
+    const fullText = await streamChat({
+      apiKey,
+      system: context.system,
+      messages: context.messages,
+      model: conversation.model,
+      onDelta: (delta) => {
+        ws.send(JSON.stringify({ type: 'ai-stream-delta', conversationId: conversation.id, delta }));
+      },
+    });
+
+    try {
+      const { conversation: finalized, capStatus } = appendMessage(projectId, conversation.id, 'assistant', fullText);
+      ws.send(JSON.stringify({
+        type: 'ai-stream-ended',
+        conversationId: finalized.id,
+        fullText,
+        capStatus: {
+          softWarn: capStatus.softWarn,
+          hardCap: capStatus.hardCap,
+          bytes: capStatus.bytes,
+          messageCount: capStatus.messageCount,
+        },
+      }));
+    } catch (e: any) {
+      if (e instanceof ConversationFullError) {
+        // Persisted as capped, but we still want to deliver the reply — emit
+        // ended + conversation-full so the UI can show the reply then force new.
+        const reloaded2 = loadConversation(projectId, conversation.id);
+        const status = reloaded2 ? capStatusOf(reloaded2) : { softWarn: false, hardCap: true, bytes: 0, messageCount: 0 };
+        ws.send(JSON.stringify({
+          type: 'ai-stream-ended',
+          conversationId: conversation.id,
+          fullText,
+          capStatus: { softWarn: status.softWarn, hardCap: true, bytes: status.bytes, messageCount: status.messageCount },
+        }));
+        ws.send(JSON.stringify({
+          type: 'conversation-full',
+          conversationId: conversation.id,
+          reason: e.reason,
+        }));
+      } else {
+        replyError(e.message, conversation.id);
+      }
+    }
+  } catch (e: any) {
+    // Map common SDK errors to friendlier strings — never echo the key.
+    if (e instanceof Anthropic.AuthenticationError) {
+      replyError('Claude rejected the API key (401). Update it in settings.', conversation.id);
+    } else if (e instanceof Anthropic.RateLimitError) {
+      replyError('Rate limited. Wait a moment and try again.', conversation.id);
+    } else if (e instanceof Anthropic.APIError) {
+      replyError(`Claude API error (${e.status}): ${e.message}`, conversation.id);
+    } else {
+      replyError(`Claude call failed: ${e.message || 'unknown error'}`, conversation.id);
     }
   }
 }

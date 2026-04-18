@@ -10,6 +10,11 @@ export interface AiInstruction {
   instruction: string;
   resultSnapshot: string | null;
   ts: string;
+  // v2: in-app AI panel enrichments. All optional so v1 entries remain valid.
+  provider?: string;
+  modelId?: string;
+  conversationId?: string;
+  status?: 'pending' | 'streaming' | 'complete' | 'error';
 }
 
 function chainPath(projectId: string): string {

@@ -97,6 +97,19 @@ const sync = {
   exportProject() { return send({ type: 'export-project' }); },
   loadCanvasState() { return send({ type: 'load-canvas-state' }); },
   saveCanvasState(state) { return send({ type: 'save-canvas-state', state }); },
+
+  getAiConfig() { return send({ type: 'get-ai-config' }); },
+  setAiApiKey(provider, apiKey) { return send({ type: 'set-ai-api-key', provider, apiKey }); },
+  clearAiApiKey(provider) { return send({ type: 'clear-ai-api-key', provider }); },
+  listAiConversations() { return send({ type: 'list-ai-conversations' }); },
+  loadAiConversation(conversationId) { return send({ type: 'load-ai-conversation', conversationId }); },
+
+  // sendAiMessage intentionally doesn't wait for a "done" reply — the response
+  // streams through the daemon push channel as ai-stream-* messages. We resolve
+  // immediately on ai-stream-started (which carries the matching requestId).
+  sendAiMessage({ conversationId, continuedFrom, message, feedbackIds }) {
+    return send({ type: 'send-ai-message', conversationId, continuedFrom, message, feedbackIds });
+  },
 };
 
 export default sync;

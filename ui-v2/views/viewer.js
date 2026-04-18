@@ -7,6 +7,7 @@ import { renderCuration } from '../components/curation.js';
 import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
+import { mountAiPanel, toggleAiPanel } from '../components/ai-panel.js';
 
 export function renderViewer(container, { onBack }) {
   const project = projectManager.get();
@@ -19,6 +20,7 @@ export function renderViewer(container, { onBack }) {
         <div class="viewer-loading">Loading content...</div>
       </div>
       <div class="viewer-sidebar" id="viewer-sidebar"></div>
+      <div class="viewer-ai-sidebar" id="viewer-ai-sidebar"></div>
     </div>
   `;
 
@@ -35,6 +37,17 @@ export function renderViewer(container, { onBack }) {
       const isOpen = sidebar.classList.toggle('open');
       commentToggle.innerHTML = isOpen ? '✕' : '💬';
       commentToggle.title = isOpen ? 'Close comments' : 'Toggle comments';
+    });
+  }
+
+  const aiSidebar = container.querySelector('#viewer-ai-sidebar');
+  mountAiPanel(aiSidebar);
+  const aiToggle = container.querySelector('#toolbar-ai-toggle');
+  if (aiToggle) {
+    aiToggle.addEventListener('click', () => {
+      toggleAiPanel();
+      const isOpen = aiSidebar.classList.contains('open');
+      aiToggle.classList.toggle('active', isOpen);
     });
   }
 

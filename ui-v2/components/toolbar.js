@@ -13,6 +13,7 @@ export function renderToolbar(container, { projectName, url, onBack }) {
         <button class="toolbar-btn" id="toolbar-snapshot" title="Take snapshot">📸</button>
         <button class="toolbar-btn" id="toolbar-timeline" title="Timeline">📋</button>
         <button class="toolbar-btn toolbar-comment-btn" id="toolbar-comment-toggle" title="Toggle comments">💬</button>
+        <button class="toolbar-btn toolbar-ai-toggle" id="toolbar-ai-toggle" title="Ask Claude">AI</button>
         <button class="toolbar-btn" id="toolbar-share" title="Share">Share</button>
       </div>
     </div>

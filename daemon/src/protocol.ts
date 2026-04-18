@@ -59,6 +59,19 @@ export interface LoadProjectRequest { type: 'load-project'; projectId: string; r
 export interface CreateProjectRequest { type: 'create-project'; name: string; contentType: 'url' | 'pdf' | 'image' | 'canvas'; url?: string; file?: string; requestId?: number; }
 export interface LoadCanvasStateRequest { type: 'load-canvas-state'; requestId?: number; }
 export interface SaveCanvasStateRequest { type: 'save-canvas-state'; state: string; requestId?: number; }
+export interface GetAiConfigRequest { type: 'get-ai-config'; requestId?: number; }
+export interface SetAiApiKeyRequest { type: 'set-ai-api-key'; provider: 'claude'; apiKey: string; requestId?: number; }
+export interface ClearAiApiKeyRequest { type: 'clear-ai-api-key'; provider: 'claude'; requestId?: number; }
+export interface ListAiConversationsRequest { type: 'list-ai-conversations'; requestId?: number; }
+export interface LoadAiConversationRequest { type: 'load-ai-conversation'; conversationId: string; requestId?: number; }
+export interface SendAiMessageRequest {
+  type: 'send-ai-message';
+  conversationId?: string;      // omit to start a new conversation
+  continuedFrom?: string;       // optional prior conversation id for continuity linking
+  message: string;              // user's typed input
+  feedbackIds?: string[];       // curated comment ids to attach
+  requestId?: number;
+}
 export interface DeleteProjectRequest { type: 'delete-project'; projectId: string; requestId?: number; }
 export interface AddScreenRequest { type: 'add-screen'; route: string; label: string; requestId?: number; }
 export interface AddCommentRequest { type: 'add-comment'; screenId: string; anchor: CommentAnchor; text: string; requestId?: number; }
@@ -91,7 +104,13 @@ export type AppMessage =
   | LogAiInstructionRequest
   | ExportProjectRequest
   | LoadCanvasStateRequest
-  | SaveCanvasStateRequest;
+  | SaveCanvasStateRequest
+  | GetAiConfigRequest
+  | SetAiApiKeyRequest
+  | ClearAiApiKeyRequest
+  | ListAiConversationsRequest
+  | LoadAiConversationRequest
+  | SendAiMessageRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -149,6 +168,78 @@ export interface ExportReadyMessage { type: 'export-ready'; requestId?: number; 
 export interface CanvasStateLoadedMessage { type: 'canvas-state-loaded'; requestId?: number; state: string | null; }
 export interface CanvasStateSavedMessage { type: 'canvas-state-saved'; requestId?: number; }
 
+export interface AiConfigMessage {
+  type: 'ai-config';
+  requestId?: number;
+  providers: { claude: { configured: boolean } };
+}
+
+export interface AiConversationSummary {
+  id: string;
+  title: string;
+  modified: string;
+  messageCount: number;
+  bytes: number;
+  model: string;
+  continuedFrom: string | null;
+  capReached: boolean;
+}
+
+export interface AiConversationListMessage {
+  type: 'ai-conversation-list';
+  requestId?: number;
+  conversations: AiConversationSummary[];
+}
+
+export interface AiConversationLoadedMessage {
+  type: 'ai-conversation-loaded';
+  requestId?: number;
+  conversation: {
+    id: string;
+    title: string;
+    created: string;
+    modified: string;
+    model: string;
+    provider: string;
+    continuedFrom: string | null;
+    capReached: boolean;
+    messages: Array<{ role: 'user' | 'assistant'; content: string; ts: string }>;
+  };
+}
+
+// Streaming AI responses. A single user message produces:
+//   ai-stream-started → ai-stream-delta (N times) → ai-stream-ended
+//   (or ai-stream-error if the provider fails)
+export interface AiStreamStartedMessage {
+  type: 'ai-stream-started';
+  requestId?: number;
+  conversationId: string;
+  model: string;
+  contextTokens: number;
+}
+export interface AiStreamDeltaMessage {
+  type: 'ai-stream-delta';
+  conversationId: string;
+  delta: string;
+}
+export interface AiStreamEndedMessage {
+  type: 'ai-stream-ended';
+  conversationId: string;
+  fullText: string;
+  capStatus: { softWarn: boolean; hardCap: boolean; bytes: number; messageCount: number };
+}
+export interface AiStreamErrorMessage {
+  type: 'ai-stream-error';
+  conversationId: string | null;
+  error: string;
+}
+export interface ConversationFullMessage {
+  type: 'conversation-full';
+  requestId?: number;
+  conversationId: string;
+  reason: 'bytes' | 'messages';
+}
+
 export type DaemonMessage =
   | ProjectListMessage
   | ProjectLoadedMessage
@@ -163,7 +254,15 @@ export type DaemonMessage =
   | AiInstructionLoggedMessage
   | ExportReadyMessage
   | CanvasStateLoadedMessage
-  | CanvasStateSavedMessage;
+  | CanvasStateSavedMessage
+  | AiConfigMessage
+  | AiConversationListMessage
+  | AiConversationLoadedMessage
+  | AiStreamStartedMessage
+  | AiStreamDeltaMessage
+  | AiStreamEndedMessage
+  | AiStreamErrorMessage
+  | ConversationFullMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
