@@ -1,0 +1,370 @@
+/* ui.css — Base styles for the ui/ primitive components.
+ *
+ * Each selector maps to one JS factory in ui-v2/ui/. Components are styled
+ * via class names (not scoped styles) so plain HTML templates can use them
+ * too. The data-variant / data-size / data-state attributes drive variants.
+ */
+
+/* ── Button ──────────────────────────────────────────────────────────────── */
+
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  padding: 0 var(--space-4);
+  height: 2.25rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+  user-select: none;
+}
+.ui-button:disabled { opacity: 0.5; pointer-events: none; }
+.ui-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+.ui-button[data-variant="primary"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.ui-button[data-variant="primary"]:hover { background: color-mix(in oklch, var(--primary), black 10%); }
+
+.ui-button[data-variant="secondary"] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  border-color: var(--border);
+}
+.ui-button[data-variant="secondary"]:hover { background: var(--accent); }
+
+.ui-button[data-variant="outline"] {
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.ui-button[data-variant="outline"]:hover { background: var(--accent); color: var(--accent-foreground); }
+
+.ui-button[data-variant="ghost"] {
+  color: var(--muted-foreground);
+}
+.ui-button[data-variant="ghost"]:hover { background: var(--accent); color: var(--accent-foreground); }
+
+.ui-button[data-variant="destructive"] {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+.ui-button[data-variant="destructive"]:hover { background: color-mix(in oklch, var(--destructive), black 10%); }
+
+.ui-button[data-size="sm"] { height: 1.75rem; padding: 0 var(--space-3); font-size: var(--text-xs); }
+.ui-button[data-size="lg"] { height: 2.75rem; padding: 0 var(--space-6); font-size: var(--text-base); }
+.ui-button[data-size="icon"] { width: 2.25rem; padding: 0; }
+
+/* ── Input / Textarea ─────────────────────────────────────────────────────── */
+
+.ui-input,
+.ui-textarea {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  height: 2.25rem;
+  font-size: var(--text-sm);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
+}
+.ui-textarea {
+  padding: var(--space-2) var(--space-3);
+  height: auto;
+  min-height: 4rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+.ui-input:focus-visible,
+.ui-textarea:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
+}
+.ui-input::placeholder,
+.ui-textarea::placeholder { color: var(--muted-foreground); }
+.ui-input:disabled,
+.ui-textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Label ───────────────────────────────────────────────────────────────── */
+
+.ui-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--foreground);
+  margin-bottom: var(--space-2);
+}
+
+/* ── Card ────────────────────────────────────────────────────────────────── */
+
+.ui-card {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.ui-card-header {
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+.ui-card-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ui-card-description {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  margin-top: var(--space-1);
+}
+.ui-card-body { padding: var(--space-5); }
+.ui-card-footer {
+  padding: var(--space-5);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/* ── Badge ───────────────────────────────────────────────────────────────── */
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.ui-badge[data-variant="outline"] {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.ui-badge[data-variant="destructive"] {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+
+/* ── Separator ───────────────────────────────────────────────────────────── */
+
+.ui-separator {
+  background: var(--border);
+  border: 0;
+  flex-shrink: 0;
+}
+.ui-separator[data-orientation="horizontal"] { height: 1px; width: 100%; }
+.ui-separator[data-orientation="vertical"] { width: 1px; height: 100%; }
+
+/* ── Dialog (modal) ──────────────────────────────────────────────────────── */
+
+.ui-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  animation: ui-fade-in var(--duration-base) var(--ease-standard);
+}
+.ui-dialog {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 440px;
+  animation: ui-scale-in var(--duration-base) var(--ease-standard);
+}
+.ui-dialog-header {
+  padding: var(--space-5) var(--space-5) var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.ui-dialog-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ui-dialog-description {
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+.ui-dialog-body { padding: var(--space-3) var(--space-5) var(--space-5); }
+.ui-dialog-footer {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.ui-dialog-close {
+  background: transparent;
+  border: 0;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+}
+.ui-dialog-close:hover { background: var(--accent); color: var(--accent-foreground); }
+
+@keyframes ui-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ── Dropdown menu ───────────────────────────────────────────────────────── */
+
+.ui-dropdown {
+  position: absolute;
+  z-index: 1500;
+  min-width: 10rem;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  animation: ui-scale-in var(--duration-fast) var(--ease-standard);
+}
+.ui-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--foreground);
+  cursor: pointer;
+  user-select: none;
+}
+.ui-dropdown-item:hover,
+.ui-dropdown-item[data-highlighted="true"] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.ui-dropdown-item[data-disabled="true"] { opacity: 0.5; pointer-events: none; }
+.ui-dropdown-separator {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-1) calc(var(--space-1) * -1);
+}
+
+/* ── Checkbox / Radio ────────────────────────────────────────────────────── */
+
+.ui-checkbox,
+.ui-radio {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--input);
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.ui-checkbox { border-radius: var(--radius-sm); }
+.ui-radio { border-radius: var(--radius-round); }
+.ui-checkbox:focus-visible,
+.ui-radio:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%); }
+.ui-checkbox:checked,
+.ui-radio:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.ui-checkbox:checked::after {
+  content: '';
+  width: 6px;
+  height: 10px;
+  border-right: 2px solid var(--primary-foreground);
+  border-bottom: 2px solid var(--primary-foreground);
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.ui-radio:checked::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-round);
+  background: var(--primary-foreground);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+
+.ui-tabs { display: flex; flex-direction: column; }
+.ui-tabs-list {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--muted);
+  border-radius: var(--radius-md);
+  width: fit-content;
+}
+.ui-tabs-trigger {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: transparent;
+  color: var(--muted-foreground);
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+.ui-tabs-trigger[data-state="active"] {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow-sm);
+}
+.ui-tabs-content { padding-top: var(--space-4); }
+.ui-tabs-content[hidden] { display: none; }
+
+/* ── Tooltip ─────────────────────────────────────────────────────────────── */
+
+.ui-tooltip {
+  position: absolute;
+  z-index: 1800;
+  padding: var(--space-1) var(--space-2);
+  background: var(--foreground);
+  color: var(--background);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  pointer-events: none;
+  box-shadow: var(--shadow);
+  animation: ui-fade-in var(--duration-fast) var(--ease-standard);
+}

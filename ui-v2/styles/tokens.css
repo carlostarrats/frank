@@ -1,32 +1,182 @@
-:root {
-  --bg-app: #0d0d0d;
-  --bg-surface: #1a1a1a;
-  --bg-elevated: #242424;
-  --border: #2a2a2a;
-  --border-hover: #3a3a3a;
-  --text-primary: #e8e8e8;
-  --text-secondary: #888;
-  --text-muted: #555;
-  --accent: #4a9eff;
-  --accent-hover: #6ab0ff;
-  --danger: #ff4a4a;
-  --success: #4aff8b;
-  --warning: #ffb84a;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+/* Design tokens — shadcn preset b50cupdRo (Lyra style, Neutral base, Rose charts,
+ * Geist Mono font, Radius: None, Solid menus).
+ *
+ * Values captured directly from ui.shadcn.com/create?preset=b50cupdRo via
+ * getComputedStyle on :root in both light and dark modes. Colors are in lab()
+ * because that's shadcn's native output; all evergreen browsers support it.
+ *
+ * Dark mode is the default for Frank. Toggle by adding .light on <html>.
+ */
+
+:root,
+.dark {
+  --background: lab(2.75381% 0 0);
+  --foreground: lab(98.26% 0 0);
+
+  --card: lab(7.78201% -.0000149012 0);
+  --card-foreground: lab(98.26% 0 0);
+
+  --popover: lab(7.78201% -.0000149012 0);
+  --popover-foreground: lab(98.26% 0 0);
+
+  --primary: lab(90.952% 0 -.0000119209);
+  --primary-foreground: lab(7.78201% -.0000149012 0);
+
+  --secondary: lab(15.204% 0 -.00000596046);
+  --secondary-foreground: lab(98.26% 0 0);
+
+  --muted: lab(15.204% 0 -.00000596046);
+  --muted-foreground: lab(66.128% -.0000298023 .0000119209);
+
+  --accent: lab(27.036% 0 0);
+  --accent-foreground: lab(98.26% 0 0);
+
+  --destructive: lab(63.7053% 60.745 31.3109);
+  --destructive-foreground: lab(98.26% 0 0);
+
+  --border: lab(100% 0 0 / .1);
+  --input: lab(100% 0 0 / .15);
+  --ring: lab(48.496% 0 0);
+
+  --sidebar: lab(7.78201% -.0000149012 0);
+  --sidebar-foreground: lab(98.26% 0 0);
+  --sidebar-primary: lab(36.9089% 35.0961 -85.6872);
+  --sidebar-accent: lab(15.204% 0 -.00000596046);
+  --sidebar-border: lab(100% 0 0 / .1);
+  --sidebar-ring: lab(34.924% 0 0);
+
+  /* Rose chart palette (preset's Chart Color = Rose). */
+  --chart-1: oklch(0.645 0.246 16.439);
+  --chart-2: oklch(0.6 0.222 25);
+  --chart-3: oklch(0.556 0.21 35);
+  --chart-4: oklch(0.5 0.198 45);
+  --chart-5: oklch(0.446 0.187 55);
+
+  /* Radius — preset is "None"; we keep a ladder so components can opt into a
+   * touch of softness where it reads better (e.g., the focus ring). */
+  --radius: 0rem;
+  --radius-sm: 0rem;
+  --radius-md: 0rem;
+  --radius-lg: 0rem;
+  --radius-round: 9999px;
+
+  /* Fonts — Geist Mono for everything, per the preset. */
+  --font-sans: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Spacing scale (used by the ui/ primitives). */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Type scale. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.125rem;
+  --text-2xl: 1.25rem;
+
+  /* Elevation shadows. Dark-scheme tuned — just a subtle lift. */
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  /* Transitions — keep short; the preset's aesthetic is precise, not bouncy. */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
+
+.light {
+  --background: lab(100% 0 0);
+  --foreground: lab(2.75381% 0 0);
+
+  --card: lab(100% 0 0);
+  --card-foreground: lab(2.75381% 0 0);
+
+  --popover: lab(100% 0 0);
+  --popover-foreground: lab(2.75381% 0 0);
+
+  --primary: lab(7.78201% -.0000149012 0);
+  --primary-foreground: lab(98.26% 0 0);
+
+  --secondary: lab(96.52% -.0000298023 .0000119209);
+  --secondary-foreground: lab(7.78201% -.0000149012 0);
+
+  --muted: lab(96.52% -.0000298023 .0000119209);
+  --muted-foreground: lab(48.496% 0 0);
+
+  --accent: lab(96.52% -.0000298023 .0000119209);
+  --accent-foreground: lab(7.78201% -.0000149012 0);
+
+  --destructive: lab(48.4493% 77.4328 61.5452);
+  --destructive-foreground: lab(96.4152% 3.22586 1.14673);
+
+  --border: lab(90.952% 0 -.0000119209);
+  --input: lab(90.952% 0 -.0000119209);
+  --ring: lab(66.128% -.0000298023 .0000119209);
+
+  --sidebar: lab(98.26% 0 0);
+  --sidebar-foreground: lab(2.75381% 0 0);
+  --sidebar-primary: lab(7.78201% -.0000149012 0);
+  --sidebar-accent: lab(96.52% -.0000298023 .0000119209);
+  --sidebar-border: lab(90.952% 0 -.0000119209);
+  --sidebar-ring: lab(66.128% -.0000298023 .0000119209);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 10px 24px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.12), 0 12px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Legacy aliases ──────────────────────────────────────────────────────────
+ * Pre-v2 CSS files reference Frank's old token names (--bg-app, --text-primary,
+ * etc.). These aliases keep them working while views are refactored one by one
+ * to the shadcn names above. Delete an alias once no CSS file references it.
+ */
+:root {
+  --bg-app: var(--background);
+  --bg-surface: var(--card);
+  --bg-elevated: var(--popover);
+  --border-hover: var(--ring);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: var(--muted-foreground);
+  --accent-hover: var(--primary);
+  --danger: var(--destructive);
+  --success: oklch(0.723 0.15 156);
+  --warning: oklch(0.8 0.18 75);
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color-scheme: dark;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-  background: var(--bg-app);
-  color: var(--text-primary);
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: var(--text-base);
+  line-height: 1.5;
   overflow: hidden;
   height: 100vh;
-  font-size: 14px;
-  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #app { height: 100vh; display: flex; flex-direction: column; }
@@ -35,4 +185,9 @@ body {
 .view.active { display: flex; }
 
 button { cursor: pointer; font-family: inherit; }
-input, textarea { font-family: inherit; }
+input, textarea, select { font-family: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
