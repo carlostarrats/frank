@@ -1,5 +1,18 @@
-// canvas.js (view) — The canvas entry point. Mounts a Konva stage, wires tool
-// palette and selection, persists canvas state through the daemon.
+// canvas.js (view) — Whiteboard surface.
+//
+// Layout:
+//   ┌──────────────────────────────────────────────────────────────┐
+//   │  top bar: back, title, zoom                                  │
+//   ├──────┬────────────────────────────────────────┬──────────────┤
+//   │  L   │                                        │      R       │
+//   │ drw. │  Konva stage                           │  inspector   │
+//   │      │                                        │              │
+//   └──────┴────────────────────────────────────────┴──────────────┘
+//
+// The left drawer is categorized (Basic / Shapes / Flowchart / Decorative /
+// Templates). The right inspector binds to the current selection; when nothing
+// is selected, it shows a hint. Both sidebars use the shadcn tokens and
+// primitives; no new CSS framework.
 
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
@@ -7,62 +20,101 @@ import { createStage } from '../canvas/stage.js';
 import { createToolController } from '../canvas/tools.js';
 import { createSelection } from '../canvas/transformer.js';
 import { serializeContent, deserializeInto } from '../canvas/serialize.js';
-
-const TOOLS = [
-  { id: 'select',    label: 'Select',    icon: '↖' },
-  { id: 'rectangle', label: 'Rectangle', icon: '▭' },
-  { id: 'sticky',    label: 'Sticky',    icon: '◪' },
-  { id: 'text',      label: 'Text',      icon: 'T' },
-  { id: 'freehand',  label: 'Pen',       icon: '✎' },
-  { id: 'arrow',     label: 'Arrow',     icon: '→' },
-];
+import { createInspector } from '../canvas/properties.js';
+import { TEMPLATES } from '../canvas/templates.js';
 
 const SAVE_DEBOUNCE_MS = 500;
+
+const TOOL_SECTIONS = [
+  {
+    id: 'basic', label: 'Basic',
+    tools: [
+      { id: 'select',    label: 'Select',    icon: '↖' },
+      { id: 'rectangle', label: 'Rectangle', icon: '▭' },
+      { id: 'text',      label: 'Text',      icon: 'T' },
+      { id: 'sticky',    label: 'Sticky',    icon: '◪' },
+      { id: 'freehand',  label: 'Pen',       icon: '✎' },
+    ],
+  },
+  {
+    id: 'shapes', label: 'Shapes',
+    tools: [
+      { id: 'circle',    label: 'Circle',    icon: '○' },
+      { id: 'ellipse',   label: 'Ellipse',   icon: '⬭' },
+      { id: 'triangle',  label: 'Triangle',  icon: '△' },
+      { id: 'diamond',   label: 'Diamond',   icon: '◇' },
+      { id: 'hexagon',   label: 'Hexagon',   icon: '⬡' },
+      { id: 'star',      label: 'Star',      icon: '☆' },
+    ],
+  },
+  {
+    id: 'flowchart', label: 'Flowchart',
+    tools: [
+      { id: 'parallelogram', label: 'Parallelogram', icon: '▱' },
+      { id: 'document',      label: 'Document',      icon: '⬒' },
+      { id: 'cylinder',      label: 'Cylinder',      icon: '⏣' },
+      { id: 'arrow',         label: 'Arrow',         icon: '→' },
+      { id: 'elbow',         label: 'Elbow',         icon: '⌐' },
+    ],
+  },
+  {
+    id: 'decorative', label: 'Decorative',
+    tools: [
+      { id: 'cloud',  label: 'Cloud',         icon: '☁' },
+      { id: 'speech', label: 'Speech bubble', icon: '💬' },
+    ],
+  },
+];
 
 export function renderCanvas(container, { onBack }) {
   const project = projectManager.get();
   if (!project) { onBack(); return; }
 
   container.innerHTML = `
-    <div class="canvas-toolbar">
-      <button class="btn-ghost canvas-back" title="Back">←</button>
-      <div class="canvas-title">${escapeHtml(project.name)}</div>
-      <div class="canvas-tools" id="canvas-tools"></div>
-      <div class="canvas-zoom" id="canvas-zoom"></div>
+    <div class="canvas-view">
+      <div class="canvas-topbar">
+        <button class="btn-ghost canvas-back" title="Back">←</button>
+        <div class="canvas-title">${escapeHtml(project.name)}</div>
+        <div class="canvas-topbar-spacer"></div>
+        <div class="canvas-zoom" id="canvas-zoom"></div>
+      </div>
+      <div class="canvas-body">
+        <aside class="canvas-drawer" id="canvas-drawer"></aside>
+        <div class="canvas-stage" id="canvas-stage"></div>
+        <aside class="canvas-inspector-host" id="canvas-inspector-host"></aside>
+      </div>
     </div>
-    <div class="canvas-stage" id="canvas-stage"></div>
   `;
 
   container.querySelector('.canvas-back').addEventListener('click', onBack);
 
-  const toolsEl = container.querySelector('#canvas-tools');
-  toolsEl.innerHTML = TOOLS.map((t) => `
-    <button class="canvas-tool" data-tool="${t.id}" title="${t.label}">
-      <span class="canvas-tool-icon">${t.icon}</span>
-      <span class="canvas-tool-label">${t.label}</span>
-    </button>
-  `).join('');
-
   const stageEl = container.querySelector('#canvas-stage');
-  const { stage, contentLayer, uiLayer, destroy: destroyStage, isPanning, resetView } = createStage(stageEl);
+  const drawerEl = container.querySelector('#canvas-drawer');
+  const inspectorHost = container.querySelector('#canvas-inspector-host');
 
-  const selection = createSelection({
-    stage,
-    contentLayer,
-    uiLayer,
-    getTool: () => tools.getTool(),
-  });
+  const { stage, contentLayer, uiLayer, destroy: destroyStage, isPanning, resetView } = createStage(stageEl);
 
   let saveTimer = null;
   const commitChange = () => {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       const json = serializeContent(contentLayer);
-      sync.saveCanvasState(json).catch((err) => {
-        console.warn('[canvas] save failed:', err);
-      });
+      sync.saveCanvasState(json).catch((err) => console.warn('[canvas] save failed:', err));
     }, SAVE_DEBOUNCE_MS);
   };
+
+  const inspector = createInspector({
+    host: inspectorHost,
+    onChange: commitChange,
+  });
+
+  const selection = createSelection({
+    stage,
+    contentLayer,
+    uiLayer,
+    getTool: () => tools.getTool(),
+    onChange: (nodes) => inspector.setSelection(nodes),
+  });
 
   const tools = createToolController({
     stage,
@@ -71,37 +123,37 @@ export function renderCanvas(container, { onBack }) {
     onCommit: commitChange,
   });
 
-  // Tool button wiring
-  toolsEl.querySelectorAll('.canvas-tool').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const t = btn.dataset.tool;
-      tools.activate(t);
+  renderDrawer(drawerEl, {
+    onTool: (id) => {
+      tools.activate(id);
       selection.clear();
-      toolsEl.querySelectorAll('.canvas-tool').forEach((b) => b.classList.toggle('active', b === btn));
-    });
+      markActiveTool(drawerEl, id);
+    },
+    onTemplate: (insert) => {
+      const group = insert(contentLayer);
+      contentLayer.batchDraw();
+      selection.setSelection([group]);
+      commitChange();
+    },
   });
-  toolsEl.querySelector('.canvas-tool[data-tool="select"]').classList.add('active');
+  markActiveTool(drawerEl, 'select');
 
-  // Drag-end on any shape → save
   stage.on('dragend', commitChange);
-  // Transformer end → save (resize/rotate)
   stage.on('transformend', commitChange);
 
-  // Zoom display
   const zoomEl = container.querySelector('#canvas-zoom');
   const updateZoom = () => {
-    zoomEl.innerHTML = `
-      <button class="btn-ghost canvas-zoom-reset" title="Reset view">${Math.round(stage.scaleX() * 100)}%</button>
-    `;
-    zoomEl.querySelector('.canvas-zoom-reset').addEventListener('click', () => {
-      resetView();
-      updateZoom();
-    });
+    zoomEl.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'btn-ghost canvas-zoom-reset';
+    btn.title = 'Reset view';
+    btn.textContent = `${Math.round(stage.scaleX() * 100)}%`;
+    btn.addEventListener('click', () => { resetView(); updateZoom(); });
+    zoomEl.appendChild(btn);
   };
   updateZoom();
   stage.on('wheel', () => updateZoom());
 
-  // Load persisted state
   sync.loadCanvasState().then((msg) => {
     if (msg && msg.state) {
       try {
@@ -123,6 +175,55 @@ export function renderCanvas(container, { onBack }) {
     }
   });
   if (viewEl) observer.observe(viewEl, { attributes: true, attributeFilter: ['class'] });
+}
+
+function renderDrawer(host, { onTool, onTemplate }) {
+  host.innerHTML = '';
+  for (const section of TOOL_SECTIONS) {
+    const header = document.createElement('div');
+    header.className = 'canvas-drawer-section-title';
+    header.textContent = section.label;
+    host.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'canvas-drawer-tools';
+    for (const t of section.tools) {
+      const btn = document.createElement('button');
+      btn.className = 'canvas-drawer-tool';
+      btn.dataset.tool = t.id;
+      btn.title = t.label;
+      btn.innerHTML = `
+        <span class="canvas-drawer-tool-icon">${t.icon}</span>
+        <span class="canvas-drawer-tool-label">${t.label}</span>
+      `;
+      btn.addEventListener('click', () => onTool(t.id));
+      list.appendChild(btn);
+    }
+    host.appendChild(list);
+  }
+
+  // Templates section
+  const header = document.createElement('div');
+  header.className = 'canvas-drawer-section-title';
+  header.textContent = 'Templates';
+  host.appendChild(header);
+
+  const templatesList = document.createElement('div');
+  templatesList.className = 'canvas-drawer-templates';
+  for (const tpl of TEMPLATES) {
+    const btn = document.createElement('button');
+    btn.className = 'canvas-drawer-template';
+    btn.textContent = tpl.label;
+    btn.addEventListener('click', () => onTemplate(tpl.insert));
+    templatesList.appendChild(btn);
+  }
+  host.appendChild(templatesList);
+}
+
+function markActiveTool(drawerEl, toolId) {
+  drawerEl.querySelectorAll('.canvas-drawer-tool').forEach((el) => {
+    el.classList.toggle('active', el.dataset.tool === toolId);
+  });
 }
 
 function escapeHtml(text) {

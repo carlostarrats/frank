@@ -4,7 +4,7 @@
 // empty stage clears. Konva.Transformer renders the move/resize/rotate handles
 // on the UI layer, so it never gets serialized into the content state.
 
-export function createSelection({ stage, contentLayer, uiLayer, getTool }) {
+export function createSelection({ stage, contentLayer, uiLayer, getTool, onChange }) {
   const Konva = window.Konva;
   const tr = new Konva.Transformer({
     rotateAnchorOffset: 24,
@@ -15,14 +15,20 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool }) {
   });
   uiLayer.add(tr);
 
+  function notify() {
+    if (onChange) onChange(tr.nodes());
+  }
+
   function selectedNodes() { return tr.nodes(); }
 
   function setSelection(nodes) {
     tr.nodes(nodes);
+    notify();
   }
 
   function clear() {
     tr.nodes([]);
+    notify();
   }
 
   stage.on('click tap', (e) => {
