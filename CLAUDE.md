@@ -33,6 +33,7 @@ MIT license. Mac-first. Browser-based (no native app).
 - **No framework.** Plain DOM — innerHTML for static renders, event listeners for interaction.
 - Plain JS ES modules — no TypeScript, no bundler, no transpilation.
 - Plain CSS with custom properties — no Tailwind, no CSS-in-JS.
+- **Konva** is loaded via `<script>` tag in `index.html` (unpkg CDN) and accessed as `window.Konva`. It powers the canvas view — also no build step.
 
 ---
 
@@ -61,9 +62,15 @@ frank/
 │   │   ├── sync.js           # WebSocket client — all I/O through daemon
 │   │   └── project.js        # In-memory project state manager
 │   ├── views/
-│   │   ├── home.js           # Project list — create, open, delete
+│   │   ├── home.js           # Project list — create (URL or canvas), open, delete
 │   │   ├── viewer.js         # Content viewer — iframe + overlay + comments
+│   │   ├── canvas.js         # Konva canvas view — shape tools, pan/zoom, persist
 │   │   └── timeline.js       # Chronological view of all activity
+│   ├── canvas/
+│   │   ├── stage.js          # Konva Stage + Layer setup, pan (space+drag), zoom
+│   │   ├── tools.js          # Tool modes: select, rect, sticky, text, freehand, arrow
+│   │   ├── transformer.js    # Selection + Konva.Transformer handles, delete-key
+│   │   └── serialize.js      # Save/load via Konva JSON (content layer only)
 │   ├── overlay/
 │   │   ├── overlay.js        # Click handling, comment mode toggle
 │   │   ├── element-detect.js # Smart element detection (bubble to meaningful)
@@ -97,6 +104,7 @@ frank/
 │   ├── src/ai-chain.ts       # AI instruction chain logging
 │   ├── src/export.ts         # Structured JSON export
 │   ├── src/inject.ts         # CLAUDE.md injection/removal
+│   ├── src/canvas.ts         # Canvas state I/O (one JSON blob per project)
 │   └── src/*.test.ts         # Tests for each module (vitest)
 ├── frank-cloud/              # Self-hosted Vercel project for sharing
 │   ├── api/                  # Serverless functions (share, comment, health)
@@ -138,8 +146,9 @@ frank/
 
 | View | What it shows |
 |---|---|
-| **Home** | Project list — create new (URL input), open existing, delete |
+| **Home** | Project list — create new (URL input or "New canvas"), open existing, delete |
 | **Viewer** | Content in iframe + commenting overlay + curation sidebar |
+| **Canvas** | Konva-backed sketching: select, rectangle, sticky, text, pen, arrow. Pan (space+drag), zoom (wheel). State persists to `~/.frank/projects/{id}/canvas-state.json`. Opened automatically when `project.contentType === 'canvas'`. |
 | **Timeline** | Chronological view of snapshots, comments, curations, AI instructions |
 
 ---
@@ -156,7 +165,7 @@ npm run test:watch # watch mode
 
 Test files live alongside source: `src/*.test.ts`. Each test file mocks `./protocol.js` to redirect `PROJECTS_DIR` to a temp directory. The `inject.test.ts` file additionally mocks `os.homedir()` using `vi.hoisted()`.
 
-**Covered modules:** `projects.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`.
+**Covered modules:** `projects.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`.
 
 After changing any daemon module, run `npm test` to verify nothing broke.
 

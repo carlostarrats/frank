@@ -95,6 +95,8 @@ const sync = {
     return send({ type: 'log-ai-instruction', feedbackIds, curationIds, instruction });
   },
   exportProject() { return send({ type: 'export-project' }); },
+  loadCanvasState() { return send({ type: 'load-canvas-state' }); },
+  saveCanvasState(state) { return send({ type: 'save-canvas-state', state }); },
 };
 
 export default sync;

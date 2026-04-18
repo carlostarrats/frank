@@ -18,6 +18,7 @@ import { saveSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
 import { addCuration, applyCurationToComments } from './curation.js';
 import { addAiInstruction } from './ai-chain.js';
 import { exportProject } from './export.js';
+import { loadCanvasState, saveCanvasState } from './canvas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -366,6 +367,28 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       try {
         const data = exportProject(activeProjectId);
         reply({ type: 'export-ready', data });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'load-canvas-state': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        const state = loadCanvasState(activeProjectId);
+        reply({ type: 'canvas-state-loaded', state });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'save-canvas-state': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        saveCanvasState(activeProjectId, msg.state);
+        reply({ type: 'canvas-state-saved' });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }

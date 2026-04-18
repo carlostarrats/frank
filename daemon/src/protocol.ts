@@ -5,7 +5,7 @@
 export interface ProjectV2 {
   frank_version: '2';
   name: string;
-  contentType: 'url' | 'pdf' | 'image';
+  contentType: 'url' | 'pdf' | 'image' | 'canvas';
   url?: string;           // For contentType: 'url'
   file?: string;          // For contentType: 'pdf' | 'image'
   screens: Record<string, ScreenV2>;
@@ -14,6 +14,8 @@ export interface ProjectV2 {
   activeShare: ActiveShare | null;
   created: string;
   modified: string;
+  // v2: canvas-backed projects opt in here. Absent on v1 projects.
+  canvasEnabled?: boolean;
 }
 
 export interface ScreenV2 {
@@ -54,7 +56,9 @@ export interface Comment {
 
 export interface ListProjectsRequest { type: 'list-projects'; requestId?: number; }
 export interface LoadProjectRequest { type: 'load-project'; projectId: string; requestId?: number; }
-export interface CreateProjectRequest { type: 'create-project'; name: string; contentType: 'url' | 'pdf' | 'image'; url?: string; file?: string; requestId?: number; }
+export interface CreateProjectRequest { type: 'create-project'; name: string; contentType: 'url' | 'pdf' | 'image' | 'canvas'; url?: string; file?: string; requestId?: number; }
+export interface LoadCanvasStateRequest { type: 'load-canvas-state'; requestId?: number; }
+export interface SaveCanvasStateRequest { type: 'save-canvas-state'; state: string; requestId?: number; }
 export interface DeleteProjectRequest { type: 'delete-project'; projectId: string; requestId?: number; }
 export interface AddScreenRequest { type: 'add-screen'; route: string; label: string; requestId?: number; }
 export interface AddCommentRequest { type: 'add-comment'; screenId: string; anchor: CommentAnchor; text: string; requestId?: number; }
@@ -85,7 +89,9 @@ export type AppMessage =
   | StarSnapshotRequest
   | CurateCommentRequest
   | LogAiInstructionRequest
-  | ExportProjectRequest;
+  | ExportProjectRequest
+  | LoadCanvasStateRequest
+  | SaveCanvasStateRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -140,6 +146,8 @@ export interface SnapshotListMessage { type: 'snapshot-list'; requestId?: number
 export interface CurationDoneMessage { type: 'curation-done'; requestId?: number; curation: unknown; }
 export interface AiInstructionLoggedMessage { type: 'ai-instruction-logged'; requestId?: number; instruction: unknown; }
 export interface ExportReadyMessage { type: 'export-ready'; requestId?: number; data: unknown; }
+export interface CanvasStateLoadedMessage { type: 'canvas-state-loaded'; requestId?: number; state: string | null; }
+export interface CanvasStateSavedMessage { type: 'canvas-state-saved'; requestId?: number; }
 
 export type DaemonMessage =
   | ProjectListMessage
@@ -153,7 +161,9 @@ export type DaemonMessage =
   | SnapshotListMessage
   | CurationDoneMessage
   | AiInstructionLoggedMessage
-  | ExportReadyMessage;
+  | ExportReadyMessage
+  | CanvasStateLoadedMessage
+  | CanvasStateSavedMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 

@@ -4,11 +4,16 @@ import projectManager from './core/project.js';
 import { renderHome } from './views/home.js';
 import { renderViewer } from './views/viewer.js';
 import { renderTimeline } from './views/timeline.js';
+import { renderCanvas } from './views/canvas.js';
 import { setupAiRouting } from './components/ai-routing.js';
 
 const state = {
   currentView: 'home',
 };
+
+function viewForProject(project) {
+  return project?.contentType === 'canvas' ? 'canvas' : 'viewer';
+}
 
 function switchView(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -21,13 +26,13 @@ function switchView(view) {
       onOpenProject(projectId) {
         sync.loadProject(projectId).then(data => {
           projectManager.setFromLoaded({ ...data, projectId });
-          switchView('viewer');
+          switchView(viewForProject(data.project));
         });
       },
       onCreateProject(name, contentType, url) {
         sync.createProject(name, contentType, url).then(data => {
           projectManager.setFromLoaded(data);
-          switchView('viewer');
+          switchView(viewForProject(data.project));
         });
       },
     });
@@ -35,6 +40,15 @@ function switchView(view) {
 
   if (view === 'viewer') {
     renderViewer(document.getElementById('view-viewer'), {
+      onBack() {
+        projectManager.clear();
+        switchView('home');
+      },
+    });
+  }
+
+  if (view === 'canvas') {
+    renderCanvas(document.getElementById('view-canvas'), {
       onBack() {
         projectManager.clear();
         switchView('home');

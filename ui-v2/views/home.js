@@ -11,6 +11,9 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
       </div>
       <div class="home-content">
         <div class="home-new" id="home-new"></div>
+        <div class="home-new-canvas" id="home-new-canvas">
+          <button class="btn-secondary home-canvas-btn" id="new-canvas-btn">+ New canvas</button>
+        </div>
         <div class="home-projects" id="home-projects">
           <h3 class="home-section-title">Recent projects</h3>
           <div class="project-list" id="project-list">
@@ -25,6 +28,13 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
     onSubmit(name, contentType, url) {
       onCreateProject(name, contentType, url);
     },
+  });
+
+  container.querySelector('#new-canvas-btn').addEventListener('click', () => {
+    const name = prompt('Canvas name:', 'Untitled Canvas');
+    if (name === null) return;
+    const trimmed = name.trim() || 'Untitled Canvas';
+    onCreateProject(trimmed, 'canvas', undefined);
   });
 
   sync.listProjects().then(data => {

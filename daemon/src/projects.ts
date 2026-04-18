@@ -63,7 +63,7 @@ export function loadProject(projectId: string): ProjectV2 {
   return JSON.parse(fs.readFileSync(jsonPath, 'utf8')) as ProjectV2;
 }
 
-export function createProject(name: string, contentType: 'url' | 'pdf' | 'image', url?: string, file?: string): { project: ProjectV2; projectId: string } {
+export function createProject(name: string, contentType: 'url' | 'pdf' | 'image' | 'canvas', url?: string, file?: string): { project: ProjectV2; projectId: string } {
   ensureProjectsDir();
   const projectId = slugify(name) + '-' + crypto.randomBytes(3).toString('hex');
   const dir = projectDir(projectId);
@@ -77,6 +77,7 @@ export function createProject(name: string, contentType: 'url' | 'pdf' | 'image'
     contentType,
     ...(url ? { url } : {}),
     ...(file ? { file } : {}),
+    ...(contentType === 'canvas' ? { canvasEnabled: true } : {}),
     screens: {},
     screenOrder: [],
     capture: true,
