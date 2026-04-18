@@ -91,6 +91,42 @@ switch (command) {
     await runUninstall();
     break;
 
+  case 'scaffold': {
+    const templateId = process.argv[3];
+    const nameParts: string[] = [];
+    let targetDir = process.cwd();
+    for (let i = 4; i < process.argv.length; i++) {
+      const arg = process.argv[i];
+      if (arg === '--dir') { targetDir = path.resolve(process.argv[i + 1] || ''); i += 1; }
+      else nameParts.push(arg);
+    }
+    const name = nameParts.join(' ').trim();
+    if (!templateId || !name) {
+      console.log('Usage: frank scaffold <template> <name> [--dir <target-dir>]');
+      console.log('Templates: static, vite-react');
+      console.log('Example: frank scaffold static "Landing page" --dir ~/projects');
+      process.exit(1);
+    }
+    const { findTemplate, scaffoldProject } = await import('./scaffold.js');
+    const template = findTemplate(templateId);
+    if (!template) { console.error(`[frank] unknown template: ${templateId}`); process.exit(1); }
+    try {
+      const result = scaffoldProject({ templateId, name, targetDir });
+      console.log(`[frank] scaffolded ${template.name} at ${result.scaffoldPath}`);
+      console.log(`[frank] project id: ${result.projectId}`);
+      if (template.needsInstall) {
+        console.log(`[frank] next: cd ${result.scaffoldPath} && npm install && npm run dev`);
+      } else {
+        console.log(`[frank] next: cd ${result.scaffoldPath} && npm run dev`);
+      }
+      console.log(`[frank] then: frank start → open your project in the viewer`);
+    } catch (e: any) {
+      console.error(`[frank] scaffold failed: ${e.message}`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
+
   default:
     console.log(`Frank v${CURRENT_VERSION} — collaboration layer for any web content`);
     console.log('');
@@ -99,6 +135,7 @@ switch (command) {
     console.log('  frank stop        Stop Frank and remove Claude Code hooks');
     console.log('  frank connect     Connect to your Frank Cloud instance');
     console.log('  frank status      Show daemon and connection status');
+    console.log('  frank scaffold    Scaffold a new project from a template');
     console.log('  frank export      Export project data as structured JSON');
     console.log('  frank uninstall   Remove all Frank data and uninstall');
     process.exit(0);
@@ -198,5 +235,9 @@ async function runUninstall(): Promise<void> {
 async function runStop(): Promise<void> {
   const { removeClaudeMd } = await import('./inject.js');
   removeClaudeMd();
+  try {
+    const { cleanupAllServers } = await import('./scaffold.js');
+    cleanupAllServers();
+  } catch { /* module may not have been loaded; that's fine */ }
   console.log('[frank] stopped');
 }

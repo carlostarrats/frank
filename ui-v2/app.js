@@ -5,6 +5,7 @@ import { renderHome } from './views/home.js';
 import { renderViewer } from './views/viewer.js';
 import { renderTimeline } from './views/timeline.js';
 import { renderCanvas } from './views/canvas.js';
+import { renderScaffold } from './views/scaffold.js';
 import { setupAiRouting } from './components/ai-routing.js';
 
 const state = {
@@ -35,6 +36,14 @@ function switchView(view) {
           switchView(viewForProject(data.project));
         });
       },
+      onScaffold() { switchView('scaffold'); },
+    });
+  }
+
+  if (view === 'scaffold') {
+    renderScaffold(document.getElementById('view-scaffold'), {
+      onBack() { switchView('home'); },
+      onScaffoldReady() { switchView('viewer'); },
     });
   }
 

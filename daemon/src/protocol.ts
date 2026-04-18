@@ -72,6 +72,15 @@ export interface SendAiMessageRequest {
   feedbackIds?: string[];       // curated comment ids to attach
   requestId?: number;
 }
+export interface ListScaffoldTemplatesRequest { type: 'list-scaffold-templates'; requestId?: number; }
+export interface ScaffoldProjectRequest {
+  type: 'scaffold-project';
+  templateId: string;
+  name: string;
+  targetDir: string;            // absolute path; parent must be writable
+  requestId?: number;
+}
+export interface StopScaffoldedServerRequest { type: 'stop-scaffolded-server'; projectId: string; requestId?: number; }
 export interface DeleteProjectRequest { type: 'delete-project'; projectId: string; requestId?: number; }
 export interface AddScreenRequest { type: 'add-screen'; route: string; label: string; requestId?: number; }
 export interface AddCommentRequest { type: 'add-comment'; screenId: string; anchor: CommentAnchor; text: string; requestId?: number; }
@@ -110,7 +119,10 @@ export type AppMessage =
   | ClearAiApiKeyRequest
   | ListAiConversationsRequest
   | LoadAiConversationRequest
-  | SendAiMessageRequest;
+  | SendAiMessageRequest
+  | ListScaffoldTemplatesRequest
+  | ScaffoldProjectRequest
+  | StopScaffoldedServerRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -240,6 +252,38 @@ export interface ConversationFullMessage {
   reason: 'bytes' | 'messages';
 }
 
+export interface ScaffoldTemplateSummary {
+  id: string;
+  name: string;
+  description: string;
+  needsInstall: boolean;
+  estimatedInstallSeconds: number;
+}
+export interface ScaffoldTemplatesMessage {
+  type: 'scaffold-templates';
+  requestId?: number;
+  templates: ScaffoldTemplateSummary[];
+}
+
+// Scaffold lifecycle. Stages announce what's happening:
+//   created → installing → starting → ready (or error)
+export interface ScaffoldStatusMessage {
+  type: 'scaffold-status';
+  requestId?: number;
+  stage: 'created' | 'installing' | 'starting' | 'ready' | 'exited' | 'error';
+  projectId: string;
+  scaffoldPath?: string;
+  url?: string;
+  exitCode?: number | null;
+  error?: string;
+}
+export interface ScaffoldLogMessage {
+  type: 'scaffold-log';
+  projectId: string;
+  stream: 'stdout' | 'stderr';
+  chunk: string;
+}
+
 export type DaemonMessage =
   | ProjectListMessage
   | ProjectLoadedMessage
@@ -262,7 +306,10 @@ export type DaemonMessage =
   | AiStreamDeltaMessage
   | AiStreamEndedMessage
   | AiStreamErrorMessage
-  | ConversationFullMessage;
+  | ConversationFullMessage
+  | ScaffoldTemplatesMessage
+  | ScaffoldStatusMessage
+  | ScaffoldLogMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 

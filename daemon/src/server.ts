@@ -28,6 +28,10 @@ import {
 } from './ai-conversations.js';
 import { buildContext, streamChat } from './ai-providers/claude.js';
 import Anthropic from '@anthropic-ai/sdk';
+import {
+  listTemplates as listScaffoldTemplates, findTemplate,
+  scaffoldProject, runInstall, startDevServer, stopDevServer, cleanupAllServers,
+} from './scaffold.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -464,7 +468,121 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       handleSendAiMessage(ws, activeProjectId, msg);
       break;
     }
+
+    case 'list-scaffold-templates': {
+      try {
+        const templates = listScaffoldTemplates().map((t) => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          needsInstall: t.needsInstall,
+          estimatedInstallSeconds: t.estimatedInstallSeconds,
+        }));
+        reply({ type: 'scaffold-templates', templates });
+      } catch (e: any) { reply({ type: 'error', error: e.message }); }
+      break;
+    }
+
+    case 'scaffold-project': {
+      handleScaffold(ws, msg);
+      break;
+    }
+
+    case 'stop-scaffolded-server': {
+      try {
+        const ok = stopDevServer(msg.projectId);
+        reply({ type: 'scaffold-status', stage: 'exited', projectId: msg.projectId, exitCode: ok ? 0 : null });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
   }
+}
+
+function handleScaffold(
+  ws: WebSocket,
+  msg: { type: 'scaffold-project'; templateId: string; name: string; targetDir: string; requestId?: number },
+): void {
+  const send = (payload: Record<string, unknown>) => {
+    ws.send(JSON.stringify({ ...payload, requestId: msg.requestId }));
+  };
+
+  const template = findTemplate(msg.templateId);
+  if (!template) {
+    send({ type: 'error', error: `Unknown template: ${msg.templateId}` });
+    return;
+  }
+  if (!msg.targetDir || !path.isAbsolute(msg.targetDir)) {
+    send({ type: 'error', error: 'targetDir must be an absolute path' });
+    return;
+  }
+  if (!msg.name.trim()) {
+    send({ type: 'error', error: 'Project name is required' });
+    return;
+  }
+
+  let result;
+  try {
+    result = scaffoldProject({ templateId: msg.templateId, name: msg.name, targetDir: msg.targetDir });
+  } catch (e: any) {
+    send({ type: 'error', error: e.message });
+    return;
+  }
+
+  const projectId = result.projectId;
+  activeProjectId = projectId;
+  send({ type: 'scaffold-status', stage: 'created', projectId, scaffoldPath: result.scaffoldPath });
+
+  const streamLog = (chunk: string, stream: 'stdout' | 'stderr') => {
+    ws.send(JSON.stringify({ type: 'scaffold-log', projectId, stream, chunk }));
+  };
+
+  (async () => {
+    if (template.needsInstall) {
+      send({ type: 'scaffold-status', stage: 'installing', projectId });
+      const install = await runInstall({ cwd: result.scaffoldPath, template, onLog: streamLog });
+      if (install.exitCode !== 0) {
+        ws.send(JSON.stringify({
+          type: 'scaffold-status',
+          stage: 'error',
+          projectId,
+          error: `npm install exited with code ${install.exitCode}. Check the log and try running the command manually in ${result.scaffoldPath}.`,
+        }));
+        return;
+      }
+    }
+
+    send({ type: 'scaffold-status', stage: 'starting', projectId });
+
+    startDevServer({
+      projectId,
+      cwd: result.scaffoldPath,
+      template,
+      onLog: streamLog,
+      onReady: (url) => {
+        // Persist the detected URL so the viewer can reopen the project later.
+        try {
+          const project = loadProject(projectId);
+          project.url = url;
+          saveProject(projectId, project);
+        } catch { /* project write failure is non-fatal */ }
+        ws.send(JSON.stringify({
+          type: 'scaffold-status', stage: 'ready', projectId, url, scaffoldPath: result.scaffoldPath,
+        }));
+      },
+      onExit: (code) => {
+        ws.send(JSON.stringify({ type: 'scaffold-status', stage: 'exited', projectId, exitCode: code }));
+      },
+    });
+  })().catch((err: any) => {
+    ws.send(JSON.stringify({
+      type: 'scaffold-status',
+      stage: 'error',
+      projectId,
+      error: err?.message || 'scaffold failed',
+    }));
+  });
 }
 
 async function handleSendAiMessage(
