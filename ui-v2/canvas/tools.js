@@ -13,9 +13,67 @@ import {
 } from './shapes.js';
 import { bindConnector, _ensureId } from './connectors.js';
 
-export function createToolController({ stage, contentLayer, isPanning, onCommit }) {
+// Cursor presets per tool. The stage container picks these up via
+// setToolCursor(); shape hover flips to 'pointer' to signal selectability
+// even when a creation tool is active.
+const TOOL_CURSORS = {
+  select: 'default',
+  rectangle: 'crosshair',
+  circle: 'crosshair',
+  ellipse: 'crosshair',
+  triangle: 'copy',
+  diamond: 'copy',
+  hexagon: 'copy',
+  star: 'copy',
+  cloud: 'copy',
+  speech: 'copy',
+  document: 'copy',
+  cylinder: 'copy',
+  parallelogram: 'copy',
+  sticky: 'copy',
+  text: 'text',
+  freehand: 'crosshair',
+  arrow: 'crosshair',
+  elbow: 'crosshair',
+};
+
+export function createToolController({ stage, contentLayer, isPanning, onCommit, onShapeClick }) {
   let currentTool = 'select';
   let disposers = [];
+  const containerEl = stage.container();
+
+  function setToolCursor(tool) {
+    containerEl.style.cursor = TOOL_CURSORS[tool] || 'default';
+  }
+
+  // Shape-hover cursor override: when the pointer enters an existing shape
+  // (any child of the content layer) and the active tool is NOT select, we
+  // flip the cursor to `pointer` so the user knows a click will select (via
+  // the onShapeClick hook), not create.
+  let hoveredShape = null;
+  const onLayerEnter = (e) => {
+    if (currentTool === 'select') return;
+    const shape = nearestContentChild(e.target);
+    if (!shape || shape === hoveredShape) return;
+    hoveredShape = shape;
+    containerEl.style.cursor = 'pointer';
+  };
+  const onLayerLeave = (e) => {
+    if (currentTool === 'select') return;
+    const shape = nearestContentChild(e.target);
+    if (shape && shape === hoveredShape) {
+      hoveredShape = null;
+      setToolCursor(currentTool);
+    }
+  };
+  stage.on('mouseover.hover', onLayerEnter);
+  stage.on('mouseout.hover', onLayerLeave);
+
+  function nearestContentChild(node) {
+    let n = node;
+    while (n && n.getLayer && n.getLayer() !== contentLayer) n = n.getParent();
+    return n && n !== contentLayer ? n : null;
+  }
 
   function activate(tool) {
     disposers.forEach((d) => d());
@@ -56,9 +114,23 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit 
 
     const handler = handlerMap[tool];
     if (typeof handler === 'function') disposers = handler();
+
+    setToolCursor(tool);
   }
 
   function getTool() { return currentTool; }
+
+  // Shared "maybe intercept this mousedown as a selection" check. Creation
+  // tools call this first; if the mousedown landed on an existing shape, we
+  // short-circuit creation, switch to the select tool, and hand the shape up
+  // to the view so it updates the active-tool UI and populates the inspector.
+  function tryInterceptClick(e) {
+    if (e.target === stage) return false;
+    const shape = nearestContentChild(e.target);
+    if (!shape) return false;
+    if (onShapeClick) onShapeClick(shape, e);
+    return true;
+  }
 
   // ── Drag-to-size shapes (rect, circle, ellipse) ────────────────────────────
   function bindDragShape(factory, resize) {
@@ -67,6 +139,7 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit 
       let start = null;
       const onDown = (e) => {
         if (isPanning()) return;
+        if (tryInterceptClick(e)) return;
         if (e.target !== stage) return;
         start = stageToContent(stage);
         node = factory(start);
@@ -94,6 +167,7 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit 
     return () => {
       const onDown = (e) => {
         if (isPanning()) return;
+        if (tryInterceptClick(e)) return;
         if (e.target !== stage) return;
         const pos = stageToContent(stage);
         const node = factory(pos);
@@ -112,6 +186,7 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit 
     let line = null;
     const onDown = (e) => {
       if (isPanning()) return;
+      if (tryInterceptClick(e)) return;
       if (e.target !== stage) return;
       const pos = stageToContent(stage);
       line = createFreehand({ points: [pos.x, pos.y] });
@@ -205,7 +280,13 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit 
 
   activate('select');
 
-  return { activate, getTool };
+  function destroy() {
+    stage.off('mouseover.hover mouseout.hover');
+    disposers.forEach((d) => d());
+    disposers = [];
+  }
+
+  return { activate, getTool, destroy };
 }
 
 // ── Shape-specific resizers (used by bindDragShape) ──────────────────────────

@@ -121,6 +121,14 @@ export function renderCanvas(container, { onBack }) {
     contentLayer,
     isPanning,
     onCommit: commitChange,
+    // Context-aware tool behavior: if the user clicks on an existing shape
+    // while a creation tool is active, switch back to Select and pick that
+    // shape. Matches the Figma/Miro pattern.
+    onShapeClick: (shape) => {
+      tools.activate('select');
+      markActiveTool(drawerEl, 'select');
+      selection.setSelection([shape]);
+    },
   });
 
   renderDrawer(drawerEl, {

@@ -141,8 +141,9 @@ export function createInspector({ host, onChange }) {
     );
     body.appendChild(zRow);
 
+    body.appendChild(Separator());
+
     if (isTemplateGroup) {
-      body.appendChild(Separator());
       body.appendChild(Button({
         variant: 'outline',
         size: 'sm',
@@ -155,6 +156,19 @@ export function createInspector({ host, onChange }) {
         },
       }));
     }
+
+    body.appendChild(Button({
+      variant: 'destructive',
+      size: 'sm',
+      text: 'Delete shape',
+      onClick: () => {
+        const layer = node.getLayer();
+        node.destroy();
+        layer?.batchDraw();
+        setSelection([]);
+        onChange?.();
+      },
+    }));
   }
 
   return { setSelection };
