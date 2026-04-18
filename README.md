@@ -214,4 +214,6 @@ frank/
 
 ## License
 
-[PolyForm Shield 1.0.0](LICENSE) — free to use, source available, cannot be used to build a competing product.
+[MIT](LICENSE) — free to use, modify, and distribute, including commercially. Include the copyright notice in any substantial redistribution.
+
+Prior versions of Frank (through the v1.0 release) were licensed under PolyForm Shield 1.0.0. The project relicensed to MIT ahead of the v2 development cycle.

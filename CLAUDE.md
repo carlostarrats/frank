@@ -3,7 +3,7 @@
 ## What This Is
 A collaboration layer for any web content. Point it at any URL — localhost, staging, production — and Frank wraps it with commenting, sharing, feedback curation, and a complete data trail of how the thing was built.
 
-PolyForm Shield 1.0.0 license. Mac-first. Browser-based (no native app).
+MIT license. Mac-first. Browser-based (no native app).
 
 ---
 

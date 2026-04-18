@@ -2,6 +2,7 @@
   "name": "frank-daemon",
   "version": "1.0.0",
   "description": "Frank daemon — Claude Code hooks integration and panel server",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "frank": "./dist/cli.js"
