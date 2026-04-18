@@ -18,19 +18,29 @@
 }
 
 .toolbar-btn {
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  transition: all 0.15s;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
 }
 .toolbar-btn:hover {
-  border-color: var(--border-hover);
-  color: var(--text-primary);
-  background: var(--bg-elevated);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--border);
 }
+.toolbar-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 .toolbar-actions {
   display: flex;
@@ -125,38 +135,89 @@
   line-height: 1.5;
 }
 
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 8px 16px;
+/* Legacy button + input classes, re-aligned to shadcn tokens so every view
+ * that still uses `.btn-primary` / `.btn-secondary` / `.btn-ghost` / `.input`
+ * reads as a shadcn-shaped control until it's migrated to the ui/ primitives. */
+
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-destructive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 2.25rem;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-family: inherit;
+  font-size: var(--text-sm);
   font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
 }
-.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-ghost:disabled,
+.btn-destructive:disabled { opacity: 0.5; pointer-events: none; }
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-ghost:focus-visible,
+.btn-destructive:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.btn-primary:hover { background: color-mix(in oklch, var(--primary), black 10%); }
+
+.btn-secondary {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  border-color: var(--border);
+}
+.btn-secondary:hover { background: var(--accent); color: var(--accent-foreground); }
 
 .btn-ghost {
   background: transparent;
-  color: var(--text-secondary);
-  border: none;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  color: var(--muted-foreground);
+  padding: 0 var(--space-3);
 }
-.btn-ghost:hover { color: var(--text-primary); background: var(--bg-elevated); }
+.btn-ghost:hover { background: var(--accent); color: var(--accent-foreground); }
+
+.btn-destructive {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+.btn-destructive:hover { background: color-mix(in oklch, var(--destructive), black 10%); }
 
 .input {
-  padding: 8px 12px;
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--input);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 14px;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: var(--text-sm);
   outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
 }
-.input:focus { border-color: var(--accent); }
-.input::placeholder { color: var(--text-muted); }
+.input:focus,
+.input:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
+}
+.input::placeholder { color: var(--muted-foreground); }
+.input:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Home view */
 .home {
@@ -413,34 +474,65 @@
 .share-popover-status:empty { display: none; }
 .share-popover-status { font-size: 12px; color: var(--text-muted); }
 
-/* Share modal input/button primitives */
+/* Share modal input/button primitives — realigned to shadcn tokens. */
 .share-modal .v-input {
   width: 100%;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-hover);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 14px;
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--input);
+  background: transparent;
+  color: var(--foreground);
+  font-size: var(--text-sm);
   font-family: inherit;
   outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
 }
-.share-modal .v-input:focus { border-color: var(--accent); }
-.share-modal .v-textarea { resize: none; min-height: 100px; }
+.share-modal .v-input:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
+}
+.share-modal .v-input::placeholder { color: var(--muted-foreground); }
+.share-modal .v-textarea {
+  height: auto;
+  min-height: 100px;
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  line-height: 1.5;
+}
 .share-modal .v-btn {
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 2.25rem;
+  padding: 0 var(--space-4);
   border: 1px solid var(--border);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
   cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
 }
-.share-modal .v-btn:hover { color: var(--text-primary); border-color: var(--border-hover); background: var(--bg-elevated); }
-.share-modal .v-btn-primary { background: var(--accent); color: #fff; border: none; }
-.share-modal .v-btn-primary:hover { background: #3a86e0; }
-.share-modal .v-btn-ghost { background: transparent; border: none; }
-.share-modal .v-btn-ghost:hover { background: var(--bg-surface); }
+.share-modal .v-btn:hover { background: var(--accent); color: var(--accent-foreground); }
+.share-modal .v-btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: transparent;
+}
+.share-modal .v-btn-primary:hover { background: color-mix(in oklch, var(--primary), black 10%); color: var(--primary-foreground); }
+.share-modal .v-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted-foreground);
+}
+.share-modal .v-btn-ghost:hover { background: var(--accent); color: var(--accent-foreground); }
 
 /* AI routing modal */
 .ai-routing-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; }
