@@ -62,10 +62,9 @@ frank/
 │   │   ├── sync.js           # WebSocket client — all I/O through daemon
 │   │   └── project.js        # In-memory project state manager
 │   ├── views/
-│   │   ├── home.js           # Project list — create (URL / canvas / scaffold), open, delete
+│   │   ├── home.js           # Project list — create (URL / canvas), open, delete
 │   │   ├── viewer.js         # Content viewer — iframe + overlay + comments
 │   │   ├── canvas.js         # Konva canvas view — shape tools, pan/zoom, persist
-│   │   ├── scaffold.js       # Spin One Up — template picker, install + dev-server progress
 │   │   └── timeline.js       # Chronological view of all activity
 │   ├── canvas/
 │   │   ├── stage.js          # Konva Stage + Layer setup, pan (space+drag), zoom
@@ -109,10 +108,6 @@ frank/
 │   ├── src/canvas.ts         # Canvas state I/O (one JSON blob per project)
 │   ├── src/ai-conversations.ts  # Per-project AI conversation storage (size + msg count caps)
 │   ├── src/ai-providers/claude.ts  # Claude API client, context builder with token budget
-│   ├── src/scaffold.ts       # Spin One Up — template copy, npm install, dev-server spawn, PID tracking
-│   ├── templates/            # Scaffold templates shipped with the daemon
-│   │   ├── static/           # Plain HTML/CSS/JS starter with a tiny Node static server
-│   │   └── vite-react/       # Vite + React starter (requires npm install)
 │   └── src/*.test.ts         # Tests for each module (vitest)
 ├── frank-cloud/              # Self-hosted Vercel project for sharing
 │   ├── api/                  # Serverless functions (share, comment, health)
@@ -157,16 +152,7 @@ frank/
 | **Home** | Project list — create new (URL input or "New canvas"), open existing, delete |
 | **Viewer** | Content in iframe + commenting overlay + curation sidebar + AI panel sidebar |
 | **Canvas** | Konva-backed sketching: select, rectangle, sticky, text, pen, arrow. Pan (space+drag), zoom (wheel). State persists to `~/.frank/projects/{id}/canvas-state.json`. Opened automatically when `project.contentType === 'canvas'`. |
-| **Scaffold** | Spin One Up — pick a template (`static` / `vite-react`), name the project, pick a directory. Daemon copies the template, runs `npm install` (streaming output to the UI) when needed, spawns the dev server, detects the URL from stdout, then hands off to the viewer. |
 | **Timeline** | Chronological view of snapshots, comments, curations, AI instructions |
-
-## Spin One Up (scaffold)
-
-- Templates ship inside the daemon package at `daemon/templates/{id}/`. Adding a new template: drop files under a new id directory and add an entry to `TEMPLATES` in `daemon/src/scaffold.ts`.
-- Dev-server URLs are detected with `/https?:\/\/(?:localhost|127\.0\.0\.1):\d+/` from the child's stdout/stderr. If a template doesn't print such a line, detection will hang — make sure the `dev` script logs one.
-- Child processes are tracked in an in-memory map keyed by project ID. `stopDevServer` sends SIGTERM then escalates to SIGKILL after 5 s. `cleanupAllServers` runs in `runStop` during `frank stop` / SIGINT / SIGTERM.
-- Orphan detection on daemon restart is not implemented yet — spawning a new scaffold after a crash leaves the old dev server running; users can `lsof -iTCP -sTCP:LISTEN -P` + `kill` manually. Planned for v2.x.
-- CLI: `frank scaffold <template> <name> [--dir <target>]` scaffolds without the UI (useful for scripting), prints the new project's directory and next steps, and exits. The dev server is NOT spawned by the CLI — use the UI for the full auto-start flow.
 
 ## AI panel
 

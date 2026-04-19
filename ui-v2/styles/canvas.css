@@ -1,4 +1,4 @@
-/* Canvas view — shadcn-aligned. */
+/* Canvas view — shadcn-aligned, whiteboard layout with left drawer + right inspector. */
 
 #view-canvas {
   display: none;
@@ -12,7 +12,14 @@
   display: flex;
 }
 
-.canvas-toolbar {
+.canvas-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas-topbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -26,75 +33,21 @@
 .canvas-back {
   width: 2rem;
   height: 2rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0;
   font-size: 1rem;
-  background: transparent;
-  color: var(--muted-foreground);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-standard),
-              color var(--duration-fast) var(--ease-standard),
-              border-color var(--duration-fast) var(--ease-standard);
-}
-.canvas-back:hover {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  border-color: var(--border);
 }
 
 .canvas-title {
   font-weight: 500;
   color: var(--foreground);
-  margin-right: var(--space-4);
-  max-width: 240px;
+  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-sm);
 }
 
-.canvas-tools {
-  display: flex;
-  gap: var(--space-1);
-  background: var(--muted);
-  padding: var(--space-1);
-  border-radius: var(--radius-md);
-}
-
-.canvas-tool {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 1.75rem;
-  padding: 0 var(--space-3);
-  background: transparent;
-  color: var(--muted-foreground);
-  border: 0;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  font-family: inherit;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-standard),
-              color var(--duration-fast) var(--ease-standard);
-}
-.canvas-tool:hover {
-  background: color-mix(in oklch, var(--accent), transparent 40%);
-  color: var(--foreground);
-}
-.canvas-tool.active {
-  background: var(--background);
-  color: var(--foreground);
-  box-shadow: var(--shadow-sm);
-}
-.canvas-tool-icon {
-  font-size: var(--text-sm);
-  line-height: 1;
-  width: 14px;
-  text-align: center;
-}
+.canvas-topbar-spacer { flex: 1; }
 
 .canvas-zoom {
   margin-left: auto;
@@ -118,23 +71,279 @@
   background: var(--accent);
 }
 
+/* Body: drawer | stage | inspector */
+
+.canvas-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Left drawer ─────────────────────────────────────────────────────────── */
+
+.canvas-drawer {
+  width: 200px;
+  flex-shrink: 0;
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
+  border-right: 1px solid var(--sidebar-border);
+  padding: var(--space-3);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.canvas-drawer-section-title {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  margin-bottom: var(--space-1);
+  font-weight: 500;
+}
+
+.canvas-drawer-tools,
+.canvas-drawer-templates {
+  display: grid;
+  gap: var(--space-1);
+  grid-template-columns: 1fr 1fr;
+}
+
+.canvas-drawer-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 var(--space-2);
+  background: transparent;
+  color: var(--sidebar-foreground);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+  min-width: 0;
+}
+.canvas-drawer-tool:hover {
+  background: var(--sidebar-accent);
+  border-color: var(--sidebar-border);
+}
+.canvas-drawer-tool.active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: transparent;
+}
+.canvas-drawer-tool-icon {
+  font-size: var(--text-sm);
+  line-height: 1;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.canvas-drawer-tool-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-drawer-templates {
+  grid-template-columns: 1fr;
+}
+.canvas-drawer-template {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 2rem;
+  padding: 0 var(--space-3);
+  background: transparent;
+  color: var(--sidebar-foreground);
+  border: 1px solid var(--sidebar-border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+.canvas-drawer-template:hover {
+  background: var(--sidebar-accent);
+  color: var(--foreground);
+}
+
+/* ── Stage ───────────────────────────────────────────────────────────────── */
+
 .canvas-stage {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   position: relative;
   background:
     radial-gradient(circle, color-mix(in oklch, var(--foreground), transparent 92%) 1px, transparent 1px) 0 0 / 20px 20px,
     var(--background);
   overflow: hidden;
 }
-
-/* Konva injects a div with a canvas inside. Fill the stage container. */
 .canvas-stage > div {
   width: 100% !important;
   height: 100% !important;
 }
 
-/* Inline text editor used by tools.js when double-clicking a Text node */
+/* ── Right inspector ─────────────────────────────────────────────────────── */
+
+.canvas-inspector-host {
+  /* No transition — open/close is instant in both directions so users never
+   * glimpse the empty "Select a shape…" state mid-slide. */
+  width: 0;
+  min-width: 0;
+  flex-shrink: 0;
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
+  border-left: 1px solid transparent;
+  overflow: hidden;
+}
+.canvas-inspector-host.open {
+  width: 260px;
+  min-width: 260px;
+  border-left-color: var(--sidebar-border);
+  overflow-y: auto;
+}
+
+.canvas-inspector {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.canvas-inspector-header {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--sidebar-border);
+}
+.canvas-inspector-title {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.canvas-inspector-body {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+}
+.canvas-inspector-empty {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  padding: var(--space-2) 0;
+  line-height: 1.5;
+}
+
+.canvas-inspector-multi-label {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+.canvas-align-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.canvas-align-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.canvas-align-label {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
+.canvas-align-buttons {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.canvas-align-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  padding: 0;
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.canvas-align-btn:hover {
+  background: var(--accent);
+  border-color: var(--ring);
+}
+
+.canvas-align-btn:active {
+  background: var(--muted);
+}
+
+.canvas-align-btn svg {
+  pointer-events: none;
+}
+
+.canvas-inspector-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.canvas-inspector-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+}
+
+.canvas-inspector-color-input {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.canvas-inspector-swatch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.canvas-inspector-swatch::-webkit-color-swatch-wrapper { padding: 2px; }
+.canvas-inspector-swatch::-webkit-color-swatch { border: 0; border-radius: calc(var(--radius-md) - 2px); }
+
+.canvas-inspector-range-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.canvas-inspector-range-value {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.canvas-inspector-range {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+/* ── Inline text editor — unchanged ──────────────────────────────────────── */
+
 .canvas-text-editor {
   border: 1px solid var(--ring);
   background: var(--popover);

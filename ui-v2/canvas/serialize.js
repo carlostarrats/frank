@@ -5,6 +5,9 @@
 // from the stored JSON. The UI layer (transformer handles) is never persisted
 // because we keep the transformer on a separate uiLayer.
 
+import { rebindAll as rebindConnectors } from './connectors.js';
+import { CONNECTOR_HIT_STROKE } from './shapes.js';
+
 export function serializeContent(contentLayer) {
   // Only persist the content layer's children. The stage size, UI layer, and
   // transformer are ephemeral UI state, not user content.
@@ -22,9 +25,22 @@ export function deserializeInto(contentLayer, json) {
   contentLayer.destroyChildren();
   for (const childDef of parsed.children) {
     const node = Konva.Node.create(JSON.stringify(childDef));
-    if (node) contentLayer.add(node);
+    if (!node) continue;
+    contentLayer.add(node);
     // Re-enable draggable on restored shapes. Konva preserves the attr, but
     // older formats may drop it — enforce here for safety.
-    if (node && typeof node.draggable === 'function') node.draggable(true);
+    if (typeof node.draggable === 'function') node.draggable(true);
+    // Restored connectors from before the wide-hit-area fix don't have
+    // hitStrokeWidth set; give them the same generous click zone as freshly
+    // created ones so the "lines are hard to click" issue is fixed
+    // retroactively.
+    if ((node.name() || '').includes('connector') && typeof node.hitStrokeWidth === 'function') {
+      node.hitStrokeWidth(CONNECTOR_HIT_STROKE);
+    }
   }
+
+  // Follow-shape connectors store sourceId/targetId on their attrs, which
+  // survives round-trip. Walk the restored layer and rebuild the dragmove
+  // listeners + per-layer connector index.
+  rebindConnectors(contentLayer);
 }

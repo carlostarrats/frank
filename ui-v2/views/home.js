@@ -2,7 +2,7 @@
 import sync from '../core/sync.js';
 import { renderUrlInput } from '../components/url-input.js';
 
-export function renderHome(container, { onOpenProject, onCreateProject, onScaffold }) {
+export function renderHome(container, { onOpenProject, onCreateProject }) {
   container.innerHTML = `
     <div class="home">
       <div class="home-header">
@@ -13,7 +13,6 @@ export function renderHome(container, { onOpenProject, onCreateProject, onScaffo
         <div class="home-new" id="home-new"></div>
         <div class="home-new-canvas" id="home-new-canvas">
           <button class="btn-secondary home-canvas-btn" id="new-canvas-btn">+ New canvas</button>
-          <button class="btn-secondary home-scaffold-btn" id="new-scaffold-btn">+ Spin one up</button>
         </div>
         <div class="home-projects" id="home-projects">
           <h3 class="home-section-title">Recent projects</h3>
@@ -36,10 +35,6 @@ export function renderHome(container, { onOpenProject, onCreateProject, onScaffo
     if (name === null) return;
     const trimmed = name.trim() || 'Untitled Canvas';
     onCreateProject(trimmed, 'canvas', undefined);
-  });
-
-  container.querySelector('#new-scaffold-btn').addEventListener('click', () => {
-    if (onScaffold) onScaffold();
   });
 
   sync.listProjects().then(data => {
