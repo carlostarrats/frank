@@ -149,7 +149,10 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     marqueeStart = null;
     uiLayer.batchDraw();
 
-    if (!didMarquee) return; // treat as click; click handler handles it
+    // Decide purely from the marquee's final geometry — don't rely on the
+    // `didMarquee` flag, because on real mouse input Konva fires `click`
+    // before `mouseup` and the click handler clears the flag first.
+    if (box.width <= 4 && box.height <= 4) return; // treat as click
 
     const hits = contentLayer.getChildren().filter((child) => {
       const r = child.getClientRect({ skipStroke: false, relativeTo: contentLayer });
@@ -165,7 +168,9 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     // Selection tool only
     if (getTool() !== 'select') return;
 
-    // Marquee-drag just completed — skip the click (setSelection already ran).
+    // Marquee-drag just completed — skip the "empty click = clear" branch.
+    // Reset after consuming so the next real click on empty stage still
+    // clears selection.
     if (didMarquee) { didMarquee = false; return; }
 
     // Clicked on empty stage → clear selection
