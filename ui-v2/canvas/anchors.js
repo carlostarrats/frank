@@ -19,7 +19,13 @@
 // square containing the diamond, so the "corners" landed out in empty
 // space and the endpoint couldn't snap to the shape's actual corners.
 function allAnchors(shape, relativeTo) {
-  const local = shape.getSelfRect();
+  // Prefer getSelfRect (class-specific, tightest bounds). Fall back to
+  // getClientRect({skipTransform: true}) for Groups/Labels which don't
+  // implement getSelfRect — that still gives us the shape's own pre-
+  // transform bounding box.
+  const local = typeof shape.getSelfRect === 'function'
+    ? shape.getSelfRect()
+    : shape.getClientRect({ skipTransform: true, skipStroke: true, skipShadow: true });
   const x0 = local.x;
   const y0 = local.y;
   const x1 = x0 + local.width;
