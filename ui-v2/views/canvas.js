@@ -30,7 +30,7 @@ import { attachShortcuts } from '../canvas/shortcuts.js';
 import { createHistory } from '../canvas/history.js';
 import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js';
 import { toastError, toastInfo } from '../components/toast.js';
-import { iconCommentPlus, iconCamera, iconLink, iconDownload } from '../components/toolbar.js';
+import { iconCommentPlus, iconCamera, iconLink, iconDownload, iconUndo, iconTimeline } from '../components/toolbar.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -95,7 +95,9 @@ export function renderCanvas(container, { onBack }) {
         <button class="btn-ghost canvas-back" title="Back">←</button>
         <div class="canvas-title">${escapeHtml(project.name)}</div>
         <div class="canvas-topbar-spacer"></div>
+        <button class="btn-ghost canvas-icon-btn canvas-undo-btn" id="canvas-undo-btn" title="Undo (⌘Z)" aria-label="Undo" disabled>${iconUndo()}</button>
         <button class="btn-ghost canvas-icon-btn canvas-comment-toggle" id="canvas-comment-toggle" title="Comment on shape" aria-label="Toggle comment mode">${iconCommentPlus()}</button>
+        <button class="btn-ghost canvas-icon-btn" id="canvas-timeline-btn" title="Timeline" aria-label="Timeline">${iconTimeline()}</button>
         <button class="btn-ghost canvas-icon-btn canvas-snapshot-btn" id="canvas-snapshot-btn" title="Take snapshot" aria-label="Take snapshot">${iconCamera()}</button>
         <button class="btn-ghost canvas-icon-btn canvas-share-btn" id="canvas-share-btn" title="Share canvas" aria-label="Share canvas">${iconLink()}</button>
         <div class="canvas-export-wrapper">
@@ -132,10 +134,19 @@ export function renderCanvas(container, { onBack }) {
     deserialize: (json) => deserializeInto(contentLayer, json),
   });
 
+  // Undo button reflects history.canUndo() — disabled (greyed out) when the
+  // stack is empty, re-enables as soon as there's something to undo.
+  const undoBtn = container.querySelector('#canvas-undo-btn');
+  const syncUndoBtn = () => {
+    if (!undoBtn) return;
+    undoBtn.disabled = !history.canUndo();
+  };
+
   let saveTimer = null;
   let saveFailureCount = 0;
   const commitChange = () => {
     history.commit();
+    syncUndoBtn();
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       const json = serializeContent(contentLayer);
@@ -320,8 +331,10 @@ export function renderCanvas(container, { onBack }) {
       uiLayer.draw();
       const state = serializeContent(contentLayer);
       await sync.saveCanvasSnapshot(state, thumbnail, 'manual', 'user');
+      toastInfo('Snapshot saved');
     } catch (err) {
       console.warn('[canvas] snapshot failed:', err);
+      toastError('Snapshot failed');
     } finally {
       setTimeout(() => snapshotBtn.classList.remove('flashing'), 300);
     }
@@ -422,25 +435,75 @@ export function renderCanvas(container, { onBack }) {
     // Reset the history baseline so the first real edit creates the first
     // undo entry (rather than the restored-from-disk state itself).
     history.reset();
+    syncUndoBtn();
   });
+
+  // Toolbar undo button: same path as Cmd+Z. Disabled attribute is kept in
+  // sync by syncUndoBtn; clicking while disabled is a no-op.
+  // Canvas topbar → timeline view (same event the viewer's toolbar dispatches).
+  container.querySelector('#canvas-timeline-btn')?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('frank:open-timeline'));
+  });
+
+  if (undoBtn) {
+    undoBtn.addEventListener('click', () => {
+      if (!history.canUndo()) return;
+      // Clear selection first — deserialize replaces every child node, which
+      // would leave the Transformer pointing at a destroyed shape and render
+      // orphan handles where the shape used to be.
+      selection.clear();
+      history.undo();
+      comments.render();
+      syncUndoBtn();
+    });
+  }
 
   function duplicateSelection() {
     const nodes = selection.selectedNodes();
     if (!nodes.length) return;
+    placeClonesWithOffset(nodes.map(n => n.toObject()));
+  }
+
+  // In-memory clipboard for Cmd+C / Cmd+V. Stores Konva-serialized plain
+  // objects (not live nodes) so they survive layer mutations and can paste
+  // any number of times. Scoped to this canvas view; cleared on reload.
+  let canvasClipboard = [];
+  let pasteCount = 0;
+
+  function copySelection() {
+    const nodes = selection.selectedNodes();
+    if (!nodes.length) return false;
+    canvasClipboard = nodes.map(n => n.toObject());
+    pasteCount = 0;
+    return true;
+  }
+
+  function pasteSelection() {
+    if (!canvasClipboard.length) return false;
+    pasteCount += 1;
+    placeClonesWithOffset(canvasClipboard, pasteCount);
+    return true;
+  }
+
+  // Shared clone helper. Offsets each clone by (+20*n, +20*n) so repeated
+  // pastes stair-step instead of stacking on top of each other.
+  function placeClonesWithOffset(sourceObjects, step = 1) {
     const Konva = window.Konva;
+    const dx = 20 * step;
+    const dy = 20 * step;
     const newNodes = [];
-    for (const node of nodes) {
+    for (const obj of sourceObjects) {
       try {
-        const clone = Konva.Node.create(JSON.stringify(node.toObject()));
+        const clone = Konva.Node.create(JSON.stringify(obj));
         if (!clone) continue;
         clone.id('shape-' + Math.random().toString(36).slice(2, 10));
-        clone.x(clone.x() + 20);
-        clone.y(clone.y() + 20);
+        clone.x((clone.x() || 0) + dx);
+        clone.y((clone.y() || 0) + dy);
         clone.draggable(true);
         contentLayer.add(clone);
         newNodes.push(clone);
       } catch (err) {
-        console.warn('[canvas] duplicate failed', err);
+        console.warn('[canvas] paste failed', err);
       }
     }
     if (newNodes.length) {
@@ -463,9 +526,11 @@ export function renderCanvas(container, { onBack }) {
       // Also turn off comment mode if it was active.
       if (comments.getMode() === 'on') comments.setMode('off');
     },
-    onUndo: () => { history.undo(); comments.render(); },
-    onRedo: () => { history.redo(); comments.render(); },
+    onUndo: () => { selection.clear(); history.undo(); comments.render(); syncUndoBtn(); },
+    onRedo: () => { selection.clear(); history.redo(); comments.render(); syncUndoBtn(); },
     onDuplicate: duplicateSelection,
+    onCopy: copySelection,
+    onPaste: pasteSelection,
   });
 
   // Cleanup when leaving the view

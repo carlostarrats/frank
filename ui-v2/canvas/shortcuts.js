@@ -13,6 +13,8 @@
 //   Esc           — Deselect + return to Select tool
 //   Cmd/Ctrl+Z    — Undo
 //   Cmd/Ctrl+⇧+Z  — Redo
+//   Cmd/Ctrl+C    — Copy selection to in-memory clipboard
+//   Cmd/Ctrl+V    — Paste from clipboard (+20/+20 offset)
 //   Cmd/Ctrl+D    — Duplicate selection (+20/+20 offset)
 
 const TOOL_KEYS = {
@@ -24,7 +26,7 @@ const TOOL_KEYS = {
   a: 'arrow',
 };
 
-export function attachShortcuts({ onTool, onEscape, onUndo, onRedo, onDuplicate }) {
+export function attachShortcuts({ onTool, onEscape, onUndo, onRedo, onDuplicate, onCopy, onPaste }) {
   const handler = (e) => {
     if (isTypingTarget(e.target)) return;
 
@@ -41,6 +43,16 @@ export function attachShortcuts({ onTool, onEscape, onUndo, onRedo, onDuplicate 
     if (mod && key === 'd') {
       e.preventDefault();
       onDuplicate && onDuplicate();
+      return;
+    }
+    if (mod && key === 'c') {
+      // Don't steal the shortcut if the user is selecting text in the page
+      // chrome; isTypingTarget above already filters inputs/textareas.
+      if (onCopy && onCopy() === true) e.preventDefault();
+      return;
+    }
+    if (mod && key === 'v') {
+      if (onPaste && onPaste() === true) e.preventDefault();
       return;
     }
 

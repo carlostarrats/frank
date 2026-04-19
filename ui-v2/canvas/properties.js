@@ -120,7 +120,8 @@ export function createInspector({ host, onChange }) {
 
     body.appendChild(Separator());
 
-    // Z-order
+    // Positioning (z-order)
+    body.appendChild(h('div', { class: 'canvas-inspector-subhead' }, ['Positioning']));
     const zRow = h('div', { class: 'canvas-inspector-row canvas-inspector-buttons' },
       [
         Button({

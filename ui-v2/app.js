@@ -68,7 +68,11 @@ function switchView(view) {
 
   if (view === 'timeline') {
     renderTimeline(document.getElementById('view-timeline'), {
-      onBack() { switchView('viewer'); },
+      onBack() {
+        // Return to whichever view this project came from — canvas or viewer.
+        const project = projectManager.get();
+        switchView(project ? viewForProject(project) : 'home');
+      },
     });
   }
 }

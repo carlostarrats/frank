@@ -13,11 +13,11 @@ export function renderToolbar(container, { projectName, url, onBack }) {
         <button class="toolbar-btn toolbar-icon-btn" id="toolbar-snapshot" title="Take snapshot" aria-label="Take snapshot">
           ${iconCamera()}
         </button>
-        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-timeline" title="Timeline" aria-label="Timeline">
-          ${iconTimeline()}
-        </button>
         <button class="toolbar-btn toolbar-icon-btn toolbar-comment-btn" id="toolbar-comment-toggle" title="Add comment" aria-label="Toggle comment mode">
           ${iconCommentPlus()}
+        </button>
+        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-timeline" title="Timeline" aria-label="Timeline">
+          ${iconTimeline()}
         </button>
         <button class="toolbar-btn toolbar-ai-toggle" id="toolbar-ai-toggle" title="Ask Claude">AI</button>
         <button class="toolbar-btn toolbar-icon-btn" id="toolbar-share" title="Share" aria-label="Share">
@@ -122,6 +122,14 @@ export function iconDownload() {
       <path d="M12 4 V16"/>
       <path d="M6 12 L12 18 L18 12"/>
       <path d="M5 21 L19 21"/>
+    </svg>
+  `;
+}
+export function iconUndo() {
+  return `
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 14 L4 9 L9 4"/>
+      <path d="M4 9 H14 a6 6 0 0 1 6 6 v1 a6 6 0 0 1-6 6 H8"/>
     </svg>
   `;
 }

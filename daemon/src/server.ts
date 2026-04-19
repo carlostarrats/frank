@@ -3,8 +3,9 @@ import path from 'path';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
+import { exec } from 'child_process';
 import {
-  WEBSOCKET_PORT, HTTP_PORT, FRANK_DIR,
+  WEBSOCKET_PORT, HTTP_PORT, FRANK_DIR, PROJECTS_DIR,
   type AppMessage, type DaemonMessage, type Comment,
 } from './protocol.js';
 import {
@@ -512,6 +513,23 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           reply({ type: 'error', error: e.message });
         }
       })();
+      break;
+    }
+
+    case 'reveal-project-folder': {
+      const id = msg.projectId || activeProjectId;
+      if (!id) { reply({ type: 'error', error: 'No project to reveal' }); break; }
+      const target = path.join(PROJECTS_DIR, id);
+      if (!fs.existsSync(target)) { reply({ type: 'error', error: 'Project folder not found' }); break; }
+      // Platform-specific reveal. Fail silently if the OS command errors.
+      const cmd =
+        process.platform === 'darwin' ? `open "${target}"` :
+        process.platform === 'win32' ? `explorer "${target}"` :
+        `xdg-open "${target}"`;
+      exec(cmd, (err) => {
+        if (err) reply({ type: 'error', error: `Could not open folder: ${err.message}` });
+        else reply({ type: 'folder-revealed', path: target });
+      });
       break;
     }
 

@@ -260,6 +260,11 @@
   justify-content: center;
 }
 .canvas-icon-btn svg { display: block; }
+.canvas-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .canvas-comment-toggle.active {
   color: var(--ring);
   background: color-mix(in oklch, var(--ring), transparent 85%);
@@ -299,6 +304,37 @@
   cursor: pointer;
 }
 .canvas-export-item:hover { background: color-mix(in oklch, var(--ring), transparent 85%); }
+
+/* Timeline export dropdown — same grammar as the canvas export menu so the
+   two surfaces behave identically. */
+.timeline-export-wrapper { position: relative; display: inline-flex; }
+.timeline-export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 120;
+}
+.timeline-export-menu[hidden] { display: none; }
+.timeline-export-item {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+}
+.timeline-export-item:hover { background: color-mix(in oklch, var(--ring), transparent 85%); }
 
 /* ── Inline comment input popover ─────────────────────────────────────────── */
 
@@ -468,6 +504,14 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-1);
+}
+.canvas-inspector-subhead {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
 }
 
 .canvas-inspector-color-input {

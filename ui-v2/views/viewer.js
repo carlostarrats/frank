@@ -3,13 +3,14 @@ import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { renderToolbar } from '../components/toolbar.js';
 import { setupOverlay, toggleCommentMode, disableCommentMode, isCommentModeActive } from '../overlay/overlay.js';
+import { createViewerPinRenderer } from '../overlay/pins.js';
 import { renderCuration } from '../components/curation.js';
 import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
 import { mountAiPanel, toggleAiPanel } from '../components/ai-panel.js';
 import { renderErrorCard } from '../components/error-card.js';
-import { toastError } from '../components/toast.js';
+import { toastError, toastInfo } from '../components/toast.js';
 
 export function renderViewer(container, { onBack }) {
   const project = projectManager.get();
@@ -92,9 +93,16 @@ export function renderViewer(container, { onBack }) {
     const iframe = document.querySelector('#content-iframe');
     if (!iframe) return;
     showSnapshotFlash();
-    const snapshot = await captureSnapshot(iframe);
-    if (snapshot) {
-      await sync.saveSnapshot(snapshot.html, null, 'manual');
+    try {
+      const snapshot = await captureSnapshot(iframe);
+      if (snapshot) {
+        await sync.saveSnapshot(snapshot.html, null, 'manual');
+        toastInfo('Snapshot saved');
+      } else {
+        toastError('Could not capture snapshot');
+      }
+    } catch (err) {
+      toastError(`Snapshot failed: ${err.message || err}`);
     }
   });
 
@@ -150,18 +158,31 @@ export function renderViewer(container, { onBack }) {
 
   const contentEl = container.querySelector('#viewer-content');
 
+  // The pin renderer attaches after the content element exists; loaders
+  // mount it once their DOM is ready so pins can find the host + overlay.
+  let pinRenderer = null;
+  function mountPinRenderer(hostEl, overlayEl) {
+    if (pinRenderer) pinRenderer.destroy();
+    pinRenderer = createViewerPinRenderer({ hostEl, overlayEl, screenId });
+    pinRenderer.render();
+  }
+  projectManager.onChange(() => { if (pinRenderer) pinRenderer.render(); });
+  window.addEventListener('frank:focus-comment-pin', (e) => {
+    if (pinRenderer) pinRenderer.setFocused(e.detail?.id ?? null);
+  });
+
   if (project.contentType === 'url' && project.url) {
-    loadUrlContent(contentEl, project.url);
+    loadUrlContent(contentEl, project.url, mountPinRenderer);
   } else if (project.contentType === 'pdf' && project.file) {
-    loadPdfContent(contentEl, project.file);
+    loadPdfContent(contentEl, project.file, mountPinRenderer);
   } else if (project.contentType === 'image' && project.file) {
-    loadImageContent(contentEl, project.file);
+    loadImageContent(contentEl, project.file, mountPinRenderer);
   } else {
     contentEl.innerHTML = '<div class="viewer-error">No content to display</div>';
   }
 }
 
-async function loadUrlContent(container, url) {
+async function loadUrlContent(container, url, mountPins) {
   container.innerHTML = `
     <div class="iframe-wrapper" id="iframe-wrapper">
       <iframe
@@ -175,6 +196,8 @@ async function loadUrlContent(container, url) {
   `;
 
   const iframe = container.querySelector('#content-iframe');
+  const overlayEl = container.querySelector('#overlay');
+  mountPins?.(iframe, overlayEl);
 
   // Setup overlay immediately — it listens for load events internally
   setupOverlay(iframe, {
@@ -276,22 +299,27 @@ async function fallbackToProxy(container, url) {
   }
 }
 
-function loadPdfContent(container, filePath) {
+function loadPdfContent(container, filePath, mountPins) {
   container.innerHTML = `
     <div class="iframe-wrapper">
       <iframe
+        id="content-iframe"
         src="/files/${encodeURIComponent(filePath)}"
         class="content-iframe"
       ></iframe>
       <div class="overlay" id="overlay"></div>
     </div>
   `;
+  const iframe = container.querySelector('#content-iframe');
+  const overlayEl = container.querySelector('#overlay');
+  mountPins?.(iframe, overlayEl);
 }
 
-function loadImageContent(container, filePath) {
+function loadImageContent(container, filePath, mountPins) {
   container.innerHTML = `
     <div class="image-wrapper">
       <img
+        id="content-image"
         src="/files/${encodeURIComponent(filePath)}"
         class="content-image"
         alt="Project content"
@@ -299,6 +327,11 @@ function loadImageContent(container, filePath) {
       <div class="overlay" id="overlay"></div>
     </div>
   `;
+  const img = container.querySelector('#content-image');
+  const overlayEl = container.querySelector('#overlay');
+  // Wait for image load so the host's getBoundingClientRect has final size.
+  img.addEventListener('load', () => mountPins?.(img, overlayEl), { once: true });
+  if (img.complete) mountPins?.(img, overlayEl);
 }
 
 function autoAddScreen(newUrl) {

@@ -135,6 +135,7 @@ const sync = {
   },
   exportProject() { return send({ type: 'export-project' }); },
   exportReport(format) { return send({ type: 'export-report', format }); },
+  revealProjectFolder(projectId) { return send({ type: 'reveal-project-folder', projectId }); },
   loadCanvasState() { return send({ type: 'load-canvas-state' }); },
   saveCanvasState(state) { return send({ type: 'save-canvas-state', state }); },
 

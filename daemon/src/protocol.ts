@@ -123,6 +123,7 @@ export interface CurateCommentRequest { type: 'curate-comment'; commentIds: stri
 export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackIds: string[]; curationIds: string[]; instruction: string; requestId?: number; }
 export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
 export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }
+export interface RevealProjectFolderRequest { type: 'reveal-project-folder'; projectId?: string; requestId?: number; }
 
 export type AppMessage =
   | ListProjectsRequest
@@ -151,6 +152,7 @@ export type AppMessage =
   | LogAiInstructionRequest
   | ExportProjectRequest
   | ExportReportRequest
+  | RevealProjectFolderRequest
   | LoadCanvasStateRequest
   | SaveCanvasStateRequest
   | GetAiConfigRequest
@@ -311,6 +313,7 @@ export interface ConversationFullMessage {
   conversationId: string;
   reason: 'bytes' | 'messages';
 }
+export interface FolderRevealedMessage { type: 'folder-revealed'; requestId?: number; path: string; }
 
 export type DaemonMessage =
   | ProjectListMessage
@@ -336,7 +339,8 @@ export type DaemonMessage =
   | AiStreamDeltaMessage
   | AiStreamEndedMessage
   | AiStreamErrorMessage
-  | ConversationFullMessage;
+  | ConversationFullMessage
+  | FolderRevealedMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
