@@ -122,11 +122,12 @@ export function createParallelogram({ x, y, width = 160, height = 80 } = {}) {
 // arrows (not dominated triangles).
 const ARROW_POINTER = 8;
 
-// Generous hit area so users can click thin connector lines without needing
-// pixel-perfect aim. This stays invisible — only the stroke (2px) renders.
-// Exported so serialize.js can apply the same value to connectors restored
-// from disk (which otherwise fall back to stroke width = 2 hit area).
-export const CONNECTOR_HIT_STROKE = 30;
+// Hit area for thin connector lines — wide enough to click without
+// pixel-perfect aim, narrow enough that the line doesn't steal clicks
+// from nearby shape edges when a connector endpoint snaps to a corner.
+// Exported so serialize.js applies the same value to connectors restored
+// from disk.
+export const CONNECTOR_HIT_STROKE = 16;
 
 export function createArrow({ points, stroke = STROKE, strokeWidth = 2 }) {
   const Konva = window.Konva;

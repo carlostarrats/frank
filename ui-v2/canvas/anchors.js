@@ -89,20 +89,25 @@ export function anchorById(shape, id, relativeTo) {
 // point on another shape).
 export { allAnchors };
 
-// Given a point in layer space, find the (shape, anchor) pair whose anchor
-// is closest to the point, considering EVERY snappable shape on the layer.
-// Returns null if the closest anchor is farther than maxDist.
+// Given a point in layer space, find the (shape, anchor) pair the user
+// most likely means to snap to. Two layers of detection:
 //
-// This replaces the old stage.getIntersection-based snap detection. Pixel
-// hit-testing fails when a rotated shape's corner pokes into a neighboring
-// shape's body — the hit returns the neighbor, so the arrow snaps to the
-// wrong shape. Closest-anchor snapping fixes that: the corner of the
-// rotated shape is closer to the cursor than the neighbor's center, so the
-// rotated shape wins.
+// 1. Anchor-proximity: if the point is within `maxDist` of any shape's
+//    anchor, that's a snap. Wins over pixel hit-test so rotated corners
+//    don't lose to a neighboring shape whose body contains the pixel.
+//
+// 2. Body-containment fallback: if no anchor is within range but the
+//    point is INSIDE a shape's body, still bind — the user clearly
+//    released on that shape, even if its anchors are far from the
+//    release point (common for large shapes). Use the shape's own
+//    nearest anchor as the snap slot.
+//
+// Returns null only if neither check matches.
 export function nearestSnapTarget(point, layer, { maxDist = 60, exclude } = {}) {
   let bestShape = null;
   let bestAnchor = null;
   let bestDist = maxDist;
+  let containing = null;
   for (const child of layer.getChildren()) {
     if (!isSnappableShape(child, layer)) continue;
     if (exclude && (child === exclude || (exclude.id && child.id() === exclude.id()))) continue;
@@ -111,9 +116,38 @@ export function nearestSnapTarget(point, layer, { maxDist = 60, exclude } = {}) 
       const d = Math.hypot(a.x - point.x, a.y - point.y);
       if (d < bestDist) { bestDist = d; bestShape = child; bestAnchor = a; }
     }
+    if (!bestShape && pointInShape(child, point, layer)) containing = child;
   }
-  if (!bestShape) return null;
-  return { shape: bestShape, anchor: bestAnchor, distance: bestDist };
+  if (bestShape) return { shape: bestShape, anchor: bestAnchor, distance: bestDist };
+  if (containing) {
+    const a = nearestAnchor(containing, point, layer);
+    return { shape: containing, anchor: a, distance: Math.hypot(a.x - point.x, a.y - point.y) };
+  }
+  return null;
+}
+
+// Layer-space point-in-shape test. Uses the shape's rotated bounding
+// quad built from the 4 corner anchors — tighter than the axis-aligned
+// getClientRect, and correct under rotation.
+function pointInShape(shape, point, layer) {
+  const anchors = allAnchors(shape, layer);
+  const tl = anchors[0], tr = anchors[2], br = anchors[4], bl = anchors[6];
+  return pointInQuad(point, tl, tr, br, bl);
+}
+
+function pointInQuad(p, a, b, c, d) {
+  // Split the quad into two triangles.
+  return pointInTriangle(p, a, b, c) || pointInTriangle(p, a, c, d);
+}
+
+function pointInTriangle(p, a, b, c) {
+  const sign = (p1, p2, p3) => (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+  const d1 = sign(p, a, b);
+  const d2 = sign(p, b, c);
+  const d3 = sign(p, c, a);
+  const hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+  const hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+  return !(hasNeg && hasPos);
 }
 
 export function createAnchorOverlay({ uiLayer, contentLayer }) {

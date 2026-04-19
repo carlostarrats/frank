@@ -122,6 +122,19 @@ export function bindConnector(layer, connector, { sourceId, targetId, sourceAnch
   if (targetAnchorId !== undefined) connector.setAttr('targetAnchorId', targetAnchorId || null);
   ensureId(connector);
 
+  // A bound connector's endpoints are 100% defined by its source/target
+  // anchors — dragging the whole line is meaningless (it snaps right back
+  // on the next shape-move, or worse, desyncs its position offset from
+  // its points). Disable whole-line drag; endpoint handles are the only
+  // way to re-route.
+  connector.draggable(false);
+  // Reset any stale position offset so the line renders exactly where
+  // its points say it should.
+  connector.position({ x: 0, y: 0 });
+  // Keep connectors behind other shapes so clicks on shapes win the
+  // hit-test when they overlap a line.
+  connector.moveToBottom();
+
   const index = indexFor(layer);
   for (const id of [sourceId, targetId]) {
     if (!id) continue;
@@ -135,7 +148,8 @@ export function bindConnector(layer, connector, { sourceId, targetId, sourceAnch
   recomputeConnector(connector, layer);
 }
 
-// Remove a connector from the index (called before connector.destroy()).
+// Remove a connector from the index (called before connector.destroy(), or
+// before endpoint-edit rebinds it with different source/target IDs).
 export function unbindConnector(layer, connector) {
   const index = indexFor(layer);
   for (const id of [connector.getAttr('sourceId'), connector.getAttr('targetId')]) {
@@ -145,6 +159,12 @@ export function unbindConnector(layer, connector) {
       set.delete(connector);
       if (set.size === 0) index.delete(id);
     }
+  }
+  // If the connector has no bindings left it becomes a free arrow — allow
+  // the user to drag it around as a whole again. Callers that are about to
+  // re-bind will flip this back off inside bindConnector.
+  if (!connector.getAttr('sourceId') && !connector.getAttr('targetId')) {
+    connector.draggable(true);
   }
 }
 
