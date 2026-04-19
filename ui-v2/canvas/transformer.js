@@ -257,9 +257,13 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
   //   Cmd/Ctrl + G       — group selected shapes into a Konva.Group
   //   Cmd/Ctrl + Shift+G — ungroup the selected Group (inverse)
   const onKeyDown = (e) => {
-    if (isTypingTarget(e.target)) return;
-
+    // Delete/Backspace should NOT fire while the user is typing in an
+    // input (color picker, stroke width) — that would destroy canvas
+    // shapes mid-edit. Cmd+G, on the other hand, is a canvas shortcut
+    // and has no meaning inside text fields, so we handle it regardless
+    // of focus target.
     if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (isTypingTarget(e.target)) return;
       const nodes = selectedNodes();
       if (!nodes.length) return;
       nodes.forEach((n) => n.destroy());

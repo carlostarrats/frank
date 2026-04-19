@@ -23,7 +23,15 @@ function insertGroup(layer, children, center = null) {
     draggable: true,
     name: 'shape template-group',
   });
-  for (const child of children) group.add(child);
+  for (const child of children) {
+    // Children of a group must NOT be individually draggable. Konva's
+    // drag-start picks the deepest draggable node under the cursor, so
+    // a draggable child would be dragged out of its group instead of
+    // the group moving as a unit. The group's own draggable:true
+    // handles the whole-unit drag.
+    if (typeof child.draggable === 'function') child.draggable(false);
+    group.add(child);
+  }
   layer.add(group);
   return group;
 }
@@ -198,6 +206,9 @@ export function dissolveGroup(group, layer) {
     child.moveTo(parent || layer);
     child.x(worldX);
     child.y(worldY);
+    // Children were draggable(false) while inside the group. Restore
+    // individual draggability now that they're loose on the layer.
+    if (typeof child.draggable === 'function') child.draggable(true);
   }
   group.destroy();
   if (layer) layer.batchDraw();
@@ -234,6 +245,9 @@ export function groupNodes(nodes, layer) {
     node.moveTo(group);
     node.x(worldX - minX);
     node.y(worldY - minY);
+    // Children inside a group must not be individually draggable — see
+    // insertGroup for why.
+    if (typeof node.draggable === 'function') node.draggable(false);
   }
   layer.add(group);
   layer.batchDraw();
