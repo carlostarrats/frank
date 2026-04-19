@@ -51,12 +51,14 @@ function send(msg) {
     msg.requestId = id;
     pendingRequests.set(id, { resolve, reject });
     ws.send(JSON.stringify(msg));
+    // 30s handles first-time PDF rendering (pdfmake + fontkit cold import
+    // can take several seconds on first call). Normal ops are sub-second.
     setTimeout(() => {
       if (pendingRequests.has(id)) {
         pendingRequests.delete(id);
         reject(new Error('Request timeout'));
       }
-    }, 10000);
+    }, 30000);
   });
 }
 
@@ -110,6 +112,7 @@ const sync = {
     return send({ type: 'log-ai-instruction', feedbackIds, curationIds, instruction });
   },
   exportProject() { return send({ type: 'export-project' }); },
+  exportReport(format) { return send({ type: 'export-report', format }); },
   loadCanvasState() { return send({ type: 'load-canvas-state' }); },
   saveCanvasState(state) { return send({ type: 'save-canvas-state', state }); },
 

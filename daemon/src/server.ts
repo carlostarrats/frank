@@ -23,6 +23,7 @@ import { saveSnapshot, saveCanvasSnapshot, listSnapshots, starSnapshot } from '.
 import { addCuration, applyCurationToComments } from './curation.js';
 import { addAiInstruction } from './ai-chain.js';
 import { exportProject } from './export.js';
+import { exportReport } from './report.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
 import {
   getClaudeApiKey, setClaudeApiKey, clearClaudeApiKey,
@@ -497,6 +498,20 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
+      break;
+    }
+
+    case 'export-report': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      (async () => {
+        try {
+          if (msg.format !== 'markdown' && msg.format !== 'pdf') throw new Error(`Unknown format: ${msg.format}`);
+          const result = await exportReport(activeProjectId!, msg.format);
+          reply({ type: 'report-ready', format: msg.format, mimeType: result.mimeType, data: result.data });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
       break;
     }
 

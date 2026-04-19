@@ -266,6 +266,37 @@
 .canvas-share-btn {
   font-size: 15px;
 }
+.canvas-export-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+.canvas-export-btn { font-size: 15px; }
+.canvas-export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 120;
+}
+.canvas-export-menu[hidden] { display: none; }
+.canvas-export-item {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.canvas-export-item:hover { background: color-mix(in oklch, var(--ring), transparent 85%); }
 
 /* ── Inline comment input popover ─────────────────────────────────────────── */
 

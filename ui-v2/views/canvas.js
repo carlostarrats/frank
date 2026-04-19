@@ -28,6 +28,7 @@ import { renderCuration } from '../components/curation.js';
 import { showSharePopover, updateSharePopover } from '../components/share-popover.js';
 import { attachShortcuts } from '../canvas/shortcuts.js';
 import { createHistory } from '../canvas/history.js';
+import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -95,6 +96,15 @@ export function renderCanvas(container, { onBack }) {
         <button class="btn-ghost canvas-comment-toggle" id="canvas-comment-toggle" title="Comment on shape">💬</button>
         <button class="btn-ghost canvas-snapshot-btn" id="canvas-snapshot-btn" title="Take snapshot">◉</button>
         <button class="btn-ghost canvas-share-btn" id="canvas-share-btn" title="Share canvas">↗</button>
+        <div class="canvas-export-wrapper">
+          <button class="btn-ghost canvas-export-btn" id="canvas-export-btn" title="Export">⤓</button>
+          <div class="canvas-export-menu" id="canvas-export-menu" hidden>
+            <button data-format="png" class="canvas-export-item">Export PNG</button>
+            <button data-format="svg" class="canvas-export-item">Export SVG (vector)</button>
+            <button data-format="pdf" class="canvas-export-item">Export PDF (vector)</button>
+            <button data-format="json" class="canvas-export-item">Export JSON</button>
+          </div>
+        </div>
         <div class="canvas-zoom" id="canvas-zoom"></div>
       </div>
       <div class="canvas-body">
@@ -270,6 +280,36 @@ export function renderCanvas(container, { onBack }) {
     }
   });
 
+  // Export dropdown: PNG / PDF / JSON. Click-outside closes.
+  const exportBtn = container.querySelector('#canvas-export-btn');
+  const exportMenu = container.querySelector('#canvas-export-menu');
+  const closeExportMenu = () => exportMenu.setAttribute('hidden', '');
+  exportBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (exportMenu.hasAttribute('hidden')) exportMenu.removeAttribute('hidden');
+    else closeExportMenu();
+  });
+  const onExportClickOutside = (e) => {
+    if (!exportMenu.contains(e.target) && e.target !== exportBtn) closeExportMenu();
+  };
+  document.addEventListener('click', onExportClickOutside);
+  exportMenu.querySelectorAll('.canvas-export-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeExportMenu();
+      const format = item.dataset.format;
+      try {
+        if (format === 'png') exportPng({ stage, uiLayer, name: project.name });
+        else if (format === 'svg') await exportSvg({ contentLayer, name: project.name });
+        else if (format === 'pdf') await exportPdf({ contentLayer, name: project.name });
+        else if (format === 'json') exportJson({ contentLayer, name: project.name });
+      } catch (err) {
+        console.warn('[canvas] export failed:', err);
+        alert(`Export failed: ${err.message || err}`);
+      }
+    });
+  });
+
   // Share: open popover, then capture canvas-flavored snapshot with assets
   // inlined as data URLs so the cloud viewer can render without the daemon.
   const shareBtn = container.querySelector('#canvas-share-btn');
@@ -392,6 +432,7 @@ export function renderCanvas(container, { onBack }) {
       destroyStage();
       if (detachImageDrop) detachImageDrop();
       if (detachShortcuts) detachShortcuts();
+      document.removeEventListener('click', onExportClickOutside);
       if (saveTimer) clearTimeout(saveTimer);
       observer.disconnect();
     }

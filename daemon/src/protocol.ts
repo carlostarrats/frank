@@ -122,6 +122,7 @@ export interface StarSnapshotRequest { type: 'star-snapshot'; snapshotId: string
 export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch'; remixedText?: string; dismissReason?: string; requestId?: number; }
 export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackIds: string[]; curationIds: string[]; instruction: string; requestId?: number; }
 export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
+export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }
 
 export type AppMessage =
   | ListProjectsRequest
@@ -149,6 +150,7 @@ export type AppMessage =
   | CurateCommentRequest
   | LogAiInstructionRequest
   | ExportProjectRequest
+  | ExportReportRequest
   | LoadCanvasStateRequest
   | SaveCanvasStateRequest
   | GetAiConfigRequest
@@ -221,6 +223,13 @@ export interface SnapshotListMessage { type: 'snapshot-list'; requestId?: number
 export interface CurationDoneMessage { type: 'curation-done'; requestId?: number; curation: unknown; }
 export interface AiInstructionLoggedMessage { type: 'ai-instruction-logged'; requestId?: number; instruction: unknown; }
 export interface ExportReadyMessage { type: 'export-ready'; requestId?: number; data: unknown; }
+export interface ReportReadyMessage {
+  type: 'report-ready';
+  requestId?: number;
+  format: 'markdown' | 'pdf';
+  mimeType: string;
+  data: string; // markdown text or base64-encoded PDF
+}
 export interface CanvasStateLoadedMessage { type: 'canvas-state-loaded'; requestId?: number; state: string | null; }
 export interface CanvasStateSavedMessage { type: 'canvas-state-saved'; requestId?: number; }
 export interface AssetUploadedMessage {
@@ -316,6 +325,7 @@ export type DaemonMessage =
   | CurationDoneMessage
   | AiInstructionLoggedMessage
   | ExportReadyMessage
+  | ReportReadyMessage
   | CanvasStateLoadedMessage
   | CanvasStateSavedMessage
   | AssetUploadedMessage
