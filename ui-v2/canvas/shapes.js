@@ -15,6 +15,11 @@ const FILL_SOFT = 'rgba(255, 255, 255, 0.08)';
 const STICKY_FILL = '#fff2a8';
 const TEXT_FILL = '#f2f2f2';
 
+// Konva renders to a <canvas>, not the DOM — `fontFamily: "inherit"` silently
+// falls back to Konva's built-in default (Arial). Hard-code the full Geist
+// Mono stack from tokens.css so canvas text matches the rest of the app.
+const FONT_STACK = "'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
+
 function common(extras = {}) {
   return {
     fill: FILL_SOFT,
@@ -168,7 +173,7 @@ export function createText({ x, y, text = 'Text', fontSize = 18, fill = TEXT_FIL
     y,
     text,
     fontSize,
-    fontFamily: 'inherit',
+    fontFamily: FONT_STACK,
     fill,
     draggable: true,
     name: 'shape text',
@@ -196,7 +201,7 @@ export function createSticky({ x, y, width = 160, height = 120, text = 'Double-c
     width: width - 24,
     text,
     fontSize: 14,
-    fontFamily: 'inherit',
+    fontFamily: FONT_STACK,
     fill: '#333',
   });
   group.add(bg);
@@ -217,7 +222,7 @@ export function createLabel({ x, y, text, fill = '#111', backgroundFill = '#f5f5
   }));
   label.add(new Konva.Text({
     text,
-    fontFamily: 'inherit',
+    fontFamily: FONT_STACK,
     fontSize,
     padding,
     fill,
