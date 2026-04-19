@@ -3,6 +3,12 @@
 // Single click on a shape selects it. Shift-click adds to selection. Click on
 // empty stage clears. Konva.Transformer renders the move/resize/rotate handles
 // on the UI layer, so it never gets serialized into the content state.
+//
+// When the selection is a single connector (arrow / elbow), we suppress the
+// Transformer and surface endpoint handles instead — resize/rotate isn't a
+// useful operation on a line, but dragging either end to re-attach is.
+
+import { showConnectorHandles } from './endpoint-edit.js';
 
 export function createSelection({ stage, contentLayer, uiLayer, getTool, onChange }) {
   const Konva = window.Konva;
@@ -25,18 +31,48 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
   window.addEventListener('keydown', onKeyToggle);
   window.addEventListener('keyup', onKeyToggle);
 
-  function notify() {
-    if (onChange) onChange(tr.nodes());
+  let currentHandles = null; // connector endpoint handles, or null
+
+  function tearDownHandles() {
+    if (currentHandles) { currentHandles.destroy(); currentHandles = null; }
   }
 
-  function selectedNodes() { return tr.nodes(); }
+  function notify() {
+    if (onChange) onChange(tr.nodes().length > 0 ? tr.nodes() : (currentHandles ? [currentHandlesOwner] : []));
+  }
+
+  let currentHandlesOwner = null;
+
+  function selectedNodes() {
+    if (tr.nodes().length) return tr.nodes();
+    if (currentHandlesOwner) return [currentHandlesOwner];
+    return [];
+  }
 
   function setSelection(nodes) {
-    tr.nodes(nodes);
+    tearDownHandles();
+    currentHandlesOwner = null;
+
+    // Single-connector special case: show endpoint handles instead of the
+    // Transformer so the user can re-attach either end to a different shape.
+    if (nodes.length === 1 && (nodes[0].name() || '').includes('connector')) {
+      tr.nodes([]);
+      currentHandlesOwner = nodes[0];
+      currentHandles = showConnectorHandles(nodes[0], {
+        stage,
+        contentLayer,
+        uiLayer,
+        onChange: notify,
+      });
+    } else {
+      tr.nodes(nodes);
+    }
     notify();
   }
 
   function clear() {
+    tearDownHandles();
+    currentHandlesOwner = null;
     tr.nodes([]);
     notify();
   }
@@ -102,11 +138,11 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     return hits.reverse();
   }
 
-  // Delete key removes the current selection
+  // Delete key removes the current selection (Transformer or connector).
   const onKeyDown = (e) => {
     if (e.key !== 'Delete' && e.key !== 'Backspace') return;
     if (isTypingTarget(e.target)) return;
-    const nodes = tr.nodes();
+    const nodes = selectedNodes();
     if (!nodes.length) return;
     nodes.forEach((n) => n.destroy());
     clear();
@@ -114,6 +150,7 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
   window.addEventListener('keydown', onKeyDown);
 
   function destroy() {
+    tearDownHandles();
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keydown', onKeyToggle);
     window.removeEventListener('keyup', onKeyToggle);

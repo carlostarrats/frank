@@ -295,7 +295,9 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
         }
       };
       const onUp = () => {
-        const finalizeTarget = hoveredTarget;
+        // Re-probe at the final pointer position so fast drags (where the
+        // last mousemove didn't land on the target) still snap.
+        const finalTarget = hoveredTarget || targetUnderPointer();
         clearHighlight();
         if (!connector) return;
         const pts = connector.points();
@@ -305,8 +307,21 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
           connector.destroy();
         } else {
           let targetId = null;
-          if (finalizeTarget && _ensureId(finalizeTarget) !== sourceId) {
-            targetId = _ensureId(finalizeTarget);
+          if (finalTarget && _ensureId(finalTarget) !== sourceId) {
+            targetId = _ensureId(finalTarget);
+            // Snap the visible endpoint to the target's center so the
+            // pre-recompute points match what we bind to.
+            const rect = finalTarget.getClientRect({ skipStroke: true, relativeTo: contentLayer });
+            const cx = rect.x + rect.width / 2;
+            const cy = rect.y + rect.height / 2;
+            const next = pts.slice();
+            next[next.length - 2] = cx;
+            next[next.length - 1] = cy;
+            if (kind === 'elbow' && next.length === 6) {
+              next[2] = cx;         // midX = endX
+              next[3] = next[1];    // midY = startY
+            }
+            connector.points(next);
           }
           if (sourceId || targetId) {
             bindConnector(contentLayer, connector, { sourceId, targetId });
