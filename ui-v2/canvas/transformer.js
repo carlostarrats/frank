@@ -136,7 +136,7 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     uiLayer.batchDraw();
   });
 
-  stage.on('mouseup.marquee', () => {
+  function finalizeMarquee() {
     if (!marquee) return;
     const box = {
       x: marquee.x(),
@@ -162,7 +162,28 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
                r.y + r.height < box.y);
     });
     setSelection(hits);
-  });
+  }
+
+  stage.on('mouseup.marquee', finalizeMarquee);
+
+  // Fallback: if the user releases the mouse OUTSIDE the stage (dragged into
+  // the drawer, over the inspector, or past the window edge), the stage's
+  // mouseup never fires and the marquee is orphaned. A window-level mouseup
+  // catches this and tears the marquee down.
+  const onWindowMouseUp = () => finalizeMarquee();
+  window.addEventListener('mouseup', onWindowMouseUp);
+
+  // Escape always cancels an in-progress marquee without selecting anything.
+  const onMarqueeKey = (e) => {
+    if (e.key !== 'Escape') return;
+    if (!marquee) return;
+    marquee.destroy();
+    marquee = null;
+    marqueeStart = null;
+    didMarquee = false;
+    uiLayer.batchDraw();
+  };
+  window.addEventListener('keydown', onMarqueeKey);
 
   stage.on('click tap', (e) => {
     // Selection tool only
@@ -245,6 +266,8 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     tearDownHandles();
     if (marquee) { marquee.destroy(); marquee = null; }
     stage.off('mousedown.marquee mousemove.marquee mouseup.marquee');
+    window.removeEventListener('mouseup', onWindowMouseUp);
+    window.removeEventListener('keydown', onMarqueeKey);
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keydown', onKeyToggle);
     window.removeEventListener('keyup', onKeyToggle);

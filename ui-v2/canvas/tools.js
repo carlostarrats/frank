@@ -337,11 +337,28 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
         sourceId = null;
         hoveredTarget = null;
       };
+      // Window-level fallbacks — if the user releases the mouse outside the
+      // stage (drawer, inspector, past the window edge) the stage's mouseup
+      // never fires and the connector + anchor overlay would be orphaned.
+      const onWindowUp = () => onUp();
+      const onWindowKey = (e) => {
+        if (e.key !== 'Escape') return;
+        if (connector) connector.destroy();
+        overlay.hide();
+        connector = null;
+        start = null;
+        sourceId = null;
+        hoveredTarget = null;
+      };
       stage.on('mousedown.tool', onDown);
       stage.on('mousemove.tool', onMove);
       stage.on('mouseup.tool', onUp);
+      window.addEventListener('mouseup', onWindowUp);
+      window.addEventListener('keydown', onWindowKey);
       return [() => {
         stage.off('mousedown.tool mousemove.tool mouseup.tool');
+        window.removeEventListener('mouseup', onWindowUp);
+        window.removeEventListener('keydown', onWindowKey);
         overlay.hide();
         restoreShapeDrag();
       }];
