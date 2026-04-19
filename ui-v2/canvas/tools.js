@@ -48,8 +48,10 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
   stage.on('mouseout.hover', onLayerLeave);
 
   function nearestContentChild(node) {
+    // Walk up to the direct child of contentLayer — see transformer.js
+    // nearestShape for why we can't just use getLayer() here.
     let n = node;
-    while (n && n.getLayer && n.getLayer() !== contentLayer) n = n.getParent();
+    while (n && n.getParent && n.getParent() !== contentLayer) n = n.getParent();
     return n && n !== contentLayer ? n : null;
   }
 
@@ -380,11 +382,11 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
     };
   }
 
-  // Walk up the parent chain to find the first node that sits directly on the
-  // content layer. Matches the selection logic in transformer.js.
+  // Walk up the parent chain to find the first node that sits directly on
+  // the content layer. Matches the selection logic in transformer.js.
   function nearestShape(node) {
     let n = node;
-    while (n && n.getLayer && n.getLayer() !== contentLayer) n = n.getParent();
+    while (n && n.getParent && n.getParent() !== contentLayer) n = n.getParent();
     return n && n !== contentLayer ? n : null;
   }
 

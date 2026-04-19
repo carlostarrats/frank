@@ -241,6 +241,62 @@
   line-height: 1.5;
 }
 
+.canvas-inspector-multi-label {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+.canvas-align-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.canvas-align-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.canvas-align-label {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
+.canvas-align-buttons {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.canvas-align-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  padding: 0;
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.canvas-align-btn:hover {
+  background: var(--accent);
+  border-color: var(--ring);
+}
+
+.canvas-align-btn:active {
+  background: var(--muted);
+}
+
+.canvas-align-btn svg {
+  pointer-events: none;
+}
+
 .canvas-inspector-row {
   display: flex;
   flex-direction: column;

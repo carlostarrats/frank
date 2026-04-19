@@ -121,6 +121,7 @@ export function renderCanvas(container, { onBack }) {
       // there's something to edit. Matches the AI-panel show/hide pattern.
       inspectorHost.classList.toggle('open', nodes.length > 0);
     },
+    onCommit: commitChange,
   });
 
   const tools = createToolController({

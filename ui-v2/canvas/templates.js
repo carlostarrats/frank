@@ -184,7 +184,8 @@ export const TEMPLATES = [
   { id: 'calendar', label: 'Calendar', insert: insertCalendar },
 ];
 
-// Used by the properties inspector for the "Dissolve group" action.
+// Used by the properties inspector for the "Dissolve group" action, and
+// by the cmd+shift+G keybinding.
 export function dissolveGroup(group, layer) {
   const parent = group.getParent();
   const children = group.getChildren().slice();
@@ -200,4 +201,41 @@ export function dissolveGroup(group, layer) {
   }
   group.destroy();
   if (layer) layer.batchDraw();
+  return children;
+}
+
+// Group the given nodes into a new Konva.Group on the same layer,
+// preserving each child's world position. Returns the new group.
+// Used by the cmd+G keybinding.
+export function groupNodes(nodes, layer) {
+  if (!nodes || nodes.length < 2) return null;
+  const Konva = window.Konva;
+  // Compute the group's origin as the top-left of the selection bounding
+  // box, then rebase each child's x/y to group-local coords.
+  const rects = nodes.map((n) => n.getClientRect({ relativeTo: layer }));
+  const minX = Math.min(...rects.map((r) => r.x));
+  const minY = Math.min(...rects.map((r) => r.y));
+  const group = new Konva.Group({
+    x: minX,
+    y: minY,
+    draggable: true,
+    name: 'shape user-group',
+  });
+  // Preserve draw order: keep the nodes in their current z-order within
+  // the group. `nodes` may arrive in selection-click order, so sort by
+  // their current index on the layer.
+  const sorted = nodes.slice().sort((a, b) => a.getZIndex() - b.getZIndex());
+  for (const node of sorted) {
+    const worldX = node.x();
+    const worldY = node.y();
+    // `moveTo` reparents without clobbering position, but position is in
+    // the previous parent's coords — subtract the group origin to keep
+    // visual placement identical after reparent.
+    node.moveTo(group);
+    node.x(worldX - minX);
+    node.y(worldY - minY);
+  }
+  layer.add(group);
+  layer.batchDraw();
+  return group;
 }

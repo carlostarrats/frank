@@ -46,8 +46,9 @@ export function createInspector({ host, onChange }) {
     // is briefly visible during the render.
     if (currentNodes.length === 0) return;
     if (currentNodes.length > 1) {
-      body.appendChild(h('div', { class: 'canvas-inspector-empty' },
-        [`${currentNodes.length} shapes selected. Select one to see its properties.`]));
+      body.appendChild(h('div', { class: 'canvas-inspector-multi-label' },
+        [`${currentNodes.length} shapes selected`]));
+      body.appendChild(alignmentGrid(currentNodes, onChange));
       return;
     }
 
@@ -173,6 +174,130 @@ export function createInspector({ host, onChange }) {
   }
 
   return { setSelection };
+}
+
+// ── Alignment (multi-selection) ──────────────────────────────────────────────
+//
+// Six buttons: horizontal (left / center / right) and vertical (top / middle /
+// bottom). Each icon visually depicts the alignment operation. The align
+// math uses getClientRect so rotation and scale are honored — `node.x()`
+// alone would misalign rotated shapes whose rendered bounds don't match
+// their origin.
+
+function alignmentGrid(nodes, onChange) {
+  const layer = nodes[0]?.getLayer();
+  if (!layer) return h('div', {}, []);
+
+  function align(axis, mode) {
+    // axis: 'h' (horizontal = align by X) or 'v' (vertical = align by Y)
+    // mode: 'start' | 'center' | 'end'
+    const rects = nodes.map((n) => ({
+      node: n,
+      rect: n.getClientRect({ relativeTo: layer }),
+    }));
+    // Compute the alignment target (the common edge or axis).
+    let target;
+    if (axis === 'h') {
+      if (mode === 'start')  target = Math.min(...rects.map((r) => r.rect.x));
+      if (mode === 'center') {
+        const minX = Math.min(...rects.map((r) => r.rect.x));
+        const maxX = Math.max(...rects.map((r) => r.rect.x + r.rect.width));
+        target = (minX + maxX) / 2;
+      }
+      if (mode === 'end')    target = Math.max(...rects.map((r) => r.rect.x + r.rect.width));
+    } else {
+      if (mode === 'start')  target = Math.min(...rects.map((r) => r.rect.y));
+      if (mode === 'center') {
+        const minY = Math.min(...rects.map((r) => r.rect.y));
+        const maxY = Math.max(...rects.map((r) => r.rect.y + r.rect.height));
+        target = (minY + maxY) / 2;
+      }
+      if (mode === 'end')    target = Math.max(...rects.map((r) => r.rect.y + r.rect.height));
+    }
+    // Move each node so its relevant edge/axis lands on `target`. Because
+    // getClientRect may differ from node.x()/y() (rotation, self-rect
+    // offset), adjust by the delta between current rect edge and target.
+    for (const { node, rect } of rects) {
+      let dx = 0, dy = 0;
+      if (axis === 'h') {
+        if (mode === 'start')  dx = target - rect.x;
+        if (mode === 'center') dx = target - (rect.x + rect.width / 2);
+        if (mode === 'end')    dx = target - (rect.x + rect.width);
+      } else {
+        if (mode === 'start')  dy = target - rect.y;
+        if (mode === 'center') dy = target - (rect.y + rect.height / 2);
+        if (mode === 'end')    dy = target - (rect.y + rect.height);
+      }
+      node.x(node.x() + dx);
+      node.y(node.y() + dy);
+    }
+    layer.batchDraw();
+    onChange?.();
+  }
+
+  const row = (label, buttons) =>
+    h('div', { class: 'canvas-align-row' }, [
+      h('div', { class: 'canvas-align-label' }, [label]),
+      h('div', { class: 'canvas-align-buttons' }, buttons),
+    ]);
+
+  return h('div', { class: 'canvas-align-grid' }, [
+    row('Horizontal', [
+      alignButton('Align left',   alignIcon('h', 'start'),  () => align('h', 'start')),
+      alignButton('Align center', alignIcon('h', 'center'), () => align('h', 'center')),
+      alignButton('Align right',  alignIcon('h', 'end'),    () => align('h', 'end')),
+    ]),
+    row('Vertical', [
+      alignButton('Align top',    alignIcon('v', 'start'),  () => align('v', 'start')),
+      alignButton('Align middle', alignIcon('v', 'center'), () => align('v', 'center')),
+      alignButton('Align bottom', alignIcon('v', 'end'),    () => align('v', 'end')),
+    ]),
+  ]);
+}
+
+function alignButton(title, iconSvg, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'canvas-align-btn';
+  btn.title = title;
+  btn.setAttribute('aria-label', title);
+  btn.innerHTML = iconSvg;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+// Inline-SVG icons that visually depict the alignment. The dashed
+// "guide" is the axis all shapes collapse to; the filled rectangles
+// are the shapes being aligned, sitting flush with that guide.
+// 24×24 viewbox, currentColor stroke.
+function alignIcon(axis, mode) {
+  const guide = (x1, y1, x2, y2) =>
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2" />`;
+  const rect = (x, y, w, h) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1" fill="currentColor" />`;
+
+  if (axis === 'h') {
+    // Horizontal alignment: vertical guide, shapes line up against it.
+    if (mode === 'start')
+      return svg(guide(4, 3, 4, 21) + rect(4, 6, 10, 4) + rect(4, 14, 14, 4));
+    if (mode === 'center')
+      return svg(guide(12, 3, 12, 21) + rect(7, 6, 10, 4) + rect(5, 14, 14, 4));
+    if (mode === 'end')
+      return svg(guide(20, 3, 20, 21) + rect(10, 6, 10, 4) + rect(6, 14, 14, 4));
+  } else {
+    // Vertical alignment: horizontal guide, shapes line up under/above.
+    if (mode === 'start')
+      return svg(guide(3, 4, 21, 4) + rect(6, 4, 4, 10) + rect(14, 4, 4, 14));
+    if (mode === 'center')
+      return svg(guide(3, 12, 21, 12) + rect(6, 7, 4, 10) + rect(14, 5, 4, 14));
+    if (mode === 'end')
+      return svg(guide(3, 20, 21, 20) + rect(6, 10, 4, 10) + rect(14, 6, 4, 14));
+  }
+  return '';
+}
+
+function svg(body) {
+  return `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">${body}</svg>`;
 }
 
 // ── Field builders ───────────────────────────────────────────────────────────

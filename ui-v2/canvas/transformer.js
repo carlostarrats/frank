@@ -9,8 +9,9 @@
 // useful operation on a line, but dragging either end to re-attach is.
 
 import { showConnectorHandles } from './endpoint-edit.js';
+import { groupNodes, dissolveGroup } from './templates.js';
 
-export function createSelection({ stage, contentLayer, uiLayer, getTool, onChange }) {
+export function createSelection({ stage, contentLayer, uiLayer, getTool, onChange, onCommit }) {
   const Konva = window.Konva;
   const tr = new Konva.Transformer({
     rotateAnchorOffset: 24,
@@ -251,14 +252,52 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     return hits.reverse();
   }
 
-  // Delete key removes the current selection (Transformer or connector).
+  // Keyboard shortcuts on the stage:
+  //   Delete / Backspace — destroy the current selection
+  //   Cmd/Ctrl + G       — group selected shapes into a Konva.Group
+  //   Cmd/Ctrl + Shift+G — ungroup the selected Group (inverse)
   const onKeyDown = (e) => {
-    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
     if (isTypingTarget(e.target)) return;
-    const nodes = selectedNodes();
-    if (!nodes.length) return;
-    nodes.forEach((n) => n.destroy());
-    clear();
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      const nodes = selectedNodes();
+      if (!nodes.length) return;
+      nodes.forEach((n) => n.destroy());
+      clear();
+      onCommit?.();
+      return;
+    }
+
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && (e.key === 'g' || e.key === 'G')) {
+      e.preventDefault();
+      const nodes = selectedNodes();
+      if (e.shiftKey) {
+        // Ungroup: dissolve every selected Group. Non-group selections
+        // are left alone.
+        const layer = contentLayer;
+        const released = [];
+        let didAny = false;
+        for (const n of nodes) {
+          if (n.getClassName() === 'Group') {
+            const kids = dissolveGroup(n, layer);
+            if (kids) { released.push(...kids); didAny = true; }
+          } else {
+            released.push(n);
+          }
+        }
+        if (!didAny) return;
+        setSelection(released);
+        onCommit?.();
+      } else {
+        // Group: need at least 2 shapes.
+        if (nodes.length < 2) return;
+        const group = groupNodes(nodes, contentLayer);
+        if (!group) return;
+        setSelection([group]);
+        onCommit?.();
+      }
+    }
   };
   window.addEventListener('keydown', onKeyDown);
 
@@ -277,8 +316,13 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
   return { selectedNodes, setSelection, clear, destroy };
 
   function nearestShape(node) {
+    // Walk up to the direct child of contentLayer. A nested node (e.g. a
+    // shape inside a template Group) is on contentLayer — getLayer()
+    // returns the ancestor Layer regardless of depth — so stopping at
+    // `getLayer() === contentLayer` incorrectly selects the inner shape.
+    // Stop when the node's parent IS the contentLayer instead.
     let n = node;
-    while (n && n.getLayer() !== contentLayer) n = n.getParent();
+    while (n && n.getParent && n.getParent() !== contentLayer) n = n.getParent();
     return n && n !== contentLayer ? n : null;
   }
 }
