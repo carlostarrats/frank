@@ -13,7 +13,7 @@ import {
 } from './shapes.js';
 import { bindConnector, _ensureId } from './connectors.js';
 import { TOOL_CURSORS } from './cursors.js';
-import { createAnchorOverlay, nearestAnchor, isSnappableShape } from './anchors.js';
+import { createAnchorOverlay, nearestAnchor, nearestSnapTarget, isSnappableShape } from './anchors.js';
 
 export function createToolController({ stage, contentLayer, uiLayer, isPanning, onCommit, onShapeClick }) {
   let currentTool = 'select';
@@ -208,7 +208,9 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
       let connector = null;
       let start = null;
       let sourceId = null;
+      let sourceAnchorId = null;
       let hoveredTarget = null;
+      let hoveredAnchorId = null;
       const overlay = createAnchorOverlay({ uiLayer, contentLayer });
 
       // While a connector tool is active, content-layer shapes must not be
@@ -234,19 +236,13 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
       }
       suppressShapeDrag();
 
-      // Walk up from an event target to the nearest content-layer child
-      // that's a valid snap target. Connectors are excluded (isSnappable).
-      function targetUnderPointer() {
-        const p = stage.getPointerPosition();
-        if (!p) return null;
-        const hit = stage.getIntersection(p);
-        if (!hit) return null;
-        let n = hit;
-        while (n && n.getLayer() !== contentLayer) n = n.getParent();
-        if (!n || n === contentLayer) return null;
-        if (n === connector) return null;
-        if (!isSnappableShape(n, contentLayer)) return null;
-        return n;
+      // Snap detection uses proximity to anchor points across every
+      // shape on the layer, not pixel hit-testing. Pixel hit-testing
+      // breaks for rotated shapes whose corners poke into a neighbor's
+      // body — the neighbor wins the hit and the connector snaps to
+      // the wrong shape. Closest-anchor wins instead.
+      function snapCandidateAt(pos) {
+        return nearestSnapTarget(pos, contentLayer, { maxDist: 60, exclude: connector });
       }
 
       // Shift-constrain: snap the drag angle to the nearest 0° / 45° / 90°.
@@ -261,17 +257,22 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
       }
 
       function resolveSnap(pos) {
-        const target = targetUnderPointer();
-        if (!target || _ensureId(target) === sourceId) {
+        const cand = snapCandidateAt(pos);
+        if (!cand || _ensureId(cand.shape) === sourceId) {
           overlay.hide();
           hoveredTarget = null;
-          return { pos, target: null };
+          hoveredAnchorId = null;
+          return { pos, target: null, anchorId: null };
         }
-        overlay.show(target);
-        hoveredTarget = target;
-        const anchor = nearestAnchor(target, pos, contentLayer);
-        overlay.highlight(anchor.id);
-        return { pos: { x: anchor.x, y: anchor.y }, target };
+        overlay.show(cand.shape);
+        hoveredTarget = cand.shape;
+        hoveredAnchorId = cand.anchor.id;
+        overlay.highlight(cand.anchor.id);
+        return {
+          pos: { x: cand.anchor.x, y: cand.anchor.y },
+          target: cand.shape,
+          anchorId: cand.anchor.id,
+        };
       }
 
       const onDown = (e) => {
@@ -281,9 +282,12 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
           const shape = nearestShape(e.target);
           if (shape && isSnappableShape(shape, contentLayer)) {
             sourceId = _ensureId(shape);
-            // Snap start to the nearest anchor on the source shape.
+            // Snap start to the nearest anchor on the source shape and
+            // remember which slot we chose, so recompute after rotation
+            // resolves to the same anchor.
             const anchor = nearestAnchor(shape, start, contentLayer);
             start = { x: anchor.x, y: anchor.y };
+            sourceAnchorId = anchor.id;
           }
         }
         connector = kind === 'elbow'
@@ -306,7 +310,7 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
       const onUp = () => {
         // Re-probe at the final pointer position so fast drags still snap.
         const raw = stageToContent(stage);
-        const { pos: finalPos, target: finalTarget } = resolveSnap(raw);
+        const { pos: finalPos, target: finalTarget, anchorId: finalAnchorId } = resolveSnap(raw);
         overlay.hide();
         if (!connector) return;
         const pts = connector.points();
@@ -316,8 +320,10 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
           connector.destroy();
         } else {
           let targetId = null;
+          let targetAnchorId = null;
           if (finalTarget && _ensureId(finalTarget) !== sourceId) {
             targetId = _ensureId(finalTarget);
+            targetAnchorId = finalAnchorId;
             const next = pts.slice();
             next[next.length - 2] = finalPos.x;
             next[next.length - 1] = finalPos.y;
@@ -328,14 +334,21 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
             connector.points(next);
           }
           if (sourceId || targetId) {
-            bindConnector(contentLayer, connector, { sourceId, targetId });
+            bindConnector(contentLayer, connector, {
+              sourceId,
+              targetId,
+              sourceAnchorId,
+              targetAnchorId,
+            });
           }
           onCommit();
         }
         connector = null;
         start = null;
         sourceId = null;
+        sourceAnchorId = null;
         hoveredTarget = null;
+        hoveredAnchorId = null;
       };
       // Window-level fallbacks — if the user releases the mouse outside the
       // stage (drawer, inspector, past the window edge) the stage's mouseup
@@ -348,7 +361,9 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
         connector = null;
         start = null;
         sourceId = null;
+        sourceAnchorId = null;
         hoveredTarget = null;
+        hoveredAnchorId = null;
       };
       stage.on('mousedown.tool', onDown);
       stage.on('mousemove.tool', onMove);

@@ -14,7 +14,7 @@
 // side. The opposite-end binding is preserved.
 
 import { bindConnector, unbindConnector, _ensureId } from './connectors.js';
-import { createAnchorOverlay, nearestAnchor, isSnappableShape } from './anchors.js';
+import { createAnchorOverlay, nearestAnchor, nearestSnapTarget, isSnappableShape } from './anchors.js';
 
 export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, onChange }) {
   const Konva = window.Konva;
@@ -124,26 +124,21 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
   }
   attachFollowers();
 
-  function targetAtPointer() {
-    const p = stage.getPointerPosition();
-    if (!p) return null;
-    const hit = stage.getIntersection(p);
-    if (!hit) return null;
-    let n = hit;
-    while (n && n.getLayer() !== contentLayer) n = n.getParent();
-    if (!n || n === contentLayer || n === connector) return null;
-    if (!isSnappableShape(n, contentLayer)) return null;
-    return n;
+  // Snap candidate is the (shape, anchor) pair whose anchor is nearest
+  // to the handle's current position — not a pixel hit-test. Same
+  // reasoning as tools.js: pixel hit-testing misfires when rotated
+  // corners poke into a neighbor's body.
+  function snapCandidateAt(pos) {
+    return nearestSnapTarget(pos, contentLayer, { maxDist: 60, exclude: connector });
   }
 
   function onDragMove(handle, which) {
     updatePointsFor(which, handle.x(), handle.y());
-    const target = targetAtPointer();
-    if (target) {
-      overlay.show(target);
-      hoveredTarget = target;
-      const anchor = nearestAnchor(target, { x: handle.x(), y: handle.y() }, contentLayer);
-      overlay.highlight(anchor.id);
+    const cand = snapCandidateAt({ x: handle.x(), y: handle.y() });
+    if (cand) {
+      overlay.show(cand.shape);
+      hoveredTarget = cand.shape;
+      overlay.highlight(cand.anchor.id);
     } else if (hoveredTarget) {
       overlay.hide();
       hoveredTarget = null;
@@ -155,20 +150,23 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
     const target = hoveredTarget;
     overlay.hide();
 
-    const attr = which === 'start' ? 'sourceId' : 'targetId';
+    const idAttr = which === 'start' ? 'sourceId' : 'targetId';
+    const anchorAttr = which === 'start' ? 'sourceAnchorId' : 'targetAnchorId';
     // Detach existing binding for this end BEFORE rebinding so the index in
     // connectors.js stays clean.
     unbindConnector(contentLayer, connector);
 
     if (target) {
       const id = _ensureId(target);
-      connector.setAttr(attr, id);
+      connector.setAttr(idAttr, id);
       const anchor = nearestAnchor(target, { x: handle.x(), y: handle.y() }, contentLayer);
+      connector.setAttr(anchorAttr, anchor.id);
       handle.x(anchor.x);
       handle.y(anchor.y);
       updatePointsFor(which, anchor.x, anchor.y);
     } else {
-      connector.setAttr(attr, null);
+      connector.setAttr(idAttr, null);
+      connector.setAttr(anchorAttr, null);
     }
     hoveredTarget = null;
 
@@ -177,6 +175,8 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
     bindConnector(contentLayer, connector, {
       sourceId: connector.getAttr('sourceId'),
       targetId: connector.getAttr('targetId'),
+      sourceAnchorId: connector.getAttr('sourceAnchorId'),
+      targetAnchorId: connector.getAttr('targetAnchorId'),
     });
 
     // Re-read endpoint positions from the (possibly snap-adjusted) points

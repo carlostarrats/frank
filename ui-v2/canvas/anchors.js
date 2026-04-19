@@ -70,6 +70,46 @@ export function nearestAnchor(shape, point, relativeTo) {
   return best;
 }
 
+// Look up a specific anchor by id — used by connectors.js to re-resolve a
+// stored anchor choice (e.g. 'tl', 'bm') to its current position after the
+// shape moves or rotates. Returns null if the id doesn't match.
+export function anchorById(shape, id, relativeTo) {
+  const anchors = allAnchors(shape, relativeTo);
+  return anchors.find((a) => a.id === id) || null;
+}
+
+// Also export allAnchors directly for callers that want to compute a snap
+// target based on geometry (e.g. pick the anchor closest to a reference
+// point on another shape).
+export { allAnchors };
+
+// Given a point in layer space, find the (shape, anchor) pair whose anchor
+// is closest to the point, considering EVERY snappable shape on the layer.
+// Returns null if the closest anchor is farther than maxDist.
+//
+// This replaces the old stage.getIntersection-based snap detection. Pixel
+// hit-testing fails when a rotated shape's corner pokes into a neighboring
+// shape's body — the hit returns the neighbor, so the arrow snaps to the
+// wrong shape. Closest-anchor snapping fixes that: the corner of the
+// rotated shape is closer to the cursor than the neighbor's center, so the
+// rotated shape wins.
+export function nearestSnapTarget(point, layer, { maxDist = 60, exclude } = {}) {
+  let bestShape = null;
+  let bestAnchor = null;
+  let bestDist = maxDist;
+  for (const child of layer.getChildren()) {
+    if (!isSnappableShape(child, layer)) continue;
+    if (exclude && (child === exclude || (exclude.id && child.id() === exclude.id()))) continue;
+    const anchors = allAnchors(child, layer);
+    for (const a of anchors) {
+      const d = Math.hypot(a.x - point.x, a.y - point.y);
+      if (d < bestDist) { bestDist = d; bestShape = child; bestAnchor = a; }
+    }
+  }
+  if (!bestShape) return null;
+  return { shape: bestShape, anchor: bestAnchor, distance: bestDist };
+}
+
 export function createAnchorOverlay({ uiLayer, contentLayer }) {
   const Konva = window.Konva;
   let group = null;

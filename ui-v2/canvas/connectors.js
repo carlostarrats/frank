@@ -1,11 +1,16 @@
 // connectors.js — Follow-shape connectors.
 //
-// A connector is a Konva.Arrow whose endpoints track two other shapes by ID.
-// When a source or target shape moves, we recompute the connector's points so
-// the arrow stays glued between them.
+// A connector is a Konva.Arrow whose endpoints track two other shapes by ID,
+// and optionally by a specific anchor slot (tl, tm, tr, rm, br, bm, bl, lm).
+// When a source/target shape moves OR rotates, we re-resolve the stored
+// anchor ID back to its current layer-space position and update the
+// connector's points — so rotated shapes stay glued at their real rotated
+// corners, not at the axis-aligned bounding box edges.
 //
 // State lives per content-layer: a WeakMap<layer, Map<shapeId, Set<connector>>>
 // so different stages don't leak listeners across each other.
+
+import { allAnchors, anchorById, nearestAnchor } from './anchors.js';
 
 const layerIndex = new WeakMap();
 
@@ -23,33 +28,31 @@ function ensureId(node) {
   return node.id();
 }
 
-// Compute the segment between two shapes. We use getClientRect relative to the
-// content layer (no stroke/shadow so the endpoints sit on the shape body), and
-// trim to the edge of the bounding box toward the other shape's center so the
-// arrow doesn't plunge into the shape's interior.
-function edgePoint(rect, toward) {
-  const cx = rect.x + rect.width / 2;
-  const cy = rect.y + rect.height / 2;
-  const dx = toward.x - cx;
-  const dy = toward.y - cy;
-  if (dx === 0 && dy === 0) return { x: cx, y: cy };
-  const hw = rect.width / 2;
-  const hh = rect.height / 2;
-  const scale = Math.min(hw / Math.abs(dx || 0.0001), hh / Math.abs(dy || 0.0001));
-  return { x: cx + dx * scale, y: cy + dy * scale };
-}
-
 function getShapeById(layer, id) {
   if (!id) return null;
   return layer.findOne('#' + id);
 }
 
-function rectOf(layer, node) {
-  // getClientRect without stroke/shadow, in the content layer's coordinate
-  // system (skipTransform:false honors stage zoom/pan for the node's drawn
-  // bounds — the layer removes the stage transform so we get layer-space
-  // coordinates).
-  return node.getClientRect({ skipStroke: true, skipShadow: true, relativeTo: layer });
+// Resolve an anchor slot on `shape` to its current layer-space coordinate.
+// If the connector stored an explicit anchor id (the user snapped to a
+// specific corner/edge-midpoint), use that. Otherwise fall back to the
+// anchor closest to `toward` — matches the spirit of the old "edge point
+// toward the other shape" logic but respects rotation and scale.
+function resolveAnchor(shape, anchorId, toward, layer) {
+  if (anchorId) {
+    const a = anchorById(shape, anchorId, layer);
+    if (a) return a;
+  }
+  if (toward) return nearestAnchor(shape, toward, layer);
+  const all = allAnchors(shape, layer);
+  return all[0];
+}
+
+function centerOf(shape, layer) {
+  const all = allAnchors(shape, layer);
+  let cx = 0, cy = 0;
+  for (const a of all) { cx += a.x; cy += a.y; }
+  return { x: cx / all.length, y: cy / all.length };
 }
 
 export function recomputeConnector(connector, layer) {
@@ -59,38 +62,30 @@ export function recomputeConnector(connector, layer) {
   const target = getShapeById(layer, targetId);
   if (!source && !target) return;
 
-  // Shape rects come back in LAYER-space. If the connector has been dragged
-  // (non-zero x/y), its own position offset would be added on top at render
-  // time, pushing the line away from the shapes. Reset to origin so the new
-  // layer-space points render exactly where we computed them.
+  // Shape anchor coords come back in LAYER-space. If the connector has been
+  // dragged (non-zero x/y), its own position offset would be added on top
+  // at render time, pushing the line away from the shapes. Reset to origin
+  // so the new layer-space points render exactly where we computed them.
   connector.position({ x: 0, y: 0 });
 
-  const sourceRect = source ? rectOf(layer, source) : null;
-  const targetRect = target ? rectOf(layer, target) : null;
-
+  const sourceAnchorId = connector.getAttr('sourceAnchorId');
+  const targetAnchorId = connector.getAttr('targetAnchorId');
   const existing = connector.points();
 
   let srcPt, tgtPt;
-  if (sourceRect && targetRect) {
-    const srcCenter = { x: sourceRect.x + sourceRect.width / 2, y: sourceRect.y + sourceRect.height / 2 };
-    const tgtCenter = { x: targetRect.x + targetRect.width / 2, y: targetRect.y + targetRect.height / 2 };
-    srcPt = edgePoint(sourceRect, tgtCenter);
-    tgtPt = edgePoint(targetRect, srcCenter);
-    // If the two shapes overlap so much that the edge points collapse,
-    // fall back to the centers — anything shorter and the Arrow just
-    // renders as a triangle.
-    if (Math.hypot(tgtPt.x - srcPt.x, tgtPt.y - srcPt.y) < 12) {
-      srcPt = srcCenter;
-      tgtPt = tgtCenter;
-    }
-  } else if (sourceRect) {
-    srcPt = { x: sourceRect.x + sourceRect.width / 2, y: sourceRect.y + sourceRect.height / 2 };
+  if (source && target) {
+    const srcTowardFallback = centerOf(target, layer);
+    const tgtTowardFallback = centerOf(source, layer);
+    srcPt = resolveAnchor(source, sourceAnchorId, srcTowardFallback, layer);
+    tgtPt = resolveAnchor(target, targetAnchorId, tgtTowardFallback, layer);
+  } else if (source) {
+    const toward = { x: existing[existing.length - 2], y: existing[existing.length - 1] };
+    srcPt = resolveAnchor(source, sourceAnchorId, toward, layer);
     tgtPt = { x: existing[existing.length - 2], y: existing[existing.length - 1] };
-    srcPt = edgePoint(sourceRect, tgtPt);
-  } else if (targetRect) {
-    tgtPt = { x: targetRect.x + targetRect.width / 2, y: targetRect.y + targetRect.height / 2 };
+  } else if (target) {
+    const toward = { x: existing[0], y: existing[1] };
     srcPt = { x: existing[0], y: existing[1] };
-    tgtPt = edgePoint(targetRect, srcPt);
+    tgtPt = resolveAnchor(target, targetAnchorId, toward, layer);
   }
 
   if (connector.name().includes('connector-elbow')) {
@@ -116,11 +111,15 @@ function registerShapeListener(layer, shape) {
   });
 }
 
-// Bind a newly-drawn connector to its source/target shapes. Call this right
-// after adding the connector to the layer.
-export function bindConnector(layer, connector, { sourceId, targetId }) {
+// Bind a newly-drawn connector to its source/target shapes. Pass the anchor
+// slots (`sourceAnchorId`, `targetAnchorId`) if the user snapped to a
+// specific corner/midpoint — those are persisted on the connector's attrs
+// so rotations/moves resolve back to the same anchor.
+export function bindConnector(layer, connector, { sourceId, targetId, sourceAnchorId, targetAnchorId }) {
   if (sourceId) connector.setAttr('sourceId', sourceId);
   if (targetId) connector.setAttr('targetId', targetId);
+  if (sourceAnchorId !== undefined) connector.setAttr('sourceAnchorId', sourceAnchorId || null);
+  if (targetAnchorId !== undefined) connector.setAttr('targetAnchorId', targetAnchorId || null);
   ensureId(connector);
 
   const index = indexFor(layer);
@@ -162,6 +161,8 @@ export function rebindAll(layer) {
     bindConnector(layer, c, {
       sourceId: c.getAttr('sourceId'),
       targetId: c.getAttr('targetId'),
+      sourceAnchorId: c.getAttr('sourceAnchorId'),
+      targetAnchorId: c.getAttr('targetAnchorId'),
     });
   }
 }
