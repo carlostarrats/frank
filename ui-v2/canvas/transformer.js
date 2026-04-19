@@ -93,7 +93,19 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
 
   stage.on('mousedown.marquee', (e) => {
     if (getTool() !== 'select') return;
-    if (e.target !== stage) return;
+    // Normal mode: marquee only starts from empty stage. Crowded-canvas
+    // escape hatch: Alt/Option-drag forces a marquee regardless of what
+    // shape is under the cursor. Matches Figma / Sketch.
+    const force = !!(e.evt && e.evt.altKey);
+    if (e.target !== stage && !force) return;
+
+    // If we're forcing a marquee over a shape, cancel any shape-drag Konva
+    // would otherwise start so the drag belongs to the marquee alone.
+    if (force && e.target !== stage) {
+      if (typeof e.target.stopDrag === 'function') e.target.stopDrag();
+      if (e.evt.preventDefault) e.evt.preventDefault();
+    }
+
     marqueeStart = pointerContent();
     didMarquee = false;
     marquee = new Konva.Rect({
