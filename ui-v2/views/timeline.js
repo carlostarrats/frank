@@ -8,7 +8,9 @@ export function renderTimeline(container, { onBack }) {
       <span class="toolbar-title">Timeline</span>
       <div class="toolbar-spacer"></div>
       <button class="toolbar-btn toolbar-comment-btn" id="timeline-back" title="Close timeline">✕</button>
-      <button class="toolbar-btn" id="timeline-export">Export</button>
+      <button class="toolbar-btn" id="timeline-export">Export JSON</button>
+      <button class="toolbar-btn" id="timeline-report-md">Report (MD)</button>
+      <button class="toolbar-btn" id="timeline-report-pdf">Report (PDF)</button>
     </div>
     <div class="timeline-body" id="timeline-body">
       <div class="viewer-loading">Loading timeline...</div>
@@ -20,14 +22,32 @@ export function renderTimeline(container, { onBack }) {
     const result = await sync.exportProject();
     if (result.data) {
       const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${projectManager.get()?.name || 'project'}-export.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `${projectManager.get()?.name || 'project'}-export.json`);
     }
   });
+  container.querySelector('#timeline-report-md').addEventListener('click', async () => {
+    const result = await sync.exportReport('markdown');
+    if (result.type === 'error') { alert(`Export failed: ${result.error}`); return; }
+    const blob = new Blob([result.data], { type: 'text/markdown' });
+    downloadBlob(blob, `${projectManager.get()?.name || 'project'}-report.md`);
+  });
+  container.querySelector('#timeline-report-pdf').addEventListener('click', async () => {
+    const result = await sync.exportReport('pdf');
+    if (result.type === 'error') { alert(`Export failed: ${result.error}`); return; }
+    // PDF arrives base64-encoded.
+    const bytes = Uint8Array.from(atob(result.data), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    downloadBlob(blob, `${projectManager.get()?.name || 'project'}-report.pdf`);
+  });
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   // Load all data
   Promise.all([
@@ -70,13 +90,19 @@ export function renderTimeline(container, { onBack }) {
           }
           if (item.type === 'snapshot') {
             const s = item.data;
+            const projectId = projectManager.getId();
+            const thumbUrl = s.canvasState && projectId
+              ? `/files/projects/${projectId}/snapshots/${s.id}/thumbnail.png`
+              : null;
             return `
               <div class="timeline-item timeline-snapshot">
                 <div class="timeline-dot dot-snapshot"></div>
                 <div class="timeline-content">
                   <span class="timeline-badge badge-snapshot">${s.starred ? '⭐ ' : ''}Snapshot</span>
+                  ${s.canvasState ? '<span class="timeline-badge badge-canvas">Canvas</span>' : ''}
                   ${s.label ? `<strong>${esc(s.label)}</strong> — ` : ''}${s.trigger}
                   <div class="timeline-meta">${new Date(s.ts).toLocaleString()}</div>
+                  ${thumbUrl ? `<img class="timeline-thumbnail" src="${thumbUrl}" alt="Snapshot thumbnail" onerror="this.remove()">` : ''}
                 </div>
               </div>
             `;

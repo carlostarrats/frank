@@ -22,6 +22,14 @@ import { createSelection } from '../canvas/transformer.js';
 import { serializeContent, deserializeInto } from '../canvas/serialize.js';
 import { createInspector } from '../canvas/properties.js';
 import { TEMPLATES } from '../canvas/templates.js';
+import { attachImageDrop } from '../canvas/image.js';
+import { createCommentController, CANVAS_SCREEN_ID } from '../canvas/comments.js';
+import { renderCuration } from '../components/curation.js';
+import { showSharePopover, updateSharePopover } from '../components/share-popover.js';
+import { attachShortcuts } from '../canvas/shortcuts.js';
+import { createHistory } from '../canvas/history.js';
+import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js';
+import { toastError, toastInfo } from '../components/toast.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -86,12 +94,25 @@ export function renderCanvas(container, { onBack }) {
         <button class="btn-ghost canvas-back" title="Back">←</button>
         <div class="canvas-title">${escapeHtml(project.name)}</div>
         <div class="canvas-topbar-spacer"></div>
+        <button class="btn-ghost canvas-comment-toggle" id="canvas-comment-toggle" title="Comment on shape">💬</button>
+        <button class="btn-ghost canvas-snapshot-btn" id="canvas-snapshot-btn" title="Take snapshot">◉</button>
+        <button class="btn-ghost canvas-share-btn" id="canvas-share-btn" title="Share canvas">↗</button>
+        <div class="canvas-export-wrapper">
+          <button class="btn-ghost canvas-export-btn" id="canvas-export-btn" title="Export">⤓</button>
+          <div class="canvas-export-menu" id="canvas-export-menu" hidden>
+            <button data-format="png" class="canvas-export-item">Export PNG</button>
+            <button data-format="svg" class="canvas-export-item">Export SVG (vector)</button>
+            <button data-format="pdf" class="canvas-export-item">Export PDF (vector)</button>
+            <button data-format="json" class="canvas-export-item">Export JSON</button>
+          </div>
+        </div>
         <div class="canvas-zoom" id="canvas-zoom"></div>
       </div>
       <div class="canvas-body">
         <aside class="canvas-drawer" id="canvas-drawer"></aside>
         <div class="canvas-stage" id="canvas-stage"></div>
         <aside class="canvas-inspector-host" id="canvas-inspector-host"></aside>
+        <aside class="canvas-curation-host" id="canvas-curation-host"></aside>
       </div>
     </div>
   `;
@@ -104,12 +125,37 @@ export function renderCanvas(container, { onBack }) {
 
   const { stage, contentLayer, uiLayer, destroy: destroyStage, isPanning, resetView } = createStage(stageEl);
 
+  // Undo/redo stack. Fed by commitChange; suspended during restore.
+  const history = createHistory({
+    serialize: () => serializeContent(contentLayer),
+    deserialize: (json) => deserializeInto(contentLayer, json),
+  });
+
   let saveTimer = null;
+  let saveFailureCount = 0;
   const commitChange = () => {
+    history.commit();
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       const json = serializeContent(contentLayer);
-      sync.saveCanvasState(json).catch((err) => console.warn('[canvas] save failed:', err));
+      sync.saveCanvasState(json).then(() => {
+        saveFailureCount = 0;
+      }).catch((err) => {
+        console.warn('[canvas] save failed:', err);
+        saveFailureCount++;
+        // After two back-to-back failures, warn the user non-blockingly.
+        if (saveFailureCount === 2) {
+          toastError('Canvas auto-save failing. Check that the daemon is running.', {
+            actionLabel: 'Retry now',
+            onAction: () => {
+              sync.saveCanvasState(json).then(() => {
+                saveFailureCount = 0;
+                toastInfo('Saved.');
+              }).catch(() => toastError('Still failing. Export JSON to keep a safe copy.'));
+            },
+          });
+        }
+      });
     }, SAVE_DEBOUNCE_MS);
   };
 
@@ -166,6 +212,162 @@ export function renderCanvas(container, { onBack }) {
   stage.on('dragend', commitChange);
   stage.on('transformend', commitChange);
 
+  const detachImageDrop = attachImageDrop(stageEl, contentLayer, {
+    onCommit: commitChange,
+    getStage: () => stage,
+  });
+
+  // Comment controller: mounts pins on the uiLayer, intercepts shape clicks
+  // when in comment mode, persists via sync.addComment.
+  const comments = createCommentController({
+    stage,
+    contentLayer,
+    uiLayer,
+    onCommit: commitChange,
+  });
+
+  // Curation sidebar mirrors the viewer layout; filters to 'canvas' screen.
+  const curationHost = container.querySelector('#canvas-curation-host');
+  renderCuration(curationHost, {
+    screenId: CANVAS_SCREEN_ID,
+    onCommentModeToggle() {
+      const next = comments.getMode() === 'on' ? 'off' : 'on';
+      comments.setMode(next);
+    },
+  });
+
+  const commentToggleBtn = container.querySelector('#canvas-comment-toggle');
+  commentToggleBtn.addEventListener('click', () => {
+    const next = comments.getMode() === 'on' ? 'off' : 'on';
+    comments.setMode(next);
+  });
+  comments.onModeChange((mode) => {
+    commentToggleBtn.classList.toggle('active', mode === 'on');
+    curationHost.classList.toggle('open', mode === 'on');
+    if (mode === 'on') {
+      // Neutralize any active creation tool so click-in-comment-mode doesn't
+      // accidentally create a shape alongside the comment.
+      tools.activate('select');
+      selection.clear();
+      markActiveTool(drawerEl, 'select');
+    }
+  });
+
+  // In comment mode, clicking a shape creates a comment anchored to it. We
+  // intercept on the stage so the creation tools don't fire in parallel.
+  stage.on('click.comments tap.comments', (e) => {
+    if (comments.getMode() !== 'on') return;
+    const target = e.target;
+    if (!target || target === stage) return;
+    // Walk up until we're at a direct contentLayer child (skip over group
+    // children so the comment anchors to the whole group, matching the pattern
+    // for snap and selection).
+    let shape = target;
+    while (shape && shape.getParent && shape.getParent() !== contentLayer) {
+      shape = shape.getParent();
+    }
+    if (!shape || shape === contentLayer || shape.getLayer && shape.getLayer() === uiLayer) return;
+    e.cancelBubble = true;
+    comments.handleShapeClickInMode(shape);
+  });
+
+  // Re-render pins whenever the project's comment list changes.
+  const onProjectChange = () => comments.render();
+  projectManager.onChange(onProjectChange);
+
+  // Snapshot: capture current canvas state + a thumbnail via Konva toDataURL.
+  // Thumbnail is rendered at pixelRatio 0.5 of the visible stage (cheap, good
+  // enough for timeline thumbnails).
+  const snapshotBtn = container.querySelector('#canvas-snapshot-btn');
+  snapshotBtn.addEventListener('click', async () => {
+    try {
+      snapshotBtn.classList.add('flashing');
+      // Briefly hide the uiLayer (transformer handles, comment pins) so the
+      // thumbnail captures just the content.
+      const wasVisible = uiLayer.visible();
+      uiLayer.visible(false);
+      uiLayer.draw();
+      const thumbnail = stage.toDataURL({ pixelRatio: 0.5, mimeType: 'image/png' });
+      uiLayer.visible(wasVisible);
+      uiLayer.draw();
+      const state = serializeContent(contentLayer);
+      await sync.saveCanvasSnapshot(state, thumbnail, 'manual', 'user');
+    } catch (err) {
+      console.warn('[canvas] snapshot failed:', err);
+    } finally {
+      setTimeout(() => snapshotBtn.classList.remove('flashing'), 300);
+    }
+  });
+
+  // Export dropdown: PNG / PDF / JSON. Click-outside closes.
+  const exportBtn = container.querySelector('#canvas-export-btn');
+  const exportMenu = container.querySelector('#canvas-export-menu');
+  const closeExportMenu = () => exportMenu.setAttribute('hidden', '');
+  exportBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (exportMenu.hasAttribute('hidden')) exportMenu.removeAttribute('hidden');
+    else closeExportMenu();
+  });
+  const onExportClickOutside = (e) => {
+    if (!exportMenu.contains(e.target) && e.target !== exportBtn) closeExportMenu();
+  };
+  document.addEventListener('click', onExportClickOutside);
+  exportMenu.querySelectorAll('.canvas-export-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeExportMenu();
+      const format = item.dataset.format;
+      try {
+        if (format === 'png') exportPng({ stage, uiLayer, name: project.name });
+        else if (format === 'svg') await exportSvg({ contentLayer, name: project.name });
+        else if (format === 'pdf') await exportPdf({ contentLayer, name: project.name });
+        else if (format === 'json') exportJson({ contentLayer, name: project.name });
+      } catch (err) {
+        console.warn('[canvas] export failed:', err);
+        toastError(`Export failed: ${err.message || err}`);
+      }
+    });
+  });
+
+  // Share: open popover, then capture canvas-flavored snapshot with assets
+  // inlined as data URLs so the cloud viewer can render without the daemon.
+  const shareBtn = container.querySelector('#canvas-share-btn');
+  shareBtn.addEventListener('click', () => {
+    showSharePopover(shareBtn, { onClose() {} });
+  });
+
+  const onCaptureSnapshot = async (e) => {
+    // Only handle canvas-originated captures. The viewer handler in viewer.js
+    // branches on its own iframe presence, so we need the contentType guard.
+    const project = projectManager.get();
+    if (project?.contentType !== 'canvas') return;
+    try {
+      const snapshot = await buildCanvasSnapshot(contentLayer, stage);
+      const result = await sync.uploadShare(
+        snapshot,
+        e.detail.coverNote,
+        'canvas',
+      );
+      if (result.error) {
+        updateSharePopover({ error: result.error });
+        return;
+      }
+      project.activeShare = {
+        id: result.shareId,
+        revokeToken: result.revokeToken,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+        coverNote: e.detail.coverNote,
+        lastSyncedNoteId: null,
+        unseenNotes: 0,
+      };
+      updateSharePopover(result);
+    } catch (err) {
+      updateSharePopover({ error: err.message || 'Share failed' });
+    }
+  };
+  window.addEventListener('frank:capture-snapshot', onCaptureSnapshot);
+
   const zoomEl = container.querySelector('#canvas-zoom');
   const updateZoom = () => {
     zoomEl.innerHTML = '';
@@ -187,6 +389,55 @@ export function renderCanvas(container, { onBack }) {
         console.warn('[canvas] could not restore state:', err);
       }
     }
+    // Render pins after content is restored so they find their anchor shapes.
+    comments.render();
+    // Reset the history baseline so the first real edit creates the first
+    // undo entry (rather than the restored-from-disk state itself).
+    history.reset();
+  });
+
+  function duplicateSelection() {
+    const nodes = selection.selectedNodes();
+    if (!nodes.length) return;
+    const Konva = window.Konva;
+    const newNodes = [];
+    for (const node of nodes) {
+      try {
+        const clone = Konva.Node.create(JSON.stringify(node.toObject()));
+        if (!clone) continue;
+        clone.id('shape-' + Math.random().toString(36).slice(2, 10));
+        clone.x(clone.x() + 20);
+        clone.y(clone.y() + 20);
+        clone.draggable(true);
+        contentLayer.add(clone);
+        newNodes.push(clone);
+      } catch (err) {
+        console.warn('[canvas] duplicate failed', err);
+      }
+    }
+    if (newNodes.length) {
+      contentLayer.batchDraw();
+      selection.setSelection(newNodes);
+      commitChange();
+    }
+  }
+
+  const detachShortcuts = attachShortcuts({
+    onTool: (id) => {
+      tools.activate(id);
+      selection.clear();
+      markActiveTool(drawerEl, id);
+    },
+    onEscape: () => {
+      tools.activate('select');
+      selection.clear();
+      markActiveTool(drawerEl, 'select');
+      // Also turn off comment mode if it was active.
+      if (comments.getMode() === 'on') comments.setMode('off');
+    },
+    onUndo: () => { history.undo(); comments.render(); },
+    onRedo: () => { history.redo(); comments.render(); },
+    onDuplicate: duplicateSelection,
   });
 
   // Cleanup when leaving the view
@@ -194,7 +445,13 @@ export function renderCanvas(container, { onBack }) {
   const observer = new MutationObserver(() => {
     if (!viewEl.classList.contains('active')) {
       selection.destroy();
+      comments.destroy();
+      projectManager.offChange(onProjectChange);
+      window.removeEventListener('frank:capture-snapshot', onCaptureSnapshot);
       destroyStage();
+      if (detachImageDrop) detachImageDrop();
+      if (detachShortcuts) detachShortcuts();
+      document.removeEventListener('click', onExportClickOutside);
       if (saveTimer) clearTimeout(saveTimer);
       observer.disconnect();
     }
@@ -255,4 +512,51 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Build a canvas-flavored share snapshot. The cloud viewer sees this blob as
+// `snapshot`; it carries the canvas JSON plus inline data URLs for every
+// referenced asset so no round-trips to the daemon are needed at view time.
+async function buildCanvasSnapshot(contentLayer, stage) {
+  const canvasState = serializeContent(contentLayer);
+  const parsed = JSON.parse(canvasState);
+
+  // Walk for every assetUrl that will need inlining. Image nodes carry
+  // assetUrl on attrs; if we later nest images inside groups, walk recurses.
+  const urls = new Set();
+  function walk(def) {
+    if (!def) return;
+    if (def.className === 'Image' && def.attrs?.assetUrl) urls.add(def.attrs.assetUrl);
+    if (Array.isArray(def.children)) def.children.forEach(walk);
+  }
+  (parsed.children || []).forEach(walk);
+
+  const assets = {};
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      assets[url] = await blobToDataUrl(blob);
+    } catch (err) {
+      console.warn('[canvas:share] failed to inline asset', url, err);
+    }
+  }
+
+  // Preview PNG for the cover image on the share page.
+  let preview = null;
+  try {
+    preview = stage.toDataURL({ pixelRatio: 0.5, mimeType: 'image/png' });
+  } catch { /* best effort */ }
+
+  return { canvasState, assets, preview };
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Read failed'));
+    reader.readAsDataURL(blob);
+  });
 }

@@ -8,6 +8,9 @@ let messageHandlers = [];
 let isConnected = false;
 let reconnectTimer = null;
 
+let connectionLostToast = null;
+let wasEverConnected = false;
+
 function connect() {
   ws = new WebSocket(WS_URL);
 
@@ -15,6 +18,17 @@ function connect() {
     console.log('[sync] connected');
     isConnected = true;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (connectionLostToast) {
+      connectionLostToast.dismiss();
+      connectionLostToast = null;
+      if (wasEverConnected) {
+        // Reconnected after a drop — confirm visually.
+        import('../components/toast.js').then(({ toastInfo }) => {
+          toastInfo('Reconnected to the daemon.');
+        });
+      }
+    }
+    wasEverConnected = true;
   };
 
   ws.onmessage = (event) => {
@@ -35,6 +49,14 @@ function connect() {
   ws.onclose = () => {
     console.log('[sync] disconnected');
     isConnected = false;
+    // Only surface a toast when we were connected first — on initial boot
+    // failure we leave console.log to avoid flashing a toast during the
+    // very first second of page load.
+    if (wasEverConnected && !connectionLostToast) {
+      import('../components/toast.js').then(({ toastError }) => {
+        connectionLostToast = toastError('Lost connection to daemon. Trying to reconnect…');
+      });
+    }
     reconnectTimer = setTimeout(connect, 2000);
   };
 
@@ -51,12 +73,14 @@ function send(msg) {
     msg.requestId = id;
     pendingRequests.set(id, { resolve, reject });
     ws.send(JSON.stringify(msg));
+    // 30s handles first-time PDF rendering (pdfmake + fontkit cold import
+    // can take several seconds on first call). Normal ops are sub-second.
     setTimeout(() => {
       if (pendingRequests.has(id)) {
         pendingRequests.delete(id);
         reject(new Error('Request timeout'));
       }
-    }, 10000);
+    }, 30000);
   });
 }
 
@@ -70,7 +94,19 @@ const sync = {
   createProject(name, contentType, url, file) {
     return send({ type: 'create-project', name, contentType, url, file });
   },
+  createProjectFromFile(name, contentType, fileName, data) {
+    return send({ type: 'create-project-from-file', name, contentType, fileName, data });
+  },
+  uploadAsset(projectId, mimeType, data) {
+    return send({ type: 'upload-asset', projectId, mimeType, data });
+  },
   deleteProject(projectId) { return send({ type: 'delete-project', projectId }); },
+  renameProject(projectId, name) { return send({ type: 'rename-project', projectId, name }); },
+  archiveProject(projectId) { return send({ type: 'archive-project', projectId }); },
+  unarchiveProject(projectId) { return send({ type: 'unarchive-project', projectId }); },
+  trashProject(projectId) { return send({ type: 'trash-project', projectId }); },
+  restoreProject(projectId) { return send({ type: 'restore-project', projectId }); },
+  purgeProject(projectId) { return send({ type: 'purge-project', projectId }); },
   addScreen(route, label) { return send({ type: 'add-screen', route, label }); },
   addComment(screenId, anchor, text) {
     return send({ type: 'add-comment', screenId, anchor, text });
@@ -86,6 +122,9 @@ const sync = {
   saveSnapshot(html, screenshot, trigger, triggeredBy) {
     return send({ type: 'save-snapshot', html, screenshot, trigger, triggeredBy });
   },
+  saveCanvasSnapshot(canvasState, thumbnail, trigger, triggeredBy) {
+    return send({ type: 'save-canvas-snapshot', canvasState, thumbnail, trigger, triggeredBy });
+  },
   listSnapshots() { return send({ type: 'list-snapshots' }); },
   starSnapshot(snapshotId, label) { return send({ type: 'star-snapshot', snapshotId, label }); },
   curateComment(commentIds, action, remixedText, dismissReason) {
@@ -95,6 +134,7 @@ const sync = {
     return send({ type: 'log-ai-instruction', feedbackIds, curationIds, instruction });
   },
   exportProject() { return send({ type: 'export-project' }); },
+  exportReport(format) { return send({ type: 'export-report', format }); },
   loadCanvasState() { return send({ type: 'load-canvas-state' }); },
   saveCanvasState(state) { return send({ type: 'save-canvas-state', state }); },
 

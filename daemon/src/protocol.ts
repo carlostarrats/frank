@@ -16,6 +16,9 @@ export interface ProjectV2 {
   modified: string;
   // v2: canvas-backed projects opt in here. Absent on v1 projects.
   canvasEnabled?: boolean;
+  // v2.02: lifecycle flags. Absence = active.
+  archived?: string;  // ISO timestamp when archived
+  trashed?: string;   // ISO timestamp when soft-deleted; auto-purged at 30d
 }
 
 export interface ScreenV2 {
@@ -34,12 +37,16 @@ export interface ActiveShare {
 }
 
 export interface CommentAnchor {
-  type: 'element' | 'pin';
+  type: 'element' | 'pin' | 'shape';
   cssSelector?: string;    // Primary anchor for element type
   domPath?: string;        // Fallback for element type
-  x: number;               // Visual coordinates (% of viewport)
+  x: number;               // Visual coords (% of viewport for element/pin; world coords for shape)
   y: number;
   pageNumber?: number;     // For PDFs
+  shapeId?: string;        // Target shape for canvas anchors
+  // Last-known world position. Pin stays here if the shape is deleted so the
+  // comment survives the edit. Updated whenever the shape is repositioned.
+  shapeLastKnown?: { x: number; y: number };
 }
 
 export interface Comment {
@@ -73,6 +80,28 @@ export interface SendAiMessageRequest {
   requestId?: number;
 }
 export interface DeleteProjectRequest { type: 'delete-project'; projectId: string; requestId?: number; }
+export interface RenameProjectRequest { type: 'rename-project'; projectId: string; name: string; requestId?: number; }
+export interface ArchiveProjectRequest { type: 'archive-project'; projectId: string; requestId?: number; }
+export interface UnarchiveProjectRequest { type: 'unarchive-project'; projectId: string; requestId?: number; }
+export interface TrashProjectRequest { type: 'trash-project'; projectId: string; requestId?: number; }
+export interface RestoreProjectRequest { type: 'restore-project'; projectId: string; requestId?: number; }
+export interface PurgeProjectRequest { type: 'purge-project'; projectId: string; requestId?: number; }
+// File upload: raw bytes arrive as base64 over WebSocket (no multipart available).
+export interface CreateProjectFromFileRequest {
+  type: 'create-project-from-file';
+  name: string;
+  contentType: 'pdf' | 'image';
+  fileName: string;
+  data: string;   // base64-encoded file bytes
+  requestId?: number;
+}
+export interface UploadAssetRequest {
+  type: 'upload-asset';
+  projectId: string;
+  mimeType: string;
+  data: string;   // base64
+  requestId?: number;
+}
 export interface AddScreenRequest { type: 'add-screen'; route: string; label: string; requestId?: number; }
 export interface AddCommentRequest { type: 'add-comment'; screenId: string; anchor: CommentAnchor; text: string; requestId?: number; }
 export interface DeleteCommentRequest { type: 'delete-comment'; commentId: string; requestId?: number; }
@@ -80,17 +109,34 @@ export interface ProxyUrlRequest { type: 'proxy-url'; url: string; requestId?: n
 export interface UploadShareRequest { type: 'upload-share'; snapshot: unknown; coverNote: string; contentType: string; oldShareId?: string; oldRevokeToken?: string; requestId?: number; }
 export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; }
 export interface SaveSnapshotRequest { type: 'save-snapshot'; html: string; screenshot: string | null; trigger: 'manual' | 'share' | 'ai-applied'; triggeredBy?: string; requestId?: number; }
+export interface SaveCanvasSnapshotRequest {
+  type: 'save-canvas-snapshot';
+  canvasState: string;           // JSON blob from serializeContent
+  thumbnail?: string | null;     // data URL (or raw base64)
+  trigger: 'manual' | 'share' | 'ai-applied';
+  triggeredBy?: string;
+  requestId?: number;
+}
 export interface ListSnapshotsRequest { type: 'list-snapshots'; requestId?: number; }
 export interface StarSnapshotRequest { type: 'star-snapshot'; snapshotId: string; label: string; requestId?: number; }
 export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch'; remixedText?: string; dismissReason?: string; requestId?: number; }
 export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackIds: string[]; curationIds: string[]; instruction: string; requestId?: number; }
 export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
+export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }
 
 export type AppMessage =
   | ListProjectsRequest
   | LoadProjectRequest
   | CreateProjectRequest
   | DeleteProjectRequest
+  | RenameProjectRequest
+  | ArchiveProjectRequest
+  | UnarchiveProjectRequest
+  | TrashProjectRequest
+  | RestoreProjectRequest
+  | PurgeProjectRequest
+  | CreateProjectFromFileRequest
+  | UploadAssetRequest
   | AddScreenRequest
   | AddCommentRequest
   | DeleteCommentRequest
@@ -98,11 +144,13 @@ export type AppMessage =
   | UploadShareRequest
   | CloudStatusRequest
   | SaveSnapshotRequest
+  | SaveCanvasSnapshotRequest
   | ListSnapshotsRequest
   | StarSnapshotRequest
   | CurateCommentRequest
   | LogAiInstructionRequest
   | ExportProjectRequest
+  | ExportReportRequest
   | LoadCanvasStateRequest
   | SaveCanvasStateRequest
   | GetAiConfigRequest
@@ -114,10 +162,20 @@ export type AppMessage =
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
+export interface ProjectSummary {
+  name: string;
+  projectId: string;
+  contentType: string;
+  modified: string;
+  commentCount: number;
+  archived?: string;
+  trashed?: string;
+}
+
 export interface ProjectListMessage {
   type: 'project-list';
   requestId?: number;
-  projects: Array<{ name: string; projectId: string; contentType: string; modified: string; commentCount: number }>;
+  projects: ProjectSummary[];
 }
 
 export interface ProjectLoadedMessage {
@@ -165,8 +223,22 @@ export interface SnapshotListMessage { type: 'snapshot-list'; requestId?: number
 export interface CurationDoneMessage { type: 'curation-done'; requestId?: number; curation: unknown; }
 export interface AiInstructionLoggedMessage { type: 'ai-instruction-logged'; requestId?: number; instruction: unknown; }
 export interface ExportReadyMessage { type: 'export-ready'; requestId?: number; data: unknown; }
+export interface ReportReadyMessage {
+  type: 'report-ready';
+  requestId?: number;
+  format: 'markdown' | 'pdf';
+  mimeType: string;
+  data: string; // markdown text or base64-encoded PDF
+}
 export interface CanvasStateLoadedMessage { type: 'canvas-state-loaded'; requestId?: number; state: string | null; }
 export interface CanvasStateSavedMessage { type: 'canvas-state-saved'; requestId?: number; }
+export interface AssetUploadedMessage {
+  type: 'asset-uploaded';
+  requestId?: number;
+  assetId: string;
+  url: string;
+  bytes: number;
+}
 
 export interface AiConfigMessage {
   type: 'ai-config';
@@ -253,8 +325,10 @@ export type DaemonMessage =
   | CurationDoneMessage
   | AiInstructionLoggedMessage
   | ExportReadyMessage
+  | ReportReadyMessage
   | CanvasStateLoadedMessage
   | CanvasStateSavedMessage
+  | AssetUploadedMessage
   | AiConfigMessage
   | AiConversationListMessage
   | AiConversationLoadedMessage

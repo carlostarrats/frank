@@ -190,6 +190,22 @@
   width: 100% !important;
   height: 100% !important;
 }
+.canvas-stage.canvas-stage-dragover::after {
+  content: 'Drop image to add';
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--ring);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--ring), transparent 92%);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 5;
+}
 
 /* ── Right inspector ─────────────────────────────────────────────────────── */
 
@@ -215,6 +231,143 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+/* ── Curation sidebar (canvas) + comment toggle ───────────────────────────── */
+
+.canvas-curation-host {
+  width: 0;
+  min-width: 0;
+  flex-shrink: 0;
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
+  border-left: 1px solid transparent;
+  overflow: hidden;
+  transition: width 0.18s;
+}
+.canvas-curation-host.open {
+  width: 340px;
+  min-width: 340px;
+  border-left-color: var(--sidebar-border);
+  overflow-y: auto;
+}
+.canvas-comment-toggle.active {
+  color: var(--ring);
+  background: color-mix(in oklch, var(--ring), transparent 85%);
+}
+.canvas-snapshot-btn {
+  font-size: 16px;
+}
+.canvas-snapshot-btn.flashing {
+  background: color-mix(in oklch, var(--ring), transparent 60%);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.canvas-share-btn {
+  font-size: 15px;
+}
+.canvas-export-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+.canvas-export-btn { font-size: 15px; }
+.canvas-export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 120;
+}
+.canvas-export-menu[hidden] { display: none; }
+.canvas-export-item {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.canvas-export-item:hover { background: color-mix(in oklch, var(--ring), transparent 85%); }
+
+/* ── Inline comment input popover ─────────────────────────────────────────── */
+
+.canvas-comment-input {
+  position: fixed;
+  z-index: 120;
+  width: 260px;
+  padding: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.canvas-comment-input-textarea {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+  outline: none;
+}
+.canvas-comment-input-textarea:focus {
+  border-color: var(--ring);
+}
+.canvas-comment-input-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* ── Comment popover (on pin click) ───────────────────────────────────────── */
+
+.canvas-comment-popover {
+  position: fixed;
+  z-index: 120;
+  width: 280px;
+  padding: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.canvas-comment-popover-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.canvas-comment-popover-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.canvas-comment-popover-text {
+  font-size: 13px;
+  color: var(--text);
+  margin: 4px 0 10px;
+  white-space: pre-wrap;
+}
+.canvas-comment-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
 }
 .canvas-inspector-header {
   padding: var(--space-3);
