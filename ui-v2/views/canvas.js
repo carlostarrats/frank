@@ -39,8 +39,9 @@ const TOOL_SECTIONS = [
   {
     id: 'shapes', label: 'Shapes',
     tools: [
+      // Circle doubles as Ellipse — drag for a perfect circle, then stretch
+      // via the Transformer handles to make an ellipse.
       { id: 'circle',    label: 'Circle',    icon: '○' },
-      { id: 'ellipse',   label: 'Ellipse',   icon: '⬭' },
       { id: 'triangle',  label: 'Triangle',  icon: '△' },
       { id: 'diamond',   label: 'Diamond',   icon: '◇' },
       { id: 'hexagon',   label: 'Hexagon',   icon: '⬡' },

@@ -119,7 +119,7 @@ export function insertFlowchart(layer) {
   children.push(step);
   children.push(createText({ x: -30, y: -50, text: 'Step 1', fontSize: 14 }));
 
-  const decision = createDiamond({ x: 0, y: 70, radius: 70 });
+  const decision = createDiamond({ x: 0, y: 70, width: 160, height: 96 });
   children.push(decision);
   children.push(createText({ x: -38, y: 60, text: 'Decision?', fontSize: 13 }));
 

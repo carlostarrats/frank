@@ -6,36 +6,13 @@
 // follow-shape connector wiring comes from connectors.js.
 
 import {
-  createRect, createCircle, createEllipse, createTriangle, createDiamond,
+  createRect, createEllipse, createTriangle, createDiamond,
   createHexagon, createStar, createCloud, createSpeechBubble, createDocument,
   createCylinder, createParallelogram, createArrow, createElbow, createFreehand,
   createText, createSticky,
 } from './shapes.js';
 import { bindConnector, _ensureId } from './connectors.js';
-
-// Cursor presets per tool. The stage container picks these up via
-// setToolCursor(); shape hover flips to 'pointer' to signal selectability
-// even when a creation tool is active.
-const TOOL_CURSORS = {
-  select: 'default',
-  rectangle: 'crosshair',
-  circle: 'crosshair',
-  ellipse: 'crosshair',
-  triangle: 'copy',
-  diamond: 'copy',
-  hexagon: 'copy',
-  star: 'copy',
-  cloud: 'copy',
-  speech: 'copy',
-  document: 'copy',
-  cylinder: 'copy',
-  parallelogram: 'copy',
-  sticky: 'copy',
-  text: 'text',
-  freehand: 'crosshair',
-  arrow: 'crosshair',
-  elbow: 'crosshair',
-};
+import { TOOL_CURSORS } from './cursors.js';
 
 export function createToolController({ stage, contentLayer, isPanning, onCommit, onShapeClick }) {
   let currentTool = 'select';
@@ -82,7 +59,10 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit,
 
     const handlerMap = {
       rectangle: bindDragShape((pos) => createRect({ x: pos.x, y: pos.y, width: 0, height: 0 }), resizeRect),
-      circle: bindDragShape((pos) => createCircle({ x: pos.x, y: pos.y, radius: 1 }), resizeCircle),
+      // Circle and Ellipse are unified: Ellipse with equal radii is a circle;
+      // non-uniform Transformer resize stretches it to an ellipse after the
+      // fact. Ellipse tool stays as an alias for backward compatibility.
+      circle: bindDragShape((pos) => createEllipse({ x: pos.x, y: pos.y, radiusX: 1, radiusY: 1 }), resizeEllipse),
       ellipse: bindDragShape((pos) => createEllipse({ x: pos.x, y: pos.y, radiusX: 1, radiusY: 1 }), resizeEllipse),
       triangle: bindClickShape((pos) => createTriangle({ x: pos.x, y: pos.y })),
       diamond: bindClickShape((pos) => createDiamond({ x: pos.x, y: pos.y })),
@@ -294,10 +274,6 @@ function resizeRect(rect, start, pos) {
   rect.width(pos.x - start.x);
   rect.height(pos.y - start.y);
 }
-function resizeCircle(circle, start, pos) {
-  const r = Math.max(1, Math.hypot(pos.x - start.x, pos.y - start.y));
-  circle.radius(r);
-}
 function resizeEllipse(ellipse, start, pos) {
   ellipse.radiusX(Math.max(1, Math.abs(pos.x - start.x)));
   ellipse.radiusY(Math.max(1, Math.abs(pos.y - start.y)));
@@ -305,12 +281,10 @@ function resizeEllipse(ellipse, start, pos) {
 
 function finalizeOrDiscard(node) {
   // Returns true if the node was discarded (too small).
-  if (typeof node.width === 'function' && typeof node.height === 'function' && node.getClassName() === 'Rect') {
+  if (node.getClassName() === 'Rect') {
     if (node.width() < 0) { node.x(node.x() + node.width()); node.width(-node.width()); }
     if (node.height() < 0) { node.y(node.y() + node.height()); node.height(-node.height()); }
     if (Math.abs(node.width()) < 4 || Math.abs(node.height()) < 4) { node.destroy(); return true; }
-  } else if (node.getClassName() === 'Circle') {
-    if (node.radius() < 3) { node.destroy(); return true; }
   } else if (node.getClassName() === 'Ellipse') {
     if (node.radiusX() < 3 || node.radiusY() < 3) { node.destroy(); return true; }
   }

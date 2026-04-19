@@ -33,9 +33,13 @@ export function createRect({ x, y, width = 120, height = 80 } = {}) {
   return new Konva.Rect({ ...common(), x, y, width, height });
 }
 
+// Circle and Ellipse are the same tool: Konva.Ellipse with radiusX === radiusY
+// starts as a perfect circle; the Transformer's non-uniform resize lets the
+// user stretch it into an ellipse after placement. Keeping a separate Circle
+// factory here for templates that specifically want a circle shape.
 export function createCircle({ x, y, radius = 50 } = {}) {
   const Konva = window.Konva;
-  return new Konva.Circle({ ...common(), x, y, radius });
+  return new Konva.Ellipse({ ...common(), x, y, radiusX: radius, radiusY: radius });
 }
 
 export function createEllipse({ x, y, radiusX = 70, radiusY = 40 } = {}) {
@@ -48,10 +52,19 @@ export function createTriangle({ x, y, radius = 50 } = {}) {
   return new Konva.RegularPolygon({ ...common(), x, y, sides: 3, radius });
 }
 
-export function createDiamond({ x, y, radius = 60 } = {}) {
+// Flowchart diamond: wider than tall, drawn as a 4-point closed polyline so
+// it reads unambiguously as a rhombus rather than a rotated square.
+export function createDiamond({ x, y, width = 140, height = 90 } = {}) {
   const Konva = window.Konva;
-  // RegularPolygon with 4 sides = square; rotate 45° for a diamond.
-  return new Konva.RegularPolygon({ ...common(), x, y, sides: 4, radius, rotation: 45 });
+  const hw = width / 2;
+  const hh = height / 2;
+  return new Konva.Line({
+    ...common(),
+    x,
+    y,
+    points: [0, -hh, hw, 0, 0, hh, -hw, 0],
+    closed: true,
+  });
 }
 
 export function createHexagon({ x, y, radius = 55 } = {}) {
