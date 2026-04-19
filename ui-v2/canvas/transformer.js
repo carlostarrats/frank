@@ -173,44 +173,6 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
   const onWindowMouseUp = () => finalizeMarquee();
   window.addEventListener('mouseup', onWindowMouseUp);
 
-  // ── Connector hover halo ───────────────────────────────────────────────────
-  // Thin lines are hard to aim at — Konva's 30px hitStrokeWidth makes them
-  // clickable, but without a visual cue the user can't tell where the click
-  // zone starts. On hover, add a subtle blue glow via shadow so the line
-  // doesn't grow in stroke width (that fights with the properties inspector).
-  // Only active with the select tool; other tools have their own hover cues.
-  let hoveredConnector = null;
-  stage.on('mouseover.connector-halo', (e) => {
-    if (getTool() !== 'select') return;
-    const node = nearestShape(e.target);
-    if (!node) return;
-    if (!(node.name() || '').includes('connector')) return;
-    if (node === hoveredConnector) return;
-    // Don't halo the currently-selected connector — the endpoint-edit mode
-    // already gives it a stronger glow.
-    if (currentHandlesOwner === node) return;
-    hoveredConnector = node;
-    node.shadowColor('#60a5fa');
-    node.shadowBlur(6);
-    node.shadowOpacity(0.6);
-    node.shadowEnabled(true);
-    contentLayer.batchDraw();
-  });
-  stage.on('mouseout.connector-halo', (e) => {
-    if (!hoveredConnector) return;
-    const node = nearestShape(e.target);
-    if (node !== hoveredConnector) return;
-    // Don't clear the glow if the connector is currently selected — the
-    // endpoint-edit mode owns the shadow until deselection.
-    if (currentHandlesOwner !== hoveredConnector) {
-      hoveredConnector.shadowEnabled(false);
-      hoveredConnector.shadowBlur(0);
-      hoveredConnector.shadowOpacity(0);
-    }
-    hoveredConnector = null;
-    contentLayer.batchDraw();
-  });
-
   // Escape always cancels an in-progress marquee without selecting anything.
   const onMarqueeKey = (e) => {
     if (e.key !== 'Escape') return;
@@ -304,7 +266,6 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     tearDownHandles();
     if (marquee) { marquee.destroy(); marquee = null; }
     stage.off('mousedown.marquee mousemove.marquee mouseup.marquee');
-    stage.off('mouseover.connector-halo mouseout.connector-halo');
     window.removeEventListener('mouseup', onWindowMouseUp);
     window.removeEventListener('keydown', onMarqueeKey);
     window.removeEventListener('keydown', onKeyDown);

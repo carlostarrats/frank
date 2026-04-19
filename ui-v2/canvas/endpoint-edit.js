@@ -21,16 +21,9 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
   let hoveredTarget = null;
   const overlay = createAnchorOverlay({ uiLayer, contentLayer });
 
-  // Visually mark the selected connector with an accent-blue glow (shadow),
-  // NOT by mutating stroke width/color — otherwise the properties inspector
-  // fights with this code for ownership of the stroke, and the user can't
-  // edit line width. Stroke geometry stays untouched; shadow is a visual
-  // overlay we clean up on destroy.
-  const hadShadow = connector.shadowEnabled && connector.shadowEnabled();
-  connector.shadowColor('#60a5fa');
-  connector.shadowBlur(10);
-  connector.shadowOpacity(0.9);
-  connector.shadowEnabled(true);
+  // Selection is indicated purely by the endpoint handles on the UI
+  // layer — matching the shape-selection pattern where the Transformer's
+  // anchors are the selection cue, not a glow on the shape itself.
 
   // Connector renders its local `points` offset by its own x/y. The uiLayer
   // shares the stage transform but NOT the connector's position offset, so
@@ -200,12 +193,6 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
       l.node.off('dragmove.endpoint-handles transformend.endpoint-handles', l.handler);
     }
     followListeners.length = 0;
-    // Drop the selection glow. We don't restore the prior shadow state
-    // because connectors never have shadows by default — the sticky/rect
-    // shapes that do have shadows aren't connectors.
-    connector.shadowEnabled(!!hadShadow);
-    connector.shadowBlur(0);
-    connector.shadowOpacity(0);
     startHandle.destroy();
     endHandle.destroy();
     contentLayer.batchDraw();
