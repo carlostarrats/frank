@@ -2,6 +2,7 @@
 
 import sync from '../core/sync.js';
 import { renderUrlInput } from '../components/url-input.js';
+import { showHelpPanel } from '../components/help-panel.js';
 
 const DEFAULT_UI_STATE = {
   search: '',
@@ -20,6 +21,11 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
       <div class="home-header">
         <img src="frank-logo.svg" alt="Frank" class="home-logo">
         <span class="home-version">v1.0</span>
+        <div class="home-header-spacer"></div>
+        <button class="home-help-btn" id="home-help-btn" title="Getting started">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Help</span>
+        </button>
       </div>
       <div class="home-content">
         <div class="home-new" id="home-new"></div>
@@ -47,6 +53,18 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
     if (name === null) return;
     const trimmed = name.trim() || 'Untitled Canvas';
     onCreateProject(trimmed, 'canvas', undefined);
+  });
+
+  container.querySelector('#home-help-btn').addEventListener('click', () => {
+    showHelpPanel({
+      onFocusUrlInput() {
+        const field = container.querySelector('#url-field');
+        if (field) { field.focus(); field.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      },
+      onCreateCanvas() {
+        onCreateProject('Untitled Canvas', 'canvas', undefined);
+      },
+    });
   });
 
   const refresh = () => {

@@ -236,6 +236,118 @@
   gap: 8px;
   margin-bottom: 32px;
 }
+.home-header-spacer { flex: 1; }
+.home-help-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.home-help-btn:hover {
+  color: var(--text);
+  border-color: var(--ring);
+  background: var(--bg-surface);
+}
+.home-help-btn svg { flex-shrink: 0; }
+
+/* Help modal */
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in oklch, black, transparent 40%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+  overflow-y: auto;
+}
+.help-modal {
+  width: 100%;
+  max-width: 780px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.help-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.help-modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+.help-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+.help-modal-close:hover { color: var(--text); background: color-mix(in oklch, var(--ring), transparent 85%); }
+.help-modal-subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.help-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: color-mix(in oklch, var(--bg-surface), transparent 20%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.help-card-icon {
+  color: var(--text);
+  opacity: 0.85;
+}
+.help-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+.help-card-blurb {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.45;
+  flex: 1;
+}
+.help-card-cta {
+  align-self: flex-start;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.help-card-detail {
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
 
 .home-logo {
   height: 36px;
