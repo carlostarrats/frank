@@ -77,9 +77,84 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     notify();
   }
 
+  // ── Marquee selection ──────────────────────────────────────────────────────
+  // Drag a rectangle from empty canvas (Select tool only) to select every
+  // shape whose bounding box intersects the marquee. The marquee lives on
+  // the UI layer so it never persists into the canvas state. If the pointer
+  // barely moves, we treat the interaction as a regular click and let the
+  // click handler below handle it.
+  let marquee = null;
+  let marqueeStart = null;
+  let didMarquee = false;
+
+  function pointerContent() {
+    return stage.getRelativePointerPosition() || { x: 0, y: 0 };
+  }
+
+  stage.on('mousedown.marquee', (e) => {
+    if (getTool() !== 'select') return;
+    if (e.target !== stage) return;
+    marqueeStart = pointerContent();
+    didMarquee = false;
+    marquee = new Konva.Rect({
+      x: marqueeStart.x,
+      y: marqueeStart.y,
+      width: 0,
+      height: 0,
+      stroke: '#60a5fa',
+      strokeWidth: 1,
+      dash: [4, 4],
+      fill: 'rgba(96, 165, 250, 0.08)',
+      listening: false,
+      name: 'marquee',
+    });
+    uiLayer.add(marquee);
+  });
+
+  stage.on('mousemove.marquee', () => {
+    if (!marquee || !marqueeStart) return;
+    const p = pointerContent();
+    const x = Math.min(marqueeStart.x, p.x);
+    const y = Math.min(marqueeStart.y, p.y);
+    const w = Math.abs(p.x - marqueeStart.x);
+    const h = Math.abs(p.y - marqueeStart.y);
+    marquee.position({ x, y });
+    marquee.size({ width: w, height: h });
+    if (w > 4 || h > 4) didMarquee = true;
+    uiLayer.batchDraw();
+  });
+
+  stage.on('mouseup.marquee', () => {
+    if (!marquee) return;
+    const box = {
+      x: marquee.x(),
+      y: marquee.y(),
+      width: marquee.width(),
+      height: marquee.height(),
+    };
+    marquee.destroy();
+    marquee = null;
+    marqueeStart = null;
+    uiLayer.batchDraw();
+
+    if (!didMarquee) return; // treat as click; click handler handles it
+
+    const hits = contentLayer.getChildren().filter((child) => {
+      const r = child.getClientRect({ skipStroke: false, relativeTo: contentLayer });
+      return !(r.x > box.x + box.width ||
+               r.x + r.width < box.x ||
+               r.y > box.y + box.height ||
+               r.y + r.height < box.y);
+    });
+    setSelection(hits);
+  });
+
   stage.on('click tap', (e) => {
     // Selection tool only
     if (getTool() !== 'select') return;
+
+    // Marquee-drag just completed — skip the click (setSelection already ran).
+    if (didMarquee) { didMarquee = false; return; }
 
     // Clicked on empty stage → clear selection
     if (e.target === stage) {
@@ -151,6 +226,8 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
 
   function destroy() {
     tearDownHandles();
+    if (marquee) { marquee.destroy(); marquee = null; }
+    stage.off('mousedown.marquee mousemove.marquee mouseup.marquee');
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keydown', onKeyToggle);
     window.removeEventListener('keyup', onKeyToggle);
