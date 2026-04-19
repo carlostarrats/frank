@@ -40,10 +40,11 @@ export function createInspector({ host, onChange }) {
   function render() {
     body.innerHTML = '';
 
-    if (currentNodes.length === 0) {
-      body.appendChild(h('div', { class: 'canvas-inspector-empty' }, ['Select a shape to edit its properties.']));
-      return;
-    }
+    // Empty selection — nothing to render. The host sidebar is hidden by
+    // .canvas-inspector-host (no `.open`), so the user never sees an empty
+    // state. Skipping the hint message keeps the panel clean if the host
+    // is briefly visible during the render.
+    if (currentNodes.length === 0) return;
     if (currentNodes.length > 1) {
       body.appendChild(h('div', { class: 'canvas-inspector-empty' },
         [`${currentNodes.length} shapes selected. Select one to see its properties.`]));

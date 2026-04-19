@@ -194,6 +194,8 @@
 /* ── Right inspector ─────────────────────────────────────────────────────── */
 
 .canvas-inspector-host {
+  /* No transition — open/close is instant in both directions so users never
+   * glimpse the empty "Select a shape…" state mid-slide. */
   width: 0;
   min-width: 0;
   flex-shrink: 0;
@@ -201,8 +203,6 @@
   color: var(--sidebar-foreground);
   border-left: 1px solid transparent;
   overflow: hidden;
-  transition: width var(--duration-base) var(--ease-standard),
-              border-color var(--duration-base) var(--ease-standard);
 }
 .canvas-inspector-host.open {
   width: 260px;
