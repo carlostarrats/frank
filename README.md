@@ -216,16 +216,24 @@ Prefer a different AI? Every user message has a **Copy** button that exports it 
 
 ### Connect to cloud (for sharing)
 
-Sharing is self-hosted — you deploy Frank Cloud to your own Vercel account, so shared snapshots live in your Blob storage, not someone else's.
+Sharing is optional and self-hosted. Frank doesn't talk to any Anthropic-operated cloud — you point it at a backend **you** host, and shared snapshots live in your storage.
 
-1. Deploy Frank Cloud to your Vercel account (see `frank-cloud/README.md`)
-2. Connect locally:
+You must set this up before the Share button can generate real links. Two paths, pick one:
+
+**UI (easy):** Open Frank, click the **Settings** cog in the home header, choose a tab:
+
+- **Use Vercel** — the modal shows three copy-paste commands: install the Vercel CLI, deploy `frank-cloud/` to your account, add `FRANK_API_KEY` as an env var. Paste the resulting URL + key into the form and click **Test connection**.
+- **Use your own** — for Cloudflare Workers, Deno Deploy, a Node server, anything that implements the [Cloud API contract](CLOUD_API.md). Paste the URL and bearer token, test.
+
+**Terminal (identical effect):**
 
 ```bash
-frank connect https://your-frank-cloud.vercel.app --key YOUR_API_KEY
+frank connect https://your-backend.example.com --key YOUR_API_KEY
 ```
 
-Now the Share button in the viewer (and the ↗ button on the canvas) generates real internet links.
+Both paths write to `~/.frank/config.json` (mode 0600). Until one is configured, the Share button warns that cloud isn't set up — everything else in Frank works without it.
+
+The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md) — four JSON-over-HTTPS endpoints (`/api/health`, `GET+POST /api/share`, `POST /api/comment`). `frank-cloud/` is a reference implementation for Vercel + Blob; any host that serves the same shapes works.
 
 ### Canvas keyboard shortcuts
 
@@ -351,8 +359,6 @@ What this means in practice:
 - **Fork it, modify it, redistribute it** — as long as you keep the license and the `Required Notice` intact.
 - **Contribute back** — open source forks and PRs are welcome under the same terms.
 - **Don't resell it as a competing product** — you may not package Frank (or a derivative) as a SaaS, hosted service, or commercial offering that competes with it.
-
-This is a change from the v2.0 release, which was MIT. The project was previously PolyForm Shield 1.0.0 through v1.0, switched to MIT at the start of v2 development, and has now returned to PolyForm Shield to protect the project from being copied-and-sold as a competing offering while keeping ordinary use, forking, and contribution fully open.
 
 > Note: PolyForm Shield is *source-available* rather than OSI-certified "open source." Some indices and corporate policies treat it as such. Consult your own legal counsel if in doubt.
 

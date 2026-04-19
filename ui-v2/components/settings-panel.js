@@ -1,0 +1,255 @@
+// settings-panel.js — Settings modal. The Cloud section is tabbed: "Use
+// Vercel" contains the guided deploy + fields; "Use your own" is the
+// generic-endpoint form. Tabs are self-contained — switching doesn't carry
+// state between them, so the user only ever sees the info that applies to
+// the path they picked.
+
+import sync from '../core/sync.js';
+import { toastInfo, toastError } from './toast.js';
+
+export function showSettingsPanel() {
+  const overlay = document.createElement('div');
+  overlay.className = 'help-overlay settings-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Settings');
+
+  overlay.innerHTML = `
+    <div class="help-modal settings-modal">
+      <div class="help-modal-header">
+        <h2>Settings</h2>
+        <button class="help-modal-close" id="settings-close" aria-label="Close">✕</button>
+      </div>
+      <div class="settings-body">
+        <section class="settings-section">
+          <h3>Cloud backend</h3>
+          <p class="settings-hint">
+            Required only if you want to share projects with a link. Pick how
+            you'd like to host it.
+          </p>
+
+          <div class="settings-tabs" role="tablist">
+            <button class="settings-tab active" role="tab" data-tab="vercel" aria-selected="true">Use Vercel</button>
+            <button class="settings-tab" role="tab" data-tab="custom" aria-selected="false">Use your own</button>
+          </div>
+
+          <!-- Vercel tab -->
+          <div class="settings-tab-panel" data-tab="vercel" role="tabpanel">
+            <details class="settings-cli">
+              <summary>Prefer the terminal?</summary>
+              <p class="settings-field-hint">Skip this form and save both values from your shell:</p>
+              <div class="settings-cmd">
+                <code>frank connect &lt;url&gt; --key &lt;FRANK_API_KEY&gt;</code>
+                <button class="settings-cmd-copy" data-copy="frank connect <url> --key <FRANK_API_KEY>">Copy</button>
+              </div>
+            </details>
+
+            <p class="settings-hint">
+              Deploy the reference backend (in <code>frank-cloud/</code>) to
+              your own Vercel account. Three commands and a paste.
+            </p>
+
+            <ol class="settings-guide-steps">
+              <li>
+                <span>Install the Vercel CLI and log in (one time):</span>
+                <div class="settings-cmd">
+                  <code>npm i -g vercel &amp;&amp; vercel login</code>
+                  <button class="settings-cmd-copy" data-copy="npm i -g vercel && vercel login">Copy</button>
+                </div>
+              </li>
+              <li>
+                <span>Deploy the reference backend from this repo:</span>
+                <div class="settings-cmd">
+                  <code>cd frank-cloud &amp;&amp; vercel --prod</code>
+                  <button class="settings-cmd-copy" data-copy="cd frank-cloud && vercel --prod">Copy</button>
+                </div>
+                <span class="settings-field-hint">Vercel prints a URL like <code>https://frank-cloud-xyz.vercel.app</code>.</span>
+              </li>
+              <li>
+                <span>Add your API key to the deployment:</span>
+                <div class="settings-cmd">
+                  <code>vercel env add FRANK_API_KEY production</code>
+                  <button class="settings-cmd-copy" data-copy="vercel env add FRANK_API_KEY production">Copy</button>
+                </div>
+                <span class="settings-field-hint">Paste a long random string when prompted. Redeploy once (<code>vercel --prod</code>) so the env var takes effect.</span>
+              </li>
+            </ol>
+
+            <label class="settings-field">
+              <span class="settings-label">Vercel deployment URL</span>
+              <input type="url" data-field="url" class="input" placeholder="https://frank-cloud-xyz.vercel.app" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="settings-field">
+              <span class="settings-label">API key (FRANK_API_KEY)</span>
+              <input type="password" data-field="key" class="input" placeholder="The value you pasted for FRANK_API_KEY" autocomplete="off" spellcheck="false">
+              <span class="settings-field-hint">Stored at <code>~/.frank/config.json</code> with 0600 permissions. Never leaves your machine except to your Vercel deployment.</span>
+            </label>
+            <div class="settings-actions">
+              <button class="btn-secondary" data-action="test">Test connection</button>
+              <button class="btn-primary" data-action="save">Save</button>
+            </div>
+            <div class="settings-status" data-status aria-live="polite"></div>
+          </div>
+
+          <!-- Custom tab -->
+          <div class="settings-tab-panel" data-tab="custom" role="tabpanel" hidden>
+            <details class="settings-cli">
+              <summary>Prefer the terminal?</summary>
+              <p class="settings-field-hint">Skip this form and save both values from your shell:</p>
+              <div class="settings-cmd">
+                <code>frank connect &lt;url&gt; --key &lt;bearer-token&gt;</code>
+                <button class="settings-cmd-copy" data-copy="frank connect <url> --key <bearer-token>">Copy</button>
+              </div>
+            </details>
+
+            <p class="settings-hint">
+              Point Frank at any host that implements the
+              <a href="https://github.com/carlostarrats/frank/blob/main/CLOUD_API.md" target="_blank" rel="noopener">Cloud API contract</a>
+              — Cloudflare Workers, Deno Deploy, a Node server, anything that
+              serves the four endpoints.
+            </p>
+
+            <label class="settings-field">
+              <span class="settings-label">Endpoint URL</span>
+              <input type="url" data-field="url" class="input" placeholder="https://your-api.example.com" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="settings-field">
+              <span class="settings-label">Bearer token</span>
+              <input type="password" data-field="key" class="input" placeholder="Token your backend expects in the Authorization header" autocomplete="off" spellcheck="false">
+              <span class="settings-field-hint">Stored at <code>~/.frank/config.json</code> with 0600 permissions. Never leaves your machine except to your configured endpoint.</span>
+            </label>
+            <div class="settings-actions">
+              <button class="btn-secondary" data-action="test">Test connection</button>
+              <button class="btn-primary" data-action="save">Save</button>
+            </div>
+            <div class="settings-status" data-status aria-live="polite"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  function close() {
+    overlay.remove();
+    document.removeEventListener('keydown', onEscape);
+  }
+  function onEscape(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onEscape);
+  overlay.querySelector('#settings-close').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  // ── Tab switching ────────────────────────────────────────────────────────
+  const tabs = overlay.querySelectorAll('.settings-tab');
+  const panels = overlay.querySelectorAll('.settings-tab-panel');
+  function activateTab(id) {
+    tabs.forEach((t) => {
+      const on = t.dataset.tab === id;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    panels.forEach((p) => {
+      if (p.dataset.tab === id) p.removeAttribute('hidden');
+      else p.setAttribute('hidden', '');
+    });
+  }
+  tabs.forEach((t) => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+
+  // ── Per-panel form wiring ────────────────────────────────────────────────
+  panels.forEach(wirePanel);
+
+  // Populate the URL in both panels from config so the user doesn't re-type
+  // when revisiting Settings. Key is never echoed back from the daemon.
+  sync.getCloudConfig().then((config) => {
+    if (!config?.cloudUrl) return;
+    const urlInputs = overlay.querySelectorAll('input[data-field="url"]');
+    urlInputs.forEach((el) => { el.value = config.cloudUrl; });
+    if (config.hasApiKey) {
+      overlay.querySelectorAll('input[data-field="key"]').forEach((el) => {
+        el.placeholder = '•••••••• (key on file — retype to change)';
+      });
+    }
+  });
+
+  // Focus the URL input of the default tab.
+  setTimeout(() => {
+    overlay.querySelector('.settings-tab-panel:not([hidden]) input[data-field="url"]')?.focus();
+  }, 0);
+
+  function wirePanel(panel) {
+    const urlEl = panel.querySelector('input[data-field="url"]');
+    const keyEl = panel.querySelector('input[data-field="key"]');
+    const statusEl = panel.querySelector('[data-status]');
+    const testBtn = panel.querySelector('[data-action="test"]');
+    const saveBtn = panel.querySelector('[data-action="save"]');
+
+    function setStatus(kind, message) {
+      statusEl.className = `settings-status settings-status-${kind}`;
+      statusEl.textContent = message;
+    }
+
+    async function doSave() {
+      const url = (urlEl.value || '').trim();
+      const key = (keyEl.value || '').trim();
+      if (!url || !key) {
+        setStatus('error', 'Both URL and key are required to save.');
+        return false;
+      }
+      const result = await sync.setCloudConfig(url, key);
+      if (result?.type === 'error') {
+        setStatus('error', result.error || 'Could not save');
+        toastError(`Settings: ${result.error || 'save failed'}`);
+        return false;
+      }
+      return true;
+    }
+
+    async function doTest() {
+      testBtn.disabled = true;
+      saveBtn.disabled = true;
+      setStatus('info', 'Testing connection…');
+      try {
+        const saved = await doSave();
+        if (!saved) return;
+        const result = await sync.testCloudConnection();
+        if (result?.ok) {
+          setStatus('ok', 'Connected — your backend is reachable and the key is valid.');
+          toastInfo('Cloud backend connected');
+        } else {
+          setStatus('error', result?.error || 'Connection failed');
+        }
+      } finally {
+        testBtn.disabled = false;
+        saveBtn.disabled = false;
+      }
+    }
+
+    testBtn.addEventListener('click', doTest);
+    saveBtn.addEventListener('click', async () => {
+      const saved = await doSave();
+      if (saved) {
+        setStatus('ok', 'Saved.');
+        toastInfo('Cloud settings saved');
+      }
+    });
+  }
+
+  // Copy-to-clipboard for command snippets.
+  overlay.querySelectorAll('.settings-cmd-copy').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const text = btn.getAttribute('data-copy') || '';
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch {}
+      ta.remove();
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => { btn.textContent = original; }, 1400);
+    });
+  });
+}

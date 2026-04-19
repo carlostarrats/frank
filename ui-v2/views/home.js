@@ -3,6 +3,7 @@
 import sync from '../core/sync.js';
 import { renderUrlInput } from '../components/url-input.js';
 import { showHelpPanel } from '../components/help-panel.js';
+import { showSettingsPanel } from '../components/settings-panel.js';
 
 const DEFAULT_UI_STATE = {
   search: '',
@@ -21,7 +22,14 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
         <img src="frank-logo.svg" alt="Frank" class="home-logo">
         <span class="home-version">v2.02</span>
         <div class="home-header-spacer"></div>
-        <button class="home-help-btn" id="home-help-btn" title="Getting started">
+        <button class="home-help-btn" id="home-settings-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Settings</span>
+        </button>
+        <button class="home-help-btn" id="home-help-btn" title="Getting started" aria-label="Help">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <span>Help</span>
         </button>
@@ -52,6 +60,10 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
     if (name === null) return;
     const trimmed = name.trim() || 'Untitled Canvas';
     onCreateProject(trimmed, 'canvas', undefined);
+  });
+
+  container.querySelector('#home-settings-btn').addEventListener('click', () => {
+    showSettingsPanel();
   });
 
   container.querySelector('#home-help-btn').addEventListener('click', () => {

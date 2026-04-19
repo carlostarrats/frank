@@ -108,6 +108,9 @@ export interface DeleteCommentRequest { type: 'delete-comment'; commentId: strin
 export interface ProxyUrlRequest { type: 'proxy-url'; url: string; requestId?: number; }
 export interface UploadShareRequest { type: 'upload-share'; snapshot: unknown; coverNote: string; contentType: string; oldShareId?: string; oldRevokeToken?: string; requestId?: number; }
 export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; }
+export interface GetCloudConfigRequest { type: 'get-cloud-config'; requestId?: number; }
+export interface SetCloudConfigRequest { type: 'set-cloud-config'; cloudUrl: string; apiKey: string; requestId?: number; }
+export interface TestCloudConnectionRequest { type: 'test-cloud-connection'; requestId?: number; }
 export interface SaveSnapshotRequest { type: 'save-snapshot'; html: string; screenshot: string | null; trigger: 'manual' | 'share' | 'ai-applied'; triggeredBy?: string; requestId?: number; }
 export interface SaveCanvasSnapshotRequest {
   type: 'save-canvas-snapshot';
@@ -144,6 +147,9 @@ export type AppMessage =
   | ProxyUrlRequest
   | UploadShareRequest
   | CloudStatusRequest
+  | GetCloudConfigRequest
+  | SetCloudConfigRequest
+  | TestCloudConnectionRequest
   | SaveSnapshotRequest
   | SaveCanvasSnapshotRequest
   | ListSnapshotsRequest
@@ -218,6 +224,18 @@ export interface CloudStatusMessage {
   requestId?: number;
   connected: boolean;
   cloudUrl: string | null;
+}
+export interface CloudConfigMessage {
+  type: 'cloud-config';
+  requestId?: number;
+  cloudUrl: string | null;
+  hasApiKey: boolean;
+}
+export interface CloudTestResultMessage {
+  type: 'cloud-test-result';
+  requestId?: number;
+  ok: boolean;
+  error?: string;
 }
 
 export interface SnapshotSavedMessage { type: 'snapshot-saved'; requestId?: number; snapshot: unknown; }
@@ -323,6 +341,8 @@ export type DaemonMessage =
   | ErrorMessage
   | ShareUploadedMessage
   | CloudStatusMessage
+  | CloudConfigMessage
+  | CloudTestResultMessage
   | SnapshotSavedMessage
   | SnapshotListMessage
   | CurationDoneMessage
