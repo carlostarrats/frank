@@ -30,7 +30,7 @@ export function renderUrlInput(container, { onSubmit, onFileSubmit }) {
       </div>
       <div class="url-input-hint">
         <span>Supports: URLs (localhost, staging, production), PDFs, and images.</span>
-        <button class="url-input-browse" id="url-browse">Browse files…</button>
+        <button class="url-input-browse" id="url-browse">Select files…</button>
         <input type="file" id="url-file-picker" accept="${ACCEPTED_ATTR}" hidden>
       </div>
       <div class="url-input-error" id="url-error" style="display:none"></div>
