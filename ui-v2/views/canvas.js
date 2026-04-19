@@ -26,6 +26,8 @@ import { attachImageDrop } from '../canvas/image.js';
 import { createCommentController, CANVAS_SCREEN_ID } from '../canvas/comments.js';
 import { renderCuration } from '../components/curation.js';
 import { showSharePopover, updateSharePopover } from '../components/share-popover.js';
+import { attachShortcuts } from '../canvas/shortcuts.js';
+import { createHistory } from '../canvas/history.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -112,8 +114,15 @@ export function renderCanvas(container, { onBack }) {
 
   const { stage, contentLayer, uiLayer, destroy: destroyStage, isPanning, resetView } = createStage(stageEl);
 
+  // Undo/redo stack. Fed by commitChange; suspended during restore.
+  const history = createHistory({
+    serialize: () => serializeContent(contentLayer),
+    deserialize: (json) => deserializeInto(contentLayer, json),
+  });
+
   let saveTimer = null;
   const commitChange = () => {
+    history.commit();
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       const json = serializeContent(contentLayer);
@@ -323,6 +332,53 @@ export function renderCanvas(container, { onBack }) {
     }
     // Render pins after content is restored so they find their anchor shapes.
     comments.render();
+    // Reset the history baseline so the first real edit creates the first
+    // undo entry (rather than the restored-from-disk state itself).
+    history.reset();
+  });
+
+  function duplicateSelection() {
+    const nodes = selection.selectedNodes();
+    if (!nodes.length) return;
+    const Konva = window.Konva;
+    const newNodes = [];
+    for (const node of nodes) {
+      try {
+        const clone = Konva.Node.create(JSON.stringify(node.toObject()));
+        if (!clone) continue;
+        clone.id('shape-' + Math.random().toString(36).slice(2, 10));
+        clone.x(clone.x() + 20);
+        clone.y(clone.y() + 20);
+        clone.draggable(true);
+        contentLayer.add(clone);
+        newNodes.push(clone);
+      } catch (err) {
+        console.warn('[canvas] duplicate failed', err);
+      }
+    }
+    if (newNodes.length) {
+      contentLayer.batchDraw();
+      selection.setSelection(newNodes);
+      commitChange();
+    }
+  }
+
+  const detachShortcuts = attachShortcuts({
+    onTool: (id) => {
+      tools.activate(id);
+      selection.clear();
+      markActiveTool(drawerEl, id);
+    },
+    onEscape: () => {
+      tools.activate('select');
+      selection.clear();
+      markActiveTool(drawerEl, 'select');
+      // Also turn off comment mode if it was active.
+      if (comments.getMode() === 'on') comments.setMode('off');
+    },
+    onUndo: () => { history.undo(); comments.render(); },
+    onRedo: () => { history.redo(); comments.render(); },
+    onDuplicate: duplicateSelection,
   });
 
   // Cleanup when leaving the view
@@ -335,6 +391,7 @@ export function renderCanvas(container, { onBack }) {
       window.removeEventListener('frank:capture-snapshot', onCaptureSnapshot);
       destroyStage();
       if (detachImageDrop) detachImageDrop();
+      if (detachShortcuts) detachShortcuts();
       if (saveTimer) clearTimeout(saveTimer);
       observer.disconnect();
     }
