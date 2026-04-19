@@ -126,6 +126,7 @@ export function renderCanvas(container, { onBack }) {
   const tools = createToolController({
     stage,
     contentLayer,
+    uiLayer,
     isPanning,
     onCommit: commitChange,
     // Context-aware tool behavior: if the user clicks on an existing shape

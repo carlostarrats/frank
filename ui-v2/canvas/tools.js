@@ -14,7 +14,7 @@ import {
 import { bindConnector, _ensureId } from './connectors.js';
 import { TOOL_CURSORS } from './cursors.js';
 
-export function createToolController({ stage, contentLayer, isPanning, onCommit, onShapeClick }) {
+export function createToolController({ stage, contentLayer, uiLayer, isPanning, onCommit, onShapeClick }) {
   let currentTool = 'select';
   let disposers = [];
   const containerEl = stage.container();
@@ -194,18 +194,74 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit,
     return [() => stage.off('mousedown.tool mousemove.tool mouseup.tool')];
   }
 
-  // ── Connector (arrow or elbow) — follows source/target if either end
-  //     is a shape on the content layer.
+  // ── Connector (arrow or elbow) ────────────────────────────────────────────
+  //
+  // The source/target binding works for ANY shape on the content layer, not
+  // just flowchart primitives — any Konva.Node with a `name` that includes
+  // "shape" qualifies. While the user drags, we probe under the cursor for a
+  // candidate target; if found, we snap the endpoint to its center and flash
+  // a highlight box on the UI layer so the user can see the attach point
+  // before committing. Shift constrains the line to 0° / 45° / 90° angles.
   function bindConnectorTool(kind) {
     return () => {
       let connector = null;
       let start = null;
       let sourceId = null;
+      let hoveredTarget = null;
+      let snapIndicator = null;
+
+      function highlightTarget(shape) {
+        clearHighlight();
+        if (!shape) return;
+        hoveredTarget = shape;
+        const rect = shape.getClientRect({ skipStroke: true, relativeTo: uiLayer });
+        snapIndicator = new window.Konva.Rect({
+          x: rect.x - 4,
+          y: rect.y - 4,
+          width: rect.width + 8,
+          height: rect.height + 8,
+          stroke: '#60a5fa',
+          strokeWidth: 2,
+          dash: [6, 4],
+          listening: false,
+          cornerRadius: 2,
+        });
+        uiLayer.add(snapIndicator);
+      }
+      function clearHighlight() {
+        hoveredTarget = null;
+        if (snapIndicator) { snapIndicator.destroy(); snapIndicator = null; }
+      }
+
+      // Find the topmost content-layer child the pointer is currently over,
+      // skipping the connector itself (we don't want to snap to the line
+      // we're drawing).
+      function targetUnderPointer() {
+        const p = stage.getPointerPosition();
+        if (!p) return null;
+        const hit = stage.getIntersection(p);
+        if (!hit) return null;
+        let n = hit;
+        while (n && n.getLayer() !== contentLayer) n = n.getParent();
+        if (!n || n === contentLayer) return null;
+        if (n === connector) return null;
+        return n;
+      }
+
+      // Shift-constrain: snap the drag angle to the nearest 0° / 45° / 90°.
+      function constrainAngle(sp, p) {
+        const dx = p.x - sp.x;
+        const dy = p.y - sp.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1) return p;
+        const step = Math.PI / 4;
+        const snapped = Math.round(Math.atan2(dy, dx) / step) * step;
+        return { x: sp.x + Math.cos(snapped) * dist, y: sp.y + Math.sin(snapped) * dist };
+      }
 
       const onDown = (e) => {
         if (isPanning()) return;
         start = stageToContent(stage);
-        // If the user pressed on a shape, record its ID as the source.
         if (e.target !== stage) {
           const shape = nearestShape(e.target);
           if (shape) sourceId = _ensureId(shape);
@@ -215,29 +271,42 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit,
           : createArrow({ points: [start.x, start.y, start.x, start.y] });
         contentLayer.add(connector);
       };
-      const onMove = () => {
+      const onMove = (e) => {
         if (!connector || !start) return;
-        const pos = stageToContent(stage);
+        let pos = stageToContent(stage);
+
+        // Snap to any shape under the cursor (except the source). Highlight
+        // the target so the user gets visual feedback before release.
+        const target = targetUnderPointer();
+        if (target && _ensureId(target) !== sourceId) {
+          if (target !== hoveredTarget) highlightTarget(target);
+          const rect = target.getClientRect({ skipStroke: true, relativeTo: contentLayer });
+          pos = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+        } else if (hoveredTarget) {
+          clearHighlight();
+        }
+
+        if (e.evt && e.evt.shiftKey) pos = constrainAngle(start, pos);
+
         if (kind === 'elbow') {
           connector.points([start.x, start.y, pos.x, start.y, pos.x, pos.y]);
         } else {
           connector.points([start.x, start.y, pos.x, pos.y]);
         }
       };
-      const onUp = (e) => {
+      const onUp = () => {
+        const finalizeTarget = hoveredTarget;
+        clearHighlight();
         if (!connector) return;
         const pts = connector.points();
-        const lastX = pts[pts.length - 2];
-        const lastY = pts[pts.length - 1];
-        const dx = lastX - pts[0];
-        const dy = lastY - pts[1];
+        const dx = pts[pts.length - 2] - pts[0];
+        const dy = pts[pts.length - 1] - pts[1];
         if (Math.hypot(dx, dy) < 6) {
           connector.destroy();
         } else {
           let targetId = null;
-          if (e.target !== stage) {
-            const shape = nearestShape(e.target);
-            if (shape && _ensureId(shape) !== sourceId) targetId = _ensureId(shape);
+          if (finalizeTarget && _ensureId(finalizeTarget) !== sourceId) {
+            targetId = _ensureId(finalizeTarget);
           }
           if (sourceId || targetId) {
             bindConnector(contentLayer, connector, { sourceId, targetId });
@@ -251,7 +320,10 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit,
       stage.on('mousedown.tool', onDown);
       stage.on('mousemove.tool', onMove);
       stage.on('mouseup.tool', onUp);
-      return [() => stage.off('mousedown.tool mousemove.tool mouseup.tool')];
+      return [() => {
+        stage.off('mousedown.tool mousemove.tool mouseup.tool');
+        clearHighlight();
+      }];
     };
   }
 

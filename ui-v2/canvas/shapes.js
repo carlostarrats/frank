@@ -118,12 +118,16 @@ export function createParallelogram({ x, y, width = 160, height = 80 } = {}) {
 
 // ── Freehand / arrow / elbow connector ───────────────────────────────────────
 
+// Pointer size for arrow heads. Kept modest so short arrows still read as
+// arrows (not dominated triangles).
+const ARROW_POINTER = 8;
+
 export function createArrow({ points, stroke = STROKE, strokeWidth = 2 }) {
   const Konva = window.Konva;
   return new Konva.Arrow({
     points,
-    pointerLength: 10,
-    pointerWidth: 10,
+    pointerLength: ARROW_POINTER,
+    pointerWidth: ARROW_POINTER,
     stroke,
     fill: stroke,
     strokeWidth,
@@ -138,8 +142,8 @@ export function createElbow({ x1, y1, x2, y2, horizontalFirst = true, stroke = S
   const mid = horizontalFirst ? { x: x2, y: y1 } : { x: x1, y: y2 };
   return new Konva.Arrow({
     points: [x1, y1, mid.x, mid.y, x2, y2],
-    pointerLength: 10,
-    pointerWidth: 10,
+    pointerLength: ARROW_POINTER,
+    pointerWidth: ARROW_POINTER,
     stroke,
     fill: stroke,
     strokeWidth,

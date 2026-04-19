@@ -70,6 +70,13 @@ export function recomputeConnector(connector, layer) {
     const tgtCenter = { x: targetRect.x + targetRect.width / 2, y: targetRect.y + targetRect.height / 2 };
     srcPt = edgePoint(sourceRect, tgtCenter);
     tgtPt = edgePoint(targetRect, srcCenter);
+    // If the two shapes overlap so much that the edge points collapse,
+    // fall back to the centers — anything shorter and the Arrow just
+    // renders as a triangle.
+    if (Math.hypot(tgtPt.x - srcPt.x, tgtPt.y - srcPt.y) < 12) {
+      srcPt = srcCenter;
+      tgtPt = tgtCenter;
+    }
   } else if (sourceRect) {
     srcPt = { x: sourceRect.x + sourceRect.width / 2, y: sourceRect.y + sourceRect.height / 2 };
     tgtPt = { x: existing[existing.length - 2], y: existing[existing.length - 1] };
