@@ -1,44 +1,57 @@
 /* App chrome styles */
 
+/* Viewer toolbar + canvas topbar share a single visual language. Any change
+   here should be mirrored in .canvas-topbar (canvas.css) — they're intended
+   to look identical. */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: var(--bg-surface);
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  background: var(--card);
   border-bottom: 1px solid var(--border);
-  height: 48px;
+  height: 3rem;
   flex-shrink: 0;
 }
 
 .toolbar-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--foreground);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.toolbar-back {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: 1rem;
 }
 
+/* Viewer toolbar buttons mirror the canvas .btn-ghost treatment — transparent
+   until hover, no persistent border. Unifies the two surfaces visually. */
 .toolbar-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  height: 2rem;
+  height: 28px;
   padding: 0 var(--space-3);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   background: transparent;
   color: var(--muted-foreground);
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-standard),
-              border-color var(--duration-fast) var(--ease-standard),
               color var(--duration-fast) var(--ease-standard);
 }
 .toolbar-btn:hover {
   background: var(--accent);
   color: var(--accent-foreground);
-  border-color: var(--border);
 }
 .toolbar-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
@@ -54,13 +67,23 @@
 }
 .toolbar-close-gap { display: inline-block; width: 16px; }
 .toolbar-icon-btn {
-  width: 36px;
+  width: 32px;
+  height: 28px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 .toolbar-icon-btn svg { display: block; }
+.toolbar-btn.active {
+  background: color-mix(in oklch, var(--ring), transparent 85%);
+  color: var(--ring);
+}
+.toolbar-btn.flashing {
+  background: color-mix(in oklch, var(--ring), transparent 60%);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
+  transition: background 0.2s, box-shadow 0.2s;
+}
 .toolbar-btn.active {
   background: var(--accent);
   color: var(--accent-foreground);

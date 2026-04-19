@@ -31,23 +31,33 @@ export function createViewerPinRenderer({ hostEl, overlayEl, screenId }) {
 
   function resolveAnchorPoint(comment) {
     const a = comment.anchor || {};
-    if (a.type === 'pin') return { x: a.x || 0, y: a.y || 0 };
 
-    // If the host has a contentDocument (iframe only), try to resolve the
-    // live element by CSS selector. Works for same-origin / proxied content.
-    try {
-      const doc = hostEl.contentDocument;
-      if (doc && a.cssSelector) {
-        const el = doc.querySelector(a.cssSelector);
-        if (el) {
-          const r = el.getBoundingClientRect();
-          return { x: r.left + r.width / 2, y: r.top };
+    // For element-anchored comments, try to resolve the live element first
+    // (works for same-origin / proxied). This gives accurate coordinates
+    // even if the layout has shifted since the comment was made.
+    if (a.type !== 'pin') {
+      try {
+        const doc = hostEl.contentDocument;
+        if (doc && (a.cssSelector || a.domPath)) {
+          const el = doc.querySelector(a.cssSelector) || doc.querySelector(a.domPath);
+          if (el) {
+            const r = el.getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top };
+          }
         }
-      }
-    } catch { /* cross-origin — fall through */ }
+      } catch { /* cross-origin — fall through */ }
+    }
 
-    // Fallback: visual coords saved at creation time.
-    return { x: a.x || 0, y: a.y || 0 };
+    // Fallback: anchor.x / anchor.y were stored as percentages of the host's
+    // width/height at creation time (see anchoring.js createAnchor /
+    // createPinAnchor). Convert back to pixels against the current host size.
+    const hostRect = hostEl.getBoundingClientRect();
+    const pctX = typeof a.x === 'number' ? a.x : 0;
+    const pctY = typeof a.y === 'number' ? a.y : 0;
+    return {
+      x: (pctX / 100) * hostRect.width,
+      y: (pctY / 100) * hostRect.height,
+    };
   }
 
   function render() {

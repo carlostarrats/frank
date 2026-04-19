@@ -4,7 +4,7 @@ import { showSharePopover } from './share-popover.js';
 export function renderToolbar(container, { projectName, url, onBack }) {
   container.innerHTML = `
     <div class="toolbar">
-      <button class="btn-ghost toolbar-back" id="toolbar-back">← Back</button>
+      <button class="btn-ghost toolbar-back" id="toolbar-back" title="Back" aria-label="Back">←</button>
       <span class="toolbar-title">${escapeHtml(projectName)}</span>
       <span class="toolbar-url">${escapeHtml(url || '')}</span>
       <div class="toolbar-spacer"></div>

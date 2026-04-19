@@ -1,7 +1,8 @@
 // overlay.js — Transparent overlay controller
 import { findMeaningfulElement } from './element-detect.js';
-import { createAnchor } from './anchoring.js';
+import { createAnchor, createPinAnchor } from './anchoring.js';
 import { showHighlight, showSelected, clearHighlight, clearSelected } from './highlight.js';
+import { COMMENT_CURSOR } from '../canvas/cursors.js';
 
 let commentMode = false;
 let onCommentCreate = null;
@@ -28,14 +29,26 @@ export function setupOverlay(iframeEl, callbacks) {
         e.stopPropagation();
 
         const target = findMeaningfulElement(e.target);
-        showSelected(target, iframeEl);
-        clearHighlight();
-
         const iframeRect = iframeEl.getBoundingClientRect();
-        const anchor = createAnchor(target, iframeRect);
+
+        // Empty-space click (no meaningful element above the target) drops a
+        // free pin at the click coords — same behavior as canvas. Otherwise
+        // anchor to the found element with the triple-anchor strategy.
+        const isEmptyClick = !target || target === doc.body || target === doc.documentElement;
+        let anchor;
+        if (isEmptyClick) {
+          // e.clientX/Y are relative to the iframe's own viewport.
+          anchor = createPinAnchor(e.clientX, e.clientY, { width: iframeRect.width, height: iframeRect.height });
+          clearHighlight();
+          clearSelected();
+        } else {
+          showSelected(target, iframeEl);
+          clearHighlight();
+          anchor = createAnchor(target, iframeRect);
+        }
 
         if (onCommentCreate) {
-          onCommentCreate(anchor, target);
+          onCommentCreate(anchor, isEmptyClick ? null : target);
         }
       });
 
@@ -50,11 +63,13 @@ export function setupOverlay(iframeEl, callbacks) {
 
 export function enableCommentMode() {
   commentMode = true;
-  // Set crosshair cursor on the iframe itself (not the overlay — overlay has pointer-events: none)
+  // Custom speech-bubble-plus cursor — same one the canvas uses so the two
+  // surfaces feel identical. Applied to the iframe body (cross-origin blocks
+  // access; we fall back to the default cursor in that case).
   if (currentIframe) {
     try {
       const doc = currentIframe.contentDocument;
-      if (doc) doc.body.style.cursor = 'crosshair';
+      if (doc) doc.body.style.cursor = COMMENT_CURSOR;
     } catch { /* cross-origin */ }
   }
 }
