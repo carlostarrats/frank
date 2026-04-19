@@ -85,7 +85,9 @@ export function renderViewer(container, { onBack }) {
 
   // Render curation panel in sidebar. Comment mode toggling lives on the
   // toolbar comment icon — no need for a redundant button inside the panel.
-  const screenId = Object.keys(project.screens || {})[0] || null;
+  // Must use the same fallback as onCommentCreate below ('default') so the
+  // panel + pins read comments at the same screenId they were written with.
+  const screenId = Object.keys(project.screens || {})[0] || 'default';
   renderCuration(sidebar, { screenId });
 
   // Manual snapshot trigger from toolbar — button flashes like the canvas
