@@ -1,8 +1,8 @@
 # Frank
 
-> A persistent context layer for AI-assisted development. Start from a URL, a canvas sketch, or a scaffolded dev server. Comment on specific elements, share for feedback, iterate with Claude in-app — every decision captured along the way.
+> A persistent context layer for AI-assisted development. Start from a URL or a canvas sketch. Comment on specific elements, share for feedback, iterate with Claude in-app — every decision captured along the way.
 
-**v2.0 Beta** — Three entry points (URL / canvas / scaffold), in-app Claude conversations, and the commenting + share loop from v1. Still early; rough edges exist.
+**v2.0 Beta** — Two entry points (URL / canvas), in-app Claude conversations, and the commenting + share loop from v1. Still early; rough edges exist.
 
 **Frank is a terminal tool.** You start it from the command line, and it opens a browser-based UI at `localhost:42068`. Requires [Node.js](https://nodejs.org/) (v18+).
 
@@ -13,16 +13,15 @@
 
 ## What it does
 
-Frank wraps what you're building with a commenting overlay, a Claude conversation that sees your project context, and a complete data trail of how the thing was made. Three entry points all lead to the same loop:
+Frank wraps what you're building with a commenting overlay, a Claude conversation that sees your project context, and a complete data trail of how the thing was made. Two entry points both lead to the same loop:
 
 1. **Start from a URL** — localhost, Vercel preview, production. Click any element to anchor a comment. Share for external review.
 2. **Start from a canvas** — an infinite Konva canvas with sticky notes, shapes, text, freehand, and arrows. Sketch structure and intent; hand it to Claude as context.
-3. **Spin one up** — pick a template (`static` or `vite-react`), name the project, and Frank scaffolds the code, starts the dev server, and lands you in review mode on the live URL.
 
-From any entry point:
+From either entry point:
 
 ```
-Entry (URL / canvas / scaffolded app)
+Entry (URL / canvas)
        |
 Comment on specific elements (click to anchor)
        |
@@ -61,12 +60,6 @@ Everything is captured: every comment, every AI conversation, every snapshot. Ev
 - **Persistent across sessions** — conversations stored per project with size-aware caps and automatic continuation linking
 - **Clipboard fallback** — "Copy as prompt" on any message, so non-Claude AIs still work
 
-### Spin One Up (new in v2)
-- **Two built-in templates** — `static` (HTML/CSS/JS with a Node static server) and `vite-react` (React + Vite with HMR)
-- **Streamed install logs** — `npm install` output flows into the scaffold UI so you can see what's happening
-- **Auto dev-server detection** — Frank reads the dev URL from stdout and opens the viewer on it
-- **Clean shutdown** — `frank stop` kills every spawned dev server
-
 ### Collaboration
 - **Self-hosted sharing** — deploy Frank Cloud to your own Vercel account, get real internet links
 - **Reviewer experience** — reviewers open the link, see the page, comment with guided prompts
@@ -91,17 +84,14 @@ LOCAL (your machine)                         CLOUD (your Vercel account, optiona
 | - Canvas state I/O        |                | - Share viewer page       |
 | - AI conversation store   |                | - Vercel Blob storage     |
 | - Claude API client       |                +---------------------------+
-| - Scaffold + dev-server   |
-|   spawner                 |     ----->     Claude API (api.anthropic.com)
-| - Project I/O (~/.frank/) |                 (your key, your call)
-+---------------------------+
+| - Project I/O (~/.frank/) |     ----->     Claude API (api.anthropic.com)
++---------------------------+                 (your key, your call)
         |
         v
   Browser UI (localhost:42068)
-  - Home (URL / canvas / scaffold entry points)
+  - Home (URL / canvas entry points)
   - Viewer (iframe wrapper + overlay + curation + AI panel)
   - Canvas (Konva stage with tools, pan/zoom, persistence)
-  - Scaffold (template picker + streamed install progress)
   - Timeline view
 ```
 
@@ -134,8 +124,6 @@ node --version
 brew install node
 ```
 
-The `vite-react` scaffold template requires an internet connection the first time you use it (for `npm install`). The `static` template has no network dependencies.
-
 ## Install
 
 ```bash
@@ -156,9 +144,8 @@ Open your terminal and run:
 
 ```bash
 frank start       # start daemon, open browser at localhost:42068
-frank stop        # stop daemon, remove Claude Code hooks, kill spawned dev servers
+frank stop        # stop daemon, remove Claude Code hooks
 frank status      # show daemon and cloud connection status
-frank scaffold    # scaffold a new project from a template (headless)
 frank connect     # connect to your self-hosted Frank Cloud
 frank export      # export a project as structured JSON
 frank uninstall   # remove all Frank data (with confirmation)
@@ -168,9 +155,8 @@ frank uninstall   # remove all Frank data (with confirmation)
 
 - **Paste a URL** to wrap any running site with Frank's commenting overlay.
 - **+ New canvas** for a blank Konva canvas to sketch on.
-- **+ Spin one up** to scaffold a new project and land in review mode on the spawned dev server.
 
-When you're done, hit `Ctrl+C` in the terminal or run `frank stop`. Frank will clean up any dev servers it spawned.
+When you're done, hit `Ctrl+C` in the terminal or run `frank stop`.
 
 ### Using Claude in the app
 
@@ -183,25 +169,6 @@ Frank's AI panel talks to Claude directly — no copy-paste required, and the co
 Every conversation is stored per-project at `~/.frank/projects/{id}/ai-conversations/`. The panel includes your curated comments, recent snapshot metadata, and (for canvas projects) the canvas state as context on every turn, within an explicit token budget so you never blow past Claude's context window.
 
 Prefer a different AI? Every user message has a **Copy** button that exports it as a structured prompt you can paste into any other assistant. The old clipboard-routing flow on curated comments still works for the same reason.
-
-### Scaffolding a new project
-
-From the home screen, click **+ Spin one up**, pick a template, name the project, and give it a target directory. Frank will:
-
-1. Copy the template files.
-2. Run `npm install` if needed (streaming output to the UI).
-3. Spawn the dev server.
-4. Read the local URL from stdout.
-5. Open the viewer on your running app.
-
-You can also scaffold from the CLI without the UI:
-
-```bash
-frank scaffold static "Landing page" --dir ~/projects
-frank scaffold vite-react "My App" --dir ~/projects
-```
-
-The CLI variant prints the scaffold location and next steps; it does **not** spawn the dev server. Use the UI for the full auto-start flow.
 
 ### Connect to cloud (for sharing)
 
@@ -252,7 +219,7 @@ npm test           # run all tests once
 npm run test:watch # run in watch mode
 ```
 
-Covered modules: projects, snapshots, curation, ai-chain, export, proxy, cloud, inject, canvas, ai-conversations, scaffold.
+Covered modules: projects, snapshots, curation, ai-chain, export, proxy, cloud, inject, canvas, ai-conversations.
 
 ### Project structure
 
@@ -262,13 +229,13 @@ frank/
 |   +-- index.html            # Entry point; links Konva via script tag
 |   +-- app.js                # App shell, view router
 |   +-- core/                 # WebSocket client, in-memory project state
-|   +-- views/                # Home, viewer, canvas, scaffold, timeline
+|   +-- views/                # Home, viewer, canvas, timeline
 |   +-- overlay/              # Element detection, anchoring, highlighting, DOM snapshots
 |   +-- canvas/               # Konva stage, tools, transformer, serialization
 |   +-- components/           # Toolbar, curation, share popover, AI panel, AI routing (fallback)
-|   +-- styles/               # CSS tokens, app chrome, overlay, canvas, AI panel, scaffold
+|   +-- styles/               # CSS tokens, app chrome, overlay, canvas, AI panel
 +-- daemon/                   # Node.js daemon (TypeScript)
-|   +-- src/cli.ts            # CLI commands: start/stop/status/scaffold/connect/export/uninstall
+|   +-- src/cli.ts            # CLI commands: start/stop/status/connect/export/uninstall
 |   +-- src/server.ts         # HTTP + WebSocket server, all message handlers
 |   +-- src/protocol.ts       # Shared types, constants, port assignments
 |   +-- src/projects.ts       # Project file I/O, comment CRUD
@@ -278,14 +245,10 @@ frank/
 |   +-- src/ai-conversations.ts     # Per-project AI conversation storage with caps
 |   +-- src/ai-providers/claude.ts  # Claude API client + context builder
 |   +-- src/ai-chain.ts       # AI instruction chain log
-|   +-- src/scaffold.ts       # Template copy, npm install streaming, dev-server spawn + tracking
 |   +-- src/proxy.ts          # Content proxy for iframe-restricted URLs
 |   +-- src/cloud.ts          # Self-hosted cloud client + secret-aware config I/O
 |   +-- src/export.ts         # Structured JSON export
 |   +-- src/inject.ts         # CLAUDE.md injection/removal
-|   +-- templates/            # Scaffold templates shipped with the daemon
-|       +-- static/           # HTML/CSS/JS + Node static server
-|       +-- vite-react/       # Vite + React starter
 +-- frank-cloud/              # Deployable Vercel project (self-hosted sharing)
 |   +-- api/                  # Serverless functions (share, comment, health)
 |   +-- public/viewer/        # Share viewer page

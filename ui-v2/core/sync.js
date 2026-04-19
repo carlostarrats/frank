@@ -110,15 +110,6 @@ const sync = {
   sendAiMessage({ conversationId, continuedFrom, message, feedbackIds }) {
     return send({ type: 'send-ai-message', conversationId, continuedFrom, message, feedbackIds });
   },
-
-  listScaffoldTemplates() { return send({ type: 'list-scaffold-templates' }); },
-  // scaffoldProject returns when the daemon acknowledges with the first
-  // scaffold-status. The rest of the lifecycle (installing/starting/ready)
-  // arrives as push messages, handled by the subscriber in scaffold.js.
-  scaffoldProject({ templateId, name, targetDir }) {
-    return send({ type: 'scaffold-project', templateId, name, targetDir });
-  },
-  stopScaffoldedServer(projectId) { return send({ type: 'stop-scaffolded-server', projectId }); },
 };
 
 export default sync;
