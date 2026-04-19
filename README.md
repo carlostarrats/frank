@@ -343,21 +343,30 @@ frank/
 
 ## License
 
-[MIT](LICENSE) — free to use, modify, and distribute, including commercially. Include the copyright notice in any substantial redistribution.
+[PolyForm Shield 1.0.0](LICENSE) — a source-available license that permits use, modification, and distribution for any purpose **except** providing a product that competes with Frank or any product the licensor provides using Frank. Full text in [`LICENSE`](LICENSE); license homepage: <https://polyformproject.org/licenses/shield/1.0.0/>.
 
-Prior versions of Frank (through the v1.0 release) were licensed under PolyForm Shield 1.0.0. The project relicensed to MIT ahead of the v2 development cycle.
+What this means in practice:
+
+- **Use it yourself** — individuals, teams, and companies can run Frank internally for any commercial or non-commercial purpose.
+- **Fork it, modify it, redistribute it** — as long as you keep the license and the `Required Notice` intact.
+- **Contribute back** — open source forks and PRs are welcome under the same terms.
+- **Don't resell it as a competing product** — you may not package Frank (or a derivative) as a SaaS, hosted service, or commercial offering that competes with it.
+
+This is a change from the v2.0 release, which was MIT. The project was previously PolyForm Shield 1.0.0 through v1.0, switched to MIT at the start of v2 development, and has now returned to PolyForm Shield to protect the project from being copied-and-sold as a competing offering while keeping ordinary use, forking, and contribution fully open.
+
+> Note: PolyForm Shield is *source-available* rather than OSI-certified "open source." Some indices and corporate policies treat it as such. Consult your own legal counsel if in doubt.
 
 ### Acknowledgements
 
-Frank bundles or depends on:
+Frank bundles or depends on the following third-party software. All are permissive licenses (MIT, 0BSD, or Apache-2.0). Full copyright notices for each are preserved in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md), which must accompany any redistribution of Frank.
 
-- [Konva](https://konvajs.org/) — MIT
-- [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript) — MIT
-- [ws](https://github.com/websockets/ws) — MIT
-- [pdfmake](http://pdfmake.org/) — MIT (daemon-side report PDF)
-- [jsPDF](https://github.com/parallax/jsPDF) — MIT (canvas PDF, loaded on demand from CDN)
-- [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) — MIT (canvas PDF, loaded on demand from CDN)
-- [Vitest](https://vitest.dev/) — MIT
+- [Konva](https://konvajs.org/) — MIT (loaded via CDN at runtime)
+- [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript) — MIT (daemon)
+- [ws](https://github.com/websockets/ws) — MIT (daemon)
+- [pdfmake](http://pdfmake.org/) — MIT (daemon — project report PDF)
+- [tslib](https://github.com/microsoft/tslib) — 0BSD (transitive, via pdfmake)
+- [jsPDF](https://github.com/parallax/jsPDF) — MIT (canvas PDF, loaded via CDN on demand)
+- [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) — MIT (canvas PDF, loaded via CDN on demand)
+- [Roboto fonts](https://fonts.google.com/specimen/Roboto) — Apache-2.0 (bundled inside pdfmake)
+- [Vitest](https://vitest.dev/) — MIT (dev-only)
 - [@vercel/blob](https://github.com/vercel/storage) — Apache-2.0 (Frank Cloud only)
-
-Include their licenses wherever you redistribute Frank.
