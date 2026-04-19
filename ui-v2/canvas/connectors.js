@@ -59,6 +59,12 @@ export function recomputeConnector(connector, layer) {
   const target = getShapeById(layer, targetId);
   if (!source && !target) return;
 
+  // Shape rects come back in LAYER-space. If the connector has been dragged
+  // (non-zero x/y), its own position offset would be added on top at render
+  // time, pushing the line away from the shapes. Reset to origin so the new
+  // layer-space points render exactly where we computed them.
+  connector.position({ x: 0, y: 0 });
+
   const sourceRect = source ? rectOf(layer, source) : null;
   const targetRect = target ? rectOf(layer, target) : null;
 

@@ -173,6 +173,39 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
   const onWindowMouseUp = () => finalizeMarquee();
   window.addEventListener('mouseup', onWindowMouseUp);
 
+  // ── Connector hover halo ───────────────────────────────────────────────────
+  // Thin lines are hard to aim at — Konva's 30px hitStrokeWidth makes them
+  // clickable, but without a visual cue the user can't tell where the click
+  // zone starts. On hover, bump the stroke width so the line "thickens" under
+  // the cursor. Only active with the select tool; other tools have their own
+  // hover cues (shape-pointer override in tools.js).
+  let hoveredConnector = null;
+  stage.on('mouseover.connector-halo', (e) => {
+    if (getTool() !== 'select') return;
+    const node = nearestShape(e.target);
+    if (!node) return;
+    if (!(node.name() || '').includes('connector')) return;
+    if (node === hoveredConnector) return;
+    // Don't halo the currently-selected connector — its endpoint-edit mode
+    // already recolors it.
+    if (currentHandlesOwner === node) return;
+    hoveredConnector = node;
+    if (!('_haloOriginalWidth' in node)) node._haloOriginalWidth = node.strokeWidth();
+    node.strokeWidth(node._haloOriginalWidth + 2);
+    contentLayer.batchDraw();
+  });
+  stage.on('mouseout.connector-halo', (e) => {
+    if (!hoveredConnector) return;
+    const node = nearestShape(e.target);
+    if (node !== hoveredConnector) return;
+    if ('_haloOriginalWidth' in hoveredConnector) {
+      hoveredConnector.strokeWidth(hoveredConnector._haloOriginalWidth);
+      delete hoveredConnector._haloOriginalWidth;
+    }
+    hoveredConnector = null;
+    contentLayer.batchDraw();
+  });
+
   // Escape always cancels an in-progress marquee without selecting anything.
   const onMarqueeKey = (e) => {
     if (e.key !== 'Escape') return;
@@ -266,6 +299,7 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     tearDownHandles();
     if (marquee) { marquee.destroy(); marquee = null; }
     stage.off('mousedown.marquee mousemove.marquee mouseup.marquee');
+    stage.off('mouseover.connector-halo mouseout.connector-halo');
     window.removeEventListener('mouseup', onWindowMouseUp);
     window.removeEventListener('keydown', onMarqueeKey);
     window.removeEventListener('keydown', onKeyDown);

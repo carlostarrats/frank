@@ -21,17 +21,37 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
   let hoveredTarget = null;
   const overlay = createAnchorOverlay({ uiLayer, contentLayer });
 
+  // Visually mark the selected connector so the user can see which line the
+  // handles belong to. Without this, the handles look like disconnected dots
+  // floating in empty space. Arrow's pointer triangle uses `fill`, so we
+  // tint both stroke and fill to the accent blue and restore both on destroy.
+  const originalStroke = connector.stroke();
+  const originalFill = connector.fill();
+  const originalStrokeWidth = connector.strokeWidth();
+  connector.stroke('#60a5fa');
+  connector.fill('#60a5fa');
+  connector.strokeWidth(Math.max(originalStrokeWidth, 2.5));
+
+  // Connector renders its local `points` offset by its own x/y. The uiLayer
+  // shares the stage transform but NOT the connector's position offset, so
+  // we convert between the two spaces explicitly. Without this, dragging
+  // the connector moves the line but leaves the handles behind in
+  // pre-drag layer space.
   function endpointFromPoints(which) {
     const pts = connector.points();
-    if (which === 'start') return { x: pts[0], y: pts[1], idx: 0 };
-    return { x: pts[pts.length - 2], y: pts[pts.length - 1], idx: pts.length - 2 };
+    const cx = connector.x();
+    const cy = connector.y();
+    if (which === 'start') return { x: pts[0] + cx, y: pts[1] + cy, idx: 0 };
+    return { x: pts[pts.length - 2] + cx, y: pts[pts.length - 1] + cy, idx: pts.length - 2 };
   }
 
-  function updatePointsFor(which, x, y) {
+  function updatePointsFor(which, absX, absY) {
     const pts = connector.points().slice();
     const { idx } = endpointFromPoints(which);
-    pts[idx] = x;
-    pts[idx + 1] = y;
+    const cx = connector.x();
+    const cy = connector.y();
+    pts[idx] = absX - cx;
+    pts[idx + 1] = absY - cy;
 
     // Elbow connectors have a middle bend at (endX, startY). Recompute so
     // the L stays aligned when either end moves.
@@ -171,8 +191,14 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
       l.node.off('dragmove.endpoint-handles transformend.endpoint-handles', l.handler);
     }
     followListeners.length = 0;
+    // Restore the connector's original appearance so it doesn't stay blue
+    // after deselection.
+    connector.stroke(originalStroke);
+    connector.fill(originalFill);
+    connector.strokeWidth(originalStrokeWidth);
     startHandle.destroy();
     endHandle.destroy();
+    contentLayer.batchDraw();
     uiLayer.batchDraw();
   }
 
