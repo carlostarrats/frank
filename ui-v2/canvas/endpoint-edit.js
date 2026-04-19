@@ -21,16 +21,16 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
   let hoveredTarget = null;
   const overlay = createAnchorOverlay({ uiLayer, contentLayer });
 
-  // Visually mark the selected connector so the user can see which line the
-  // handles belong to. Without this, the handles look like disconnected dots
-  // floating in empty space. Arrow's pointer triangle uses `fill`, so we
-  // tint both stroke and fill to the accent blue and restore both on destroy.
-  const originalStroke = connector.stroke();
-  const originalFill = connector.fill();
-  const originalStrokeWidth = connector.strokeWidth();
-  connector.stroke('#60a5fa');
-  connector.fill('#60a5fa');
-  connector.strokeWidth(Math.max(originalStrokeWidth, 2.5));
+  // Visually mark the selected connector with an accent-blue glow (shadow),
+  // NOT by mutating stroke width/color — otherwise the properties inspector
+  // fights with this code for ownership of the stroke, and the user can't
+  // edit line width. Stroke geometry stays untouched; shadow is a visual
+  // overlay we clean up on destroy.
+  const hadShadow = connector.shadowEnabled && connector.shadowEnabled();
+  connector.shadowColor('#60a5fa');
+  connector.shadowBlur(10);
+  connector.shadowOpacity(0.9);
+  connector.shadowEnabled(true);
 
   // Connector renders its local `points` offset by its own x/y. The uiLayer
   // shares the stage transform but NOT the connector's position offset, so
@@ -75,8 +75,17 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
       name: 'endpoint-handle',
       hitStrokeWidth: 12,
     });
+    // While the handle is being dragged it sits directly under the cursor.
+    // If it stays listening, `stage.getIntersection(pointer)` returns the
+    // handle itself (or punches through to a shape below, at the wrong z),
+    // which caused snap-to-wrong-shape. Turn off hit detection for the
+    // duration of the drag so intersection sees only the content layer.
+    h.on('dragstart', () => { h.listening(false); });
     h.on('dragmove', () => onDragMove(h, which));
-    h.on('dragend', () => onDragEnd(h, which));
+    h.on('dragend', () => {
+      h.listening(true);
+      onDragEnd(h, which);
+    });
     return h;
   }
 
@@ -191,11 +200,12 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
       l.node.off('dragmove.endpoint-handles transformend.endpoint-handles', l.handler);
     }
     followListeners.length = 0;
-    // Restore the connector's original appearance so it doesn't stay blue
-    // after deselection.
-    connector.stroke(originalStroke);
-    connector.fill(originalFill);
-    connector.strokeWidth(originalStrokeWidth);
+    // Drop the selection glow. We don't restore the prior shadow state
+    // because connectors never have shadows by default — the sticky/rect
+    // shapes that do have shadows aren't connectors.
+    connector.shadowEnabled(!!hadShadow);
+    connector.shadowBlur(0);
+    connector.shadowOpacity(0);
     startHandle.destroy();
     endHandle.destroy();
     contentLayer.batchDraw();

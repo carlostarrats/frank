@@ -176,9 +176,9 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
   // ── Connector hover halo ───────────────────────────────────────────────────
   // Thin lines are hard to aim at — Konva's 30px hitStrokeWidth makes them
   // clickable, but without a visual cue the user can't tell where the click
-  // zone starts. On hover, bump the stroke width so the line "thickens" under
-  // the cursor. Only active with the select tool; other tools have their own
-  // hover cues (shape-pointer override in tools.js).
+  // zone starts. On hover, add a subtle blue glow via shadow so the line
+  // doesn't grow in stroke width (that fights with the properties inspector).
+  // Only active with the select tool; other tools have their own hover cues.
   let hoveredConnector = null;
   stage.on('mouseover.connector-halo', (e) => {
     if (getTool() !== 'select') return;
@@ -186,21 +186,26 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     if (!node) return;
     if (!(node.name() || '').includes('connector')) return;
     if (node === hoveredConnector) return;
-    // Don't halo the currently-selected connector — its endpoint-edit mode
-    // already recolors it.
+    // Don't halo the currently-selected connector — the endpoint-edit mode
+    // already gives it a stronger glow.
     if (currentHandlesOwner === node) return;
     hoveredConnector = node;
-    if (!('_haloOriginalWidth' in node)) node._haloOriginalWidth = node.strokeWidth();
-    node.strokeWidth(node._haloOriginalWidth + 2);
+    node.shadowColor('#60a5fa');
+    node.shadowBlur(6);
+    node.shadowOpacity(0.6);
+    node.shadowEnabled(true);
     contentLayer.batchDraw();
   });
   stage.on('mouseout.connector-halo', (e) => {
     if (!hoveredConnector) return;
     const node = nearestShape(e.target);
     if (node !== hoveredConnector) return;
-    if ('_haloOriginalWidth' in hoveredConnector) {
-      hoveredConnector.strokeWidth(hoveredConnector._haloOriginalWidth);
-      delete hoveredConnector._haloOriginalWidth;
+    // Don't clear the glow if the connector is currently selected — the
+    // endpoint-edit mode owns the shadow until deselection.
+    if (currentHandlesOwner !== hoveredConnector) {
+      hoveredConnector.shadowEnabled(false);
+      hoveredConnector.shadowBlur(0);
+      hoveredConnector.shadowOpacity(0);
     }
     hoveredConnector = null;
     contentLayer.batchDraw();
