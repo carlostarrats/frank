@@ -8,9 +8,14 @@ import {
   type AppMessage, type DaemonMessage, type Comment,
 } from './protocol.js';
 import {
-  listProjects, loadProject, createProject, deleteProject,
+  listProjects, loadProject, createProject, createProjectFromFile, deleteProject,
   addScreen, loadComments, addComment, deleteComment, saveProject,
+  renameProject, archiveProject, unarchiveProject,
+  trashProject, restoreProject, purgeExpiredTrash,
 } from './projects.js';
+import { saveAsset, ALLOWED_MIME_TYPES } from './assets.js';
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB cap for base64-over-WS uploads
 import { proxyRequest } from './proxy.js';
 import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments } from './cloud.js';
 import { mergeCloudComments } from './projects.js';
@@ -41,6 +46,12 @@ const proxyTargets = new Map<string, string>();
 
 export function startServer(): void {
   fs.mkdirSync(FRANK_DIR, { recursive: true });
+  try {
+    const purged = purgeExpiredTrash();
+    if (purged.length > 0) console.log(`[frank] purged ${purged.length} expired trashed project(s)`);
+  } catch (e: any) {
+    console.warn(`[frank] trash purge failed:`, e.message);
+  }
   startWebSocketServer();
   startHttpServer();
   // Sync cloud comments every 30 seconds
@@ -205,7 +216,103 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       break;
     }
 
+    case 'create-project-from-file': {
+      try {
+        const buffer = Buffer.from(msg.data, 'base64');
+        if (buffer.length === 0) throw new Error('Empty file');
+        if (buffer.length > MAX_UPLOAD_BYTES) throw new Error(`File too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024}MB)`);
+        if (msg.contentType !== 'pdf' && msg.contentType !== 'image') throw new Error(`Unsupported contentType: ${msg.contentType}`);
+        const { project, projectId } = createProjectFromFile(msg.name, msg.contentType, msg.fileName, buffer);
+        activeProjectId = projectId;
+        reply({ type: 'project-loaded', projectId, project, comments: [] });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'upload-asset': {
+      try {
+        if (!ALLOWED_MIME_TYPES.includes(msg.mimeType.toLowerCase())) {
+          throw new Error(`Unsupported asset type: ${msg.mimeType}`);
+        }
+        const buffer = Buffer.from(msg.data, 'base64');
+        if (buffer.length === 0) throw new Error('Empty asset');
+        if (buffer.length > MAX_UPLOAD_BYTES) throw new Error(`Asset too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024}MB)`);
+        // Asset must belong to a known project; reject unknown IDs to prevent
+        // writes outside of legitimate project dirs.
+        loadProject(msg.projectId);
+        const asset = saveAsset(msg.projectId, buffer, msg.mimeType);
+        reply({ type: 'asset-uploaded', assetId: asset.assetId, url: asset.url, bytes: asset.bytes });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
     case 'delete-project': {
+      try {
+        deleteProject(msg.projectId);
+        if (activeProjectId === msg.projectId) activeProjectId = null;
+        reply({ type: 'project-list', projects: listProjects() });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'rename-project': {
+      try {
+        renameProject(msg.projectId, msg.name);
+        reply({ type: 'project-list', projects: listProjects() });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'archive-project': {
+      try {
+        archiveProject(msg.projectId);
+        reply({ type: 'project-list', projects: listProjects() });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'unarchive-project': {
+      try {
+        unarchiveProject(msg.projectId);
+        reply({ type: 'project-list', projects: listProjects() });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'trash-project': {
+      try {
+        trashProject(msg.projectId);
+        if (activeProjectId === msg.projectId) activeProjectId = null;
+        reply({ type: 'project-list', projects: listProjects() });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'restore-project': {
+      try {
+        restoreProject(msg.projectId);
+        reply({ type: 'project-list', projects: listProjects() });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'purge-project': {
       try {
         deleteProject(msg.projectId);
         if (activeProjectId === msg.projectId) activeProjectId = null;

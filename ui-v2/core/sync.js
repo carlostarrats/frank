@@ -70,7 +70,19 @@ const sync = {
   createProject(name, contentType, url, file) {
     return send({ type: 'create-project', name, contentType, url, file });
   },
+  createProjectFromFile(name, contentType, fileName, data) {
+    return send({ type: 'create-project-from-file', name, contentType, fileName, data });
+  },
+  uploadAsset(projectId, mimeType, data) {
+    return send({ type: 'upload-asset', projectId, mimeType, data });
+  },
   deleteProject(projectId) { return send({ type: 'delete-project', projectId }); },
+  renameProject(projectId, name) { return send({ type: 'rename-project', projectId, name }); },
+  archiveProject(projectId) { return send({ type: 'archive-project', projectId }); },
+  unarchiveProject(projectId) { return send({ type: 'unarchive-project', projectId }); },
+  trashProject(projectId) { return send({ type: 'trash-project', projectId }); },
+  restoreProject(projectId) { return send({ type: 'restore-project', projectId }); },
+  purgeProject(projectId) { return send({ type: 'purge-project', projectId }); },
   addScreen(route, label) { return send({ type: 'add-screen', route, label }); },
   addComment(screenId, anchor, text) {
     return send({ type: 'add-comment', screenId, anchor, text });

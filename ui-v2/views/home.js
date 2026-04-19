@@ -1,6 +1,18 @@
-// home.js — Project list: create, open, delete
+// home.js — Project list: create, rename, archive, trash, restore, search/sort/filter.
+
 import sync from '../core/sync.js';
 import { renderUrlInput } from '../components/url-input.js';
+
+const DEFAULT_UI_STATE = {
+  search: '',
+  sort: 'recent',           // 'recent' | 'oldest' | 'alpha' | 'type'
+  filter: 'all',            // 'all' | 'canvas' | 'url' | 'pdf' | 'image'
+  archivedOpen: false,
+  trashOpen: false,
+};
+
+let uiState = { ...DEFAULT_UI_STATE };
+let openMenu = null;
 
 export function renderHome(container, { onOpenProject, onCreateProject }) {
   container.innerHTML = `
@@ -15,10 +27,7 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
           <button class="btn-secondary home-canvas-btn" id="new-canvas-btn">+ New canvas</button>
         </div>
         <div class="home-projects" id="home-projects">
-          <h3 class="home-section-title">Recent projects</h3>
-          <div class="project-list" id="project-list">
-            <div class="project-list-loading">Loading...</div>
-          </div>
+          <div class="project-list-loading">Loading...</div>
         </div>
       </div>
     </div>
@@ -27,6 +36,9 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
   renderUrlInput(container.querySelector('#home-new'), {
     onSubmit(name, contentType, url) {
       onCreateProject(name, contentType, url);
+    },
+    onFileSubmit(name, contentType, fileName, data) {
+      onCreateProject(name, contentType, undefined, undefined, { fileName, data });
     },
   });
 
@@ -37,46 +49,346 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
     onCreateProject(trimmed, 'canvas', undefined);
   });
 
-  sync.listProjects().then(data => {
-    const list = container.querySelector('#project-list');
-    const projects = data.projects || [];
-
-    if (projects.length === 0) {
-      list.innerHTML = '<p class="project-list-empty">No projects yet</p>';
-      return;
-    }
-
-    list.innerHTML = projects.map(p => `
-      <div class="project-card" data-id="${p.projectId}">
-        <div class="project-card-info">
-          <span class="project-card-name">${escapeHtml(p.name)}</span>
-          <span class="project-card-meta">${p.contentType} · ${p.commentCount} comments · ${timeAgo(p.modified)}</span>
-        </div>
-        <div class="project-card-actions">
-          <button class="btn-ghost project-delete" data-id="${p.projectId}" title="Delete">×</button>
-        </div>
-      </div>
-    `).join('');
-
-    list.querySelectorAll('.project-card').forEach(card => {
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('.project-delete')) return;
-        onOpenProject(card.dataset.id);
+  const refresh = () => {
+    sync.listProjects().then(data => {
+      renderProjects(container.querySelector('#home-projects'), data.projects || [], {
+        onOpenProject,
+        refresh,
       });
     });
+  };
+  refresh();
 
-    list.querySelectorAll('.project-delete').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm('Delete this project and all its data?')) {
-          sync.deleteProject(btn.dataset.id).then(() => {
-            renderHome(container, { onOpenProject, onCreateProject });
-          });
-        }
-      });
+  // Click-outside closes any open context menu.
+  document.addEventListener('click', closeOpenMenu, { capture: true });
+}
+
+function closeOpenMenu(e) {
+  if (!openMenu) return;
+  if (e && (openMenu.contains(e.target) || e.target.closest('.project-menu-btn'))) return;
+  openMenu.remove();
+  openMenu = null;
+}
+
+function renderProjects(host, projects, { onOpenProject, refresh }) {
+  const active = projects.filter(p => !p.archived && !p.trashed);
+  const archived = projects.filter(p => p.archived && !p.trashed);
+  const trashed = projects.filter(p => p.trashed);
+
+  if (projects.length === 0) {
+    host.innerHTML = `
+      <h3 class="home-section-title">Recent projects</h3>
+      <div class="project-list">
+        <p class="project-list-empty">No projects yet</p>
+      </div>
+    `;
+    return;
+  }
+
+  host.innerHTML = `
+    ${renderToolbar(active)}
+    <div class="home-section" id="section-recent">
+      <h3 class="home-section-title">Recent projects</h3>
+      <div class="project-list" id="list-active"></div>
+    </div>
+    ${archived.length > 0 ? renderCollapsibleHeader('archived', 'Archived', archived.length, uiState.archivedOpen) : ''}
+    ${archived.length > 0 && uiState.archivedOpen ? `<div class="project-list" id="list-archived"></div>` : ''}
+    ${trashed.length > 0 ? renderCollapsibleHeader('trash', `Trash`, trashed.length, uiState.trashOpen) : ''}
+    ${trashed.length > 0 && uiState.trashOpen ? `<div class="project-list project-list-trash" id="list-trash"></div>` : ''}
+  `;
+
+  wireToolbar(host, refresh);
+
+  const filtered = applyFilters(active, uiState);
+  const activeList = host.querySelector('#list-active');
+  if (filtered.length === 0) {
+    activeList.innerHTML = `<p class="project-list-empty">No projects match</p>`;
+  } else {
+    activeList.innerHTML = filtered.map(p => renderCard(p, 'active')).join('');
+    wireCards(activeList, filtered, 'active', { onOpenProject, refresh });
+  }
+
+  if (archived.length > 0 && uiState.archivedOpen) {
+    const el = host.querySelector('#list-archived');
+    el.innerHTML = archived.map(p => renderCard(p, 'archived')).join('');
+    wireCards(el, archived, 'archived', { onOpenProject, refresh });
+  }
+
+  if (trashed.length > 0 && uiState.trashOpen) {
+    const el = host.querySelector('#list-trash');
+    el.innerHTML = trashed.map(p => renderCard(p, 'trash')).join('');
+    wireCards(el, trashed, 'trash', { onOpenProject, refresh });
+  }
+
+  host.querySelectorAll('.home-section-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.section === 'archived' ? 'archivedOpen' : 'trashOpen';
+      uiState[key] = !uiState[key];
+      refresh();
     });
   });
 }
+
+// ─── Toolbar (search / sort / filter) ───────────────────────────────────────
+
+function renderToolbar(activeProjects) {
+  const typeCounts = activeProjects.reduce((acc, p) => {
+    acc[p.contentType] = (acc[p.contentType] || 0) + 1;
+    return acc;
+  }, {});
+  const chip = (id, label) => {
+    const count = id === 'all' ? activeProjects.length : (typeCounts[id] || 0);
+    const active = uiState.filter === id ? ' active' : '';
+    return `<button class="chip${active}" data-filter="${id}">${label}<span class="chip-count">${count}</span></button>`;
+  };
+
+  return `
+    <div class="home-toolbar">
+      <input
+        type="search"
+        class="input home-search"
+        placeholder="Search projects…"
+        value="${escapeHtml(uiState.search)}"
+        id="home-search-input"
+      >
+      <select class="input home-sort" id="home-sort-select">
+        <option value="recent"${uiState.sort === 'recent' ? ' selected' : ''}>Most recent</option>
+        <option value="oldest"${uiState.sort === 'oldest' ? ' selected' : ''}>Oldest</option>
+        <option value="alpha"${uiState.sort === 'alpha' ? ' selected' : ''}>A–Z</option>
+        <option value="type"${uiState.sort === 'type' ? ' selected' : ''}>By type</option>
+      </select>
+      <div class="home-filter-chips">
+        ${chip('all', 'All')}
+        ${chip('canvas', 'Canvas')}
+        ${chip('url', 'URL')}
+        ${chip('pdf', 'PDF')}
+        ${chip('image', 'Image')}
+      </div>
+    </div>
+  `;
+}
+
+function wireToolbar(host, refresh) {
+  const search = host.querySelector('#home-search-input');
+  if (search) {
+    let debounce = null;
+    search.addEventListener('input', (e) => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        uiState.search = e.target.value;
+        refresh();
+      }, 150);
+    });
+  }
+
+  const sort = host.querySelector('#home-sort-select');
+  if (sort) {
+    sort.addEventListener('change', (e) => {
+      uiState.sort = e.target.value;
+      refresh();
+    });
+  }
+
+  host.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      uiState.filter = btn.dataset.filter;
+      refresh();
+    });
+  });
+}
+
+function applyFilters(projects, state) {
+  let list = projects.slice();
+
+  if (state.filter !== 'all') {
+    list = list.filter(p => p.contentType === state.filter);
+  }
+
+  if (state.search.trim()) {
+    const q = state.search.trim().toLowerCase();
+    list = list.filter(p => p.name.toLowerCase().includes(q));
+  }
+
+  const sortFn = {
+    recent:  (a, b) => b.modified.localeCompare(a.modified),
+    oldest:  (a, b) => a.modified.localeCompare(b.modified),
+    alpha:   (a, b) => a.name.localeCompare(b.name),
+    type:    (a, b) => a.contentType.localeCompare(b.contentType) || b.modified.localeCompare(a.modified),
+  }[state.sort] || ((a, b) => 0);
+  list.sort(sortFn);
+
+  return list;
+}
+
+// ─── Section collapsible headers ────────────────────────────────────────────
+
+function renderCollapsibleHeader(section, label, count, open) {
+  const arrow = open ? '▾' : '▸';
+  return `
+    <button class="home-section-toggle" data-section="${section}">
+      <span class="home-section-toggle-arrow">${arrow}</span>
+      <span class="home-section-toggle-label">${label}</span>
+      <span class="home-section-toggle-count">${count}</span>
+    </button>
+  `;
+}
+
+// ─── Card render + wiring ───────────────────────────────────────────────────
+
+function renderCard(p, variant) {
+  const classes = ['project-card'];
+  if (variant !== 'active') classes.push(`project-card-${variant}`);
+  const meta = variant === 'trash' && p.trashed
+    ? `${p.contentType} · Deleted ${timeAgo(p.trashed)} · Auto-removes in ${daysUntilPurge(p.trashed)}d`
+    : `${p.contentType} · ${p.commentCount} comments · ${timeAgo(p.modified)}`;
+  return `
+    <div class="${classes.join(' ')}" data-id="${p.projectId}" data-variant="${variant}">
+      <div class="project-card-info">
+        <span class="project-card-name" data-id="${p.projectId}">${escapeHtml(p.name)}</span>
+        <span class="project-card-meta">${escapeHtml(meta)}</span>
+      </div>
+      <div class="project-card-actions">
+        <button class="btn-ghost project-menu-btn" data-id="${p.projectId}" title="More actions">⋯</button>
+      </div>
+    </div>
+  `;
+}
+
+function wireCards(host, projects, variant, { onOpenProject, refresh }) {
+  host.querySelectorAll('.project-card').forEach(card => {
+    const id = card.dataset.id;
+    const project = projects.find(p => p.projectId === id);
+
+    // Open on click (active + archived only; trash requires restore first).
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.project-menu-btn')) return;
+      if (e.target.closest('.project-card-name[contenteditable]')) return;
+      if (e.target.closest('.project-menu')) return;
+      if (variant === 'trash') return;
+      onOpenProject(id);
+    });
+
+    // Inline rename: click on name starts edit (active + archived).
+    const nameEl = card.querySelector('.project-card-name');
+    if (variant !== 'trash') {
+      nameEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startRename(nameEl, project, refresh);
+      });
+    }
+
+    // Context menu.
+    const menuBtn = card.querySelector('.project-menu-btn');
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openCardMenu(menuBtn, project, variant, refresh);
+    });
+  });
+}
+
+function startRename(nameEl, project, refresh) {
+  if (nameEl.dataset.editing === '1') return;
+  nameEl.dataset.editing = '1';
+  const original = project.name;
+  nameEl.setAttribute('contenteditable', 'plaintext-only');
+  nameEl.classList.add('editing');
+  nameEl.focus();
+  // Select all text.
+  const range = document.createRange();
+  range.selectNodeContents(nameEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  const finish = (commit) => {
+    nameEl.removeAttribute('contenteditable');
+    nameEl.classList.remove('editing');
+    delete nameEl.dataset.editing;
+    const trimmed = nameEl.textContent.trim();
+    if (commit && trimmed && trimmed !== original) {
+      sync.renameProject(project.projectId, trimmed).then(refresh);
+    } else {
+      nameEl.textContent = original;
+    }
+  };
+
+  nameEl.addEventListener('blur', () => finish(true), { once: true });
+  nameEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); nameEl.textContent = original; nameEl.blur(); }
+  });
+}
+
+// ─── Context menu popover ───────────────────────────────────────────────────
+
+function openCardMenu(anchorBtn, project, variant, refresh) {
+  closeOpenMenu();
+
+  const items = menuItemsForVariant(project, variant, refresh);
+  const menu = document.createElement('div');
+  menu.className = 'project-menu';
+  menu.innerHTML = items.map(it => `
+    <button class="project-menu-item ${it.danger ? 'project-menu-item-danger' : ''}" data-key="${it.key}">
+      ${it.label}
+    </button>
+  `).join('');
+
+  const rect = anchorBtn.getBoundingClientRect();
+  menu.style.top = `${rect.bottom + 4}px`;
+  menu.style.left = `${Math.max(8, rect.right - 180)}px`;
+  document.body.appendChild(menu);
+  openMenu = menu;
+
+  menu.querySelectorAll('.project-menu-item').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.key;
+      const item = items.find(i => i.key === key);
+      if (item) item.action();
+      menu.remove();
+      openMenu = null;
+    });
+  });
+}
+
+function menuItemsForVariant(project, variant, refresh) {
+  if (variant === 'trash') {
+    return [
+      { key: 'restore', label: 'Restore', action: () => sync.restoreProject(project.projectId).then(refresh) },
+      { key: 'purge', label: 'Delete permanently', danger: true, action: () => {
+        if (confirm(`Delete "${project.name}" permanently? This cannot be undone.`)) {
+          sync.purgeProject(project.projectId).then(refresh);
+        }
+      }},
+    ];
+  }
+  if (variant === 'archived') {
+    return [
+      { key: 'rename', label: 'Rename', action: () => {
+        const card = document.querySelector(`.project-card[data-id="${project.projectId}"] .project-card-name`);
+        if (card) startRename(card, project, refresh);
+      }},
+      { key: 'unarchive', label: 'Unarchive', action: () => sync.unarchiveProject(project.projectId).then(refresh) },
+      { key: 'trash', label: 'Delete', danger: true, action: () => confirmTrash(project, refresh) },
+    ];
+  }
+  return [
+    { key: 'rename', label: 'Rename', action: () => {
+      const card = document.querySelector(`.project-card[data-id="${project.projectId}"] .project-card-name`);
+      if (card) startRename(card, project, refresh);
+    }},
+    { key: 'archive', label: 'Archive', action: () => sync.archiveProject(project.projectId).then(refresh) },
+    { key: 'trash', label: 'Delete', danger: true, action: () => confirmTrash(project, refresh) },
+  ];
+}
+
+function confirmTrash(project, refresh) {
+  if (confirm(`Delete "${project.name}"? It will move to Trash for 30 days.`)) {
+    sync.trashProject(project.projectId).then(refresh);
+  }
+}
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
 
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -93,4 +405,11 @@ function timeAgo(isoString) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function daysUntilPurge(trashedIso) {
+  const trashedAt = new Date(trashedIso).getTime();
+  const retentionMs = 30 * 24 * 60 * 60 * 1000;
+  const remaining = trashedAt + retentionMs - Date.now();
+  return Math.max(0, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
 }

@@ -22,6 +22,7 @@ import { createSelection } from '../canvas/transformer.js';
 import { serializeContent, deserializeInto } from '../canvas/serialize.js';
 import { createInspector } from '../canvas/properties.js';
 import { TEMPLATES } from '../canvas/templates.js';
+import { attachImageDrop } from '../canvas/image.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -166,6 +167,11 @@ export function renderCanvas(container, { onBack }) {
   stage.on('dragend', commitChange);
   stage.on('transformend', commitChange);
 
+  const detachImageDrop = attachImageDrop(stageEl, contentLayer, {
+    onCommit: commitChange,
+    getStage: () => stage,
+  });
+
   const zoomEl = container.querySelector('#canvas-zoom');
   const updateZoom = () => {
     zoomEl.innerHTML = '';
@@ -195,6 +201,7 @@ export function renderCanvas(container, { onBack }) {
     if (!viewEl.classList.contains('active')) {
       selection.destroy();
       destroyStage();
+      if (detachImageDrop) detachImageDrop();
       if (saveTimer) clearTimeout(saveTimer);
       observer.disconnect();
     }

@@ -28,6 +28,13 @@ import {
   addComment,
   deleteComment,
   mergeCloudComments,
+  renameProject,
+  archiveProject,
+  unarchiveProject,
+  trashProject,
+  restoreProject,
+  purgeExpiredTrash,
+  TRASH_RETENTION_MS,
 } from './projects.js';
 
 beforeEach(() => {
@@ -324,5 +331,121 @@ describe('mergeCloudComments', () => {
     const result = mergeCloudComments(projectId, []);
     expect(result.lastId).toBeNull();
     expect(result.newCount).toBe(0);
+  });
+});
+
+// ─── renameProject ──────────────────────────────────────────────────────────
+
+describe('renameProject', () => {
+  it('updates project name without moving the directory', () => {
+    const { projectId } = createProject('Original Name', 'url', 'https://x.com');
+    renameProject(projectId, 'Renamed');
+    expect(loadProject(projectId).name).toBe('Renamed');
+    expect(fs.existsSync(path.join(tmpDir, projectId))).toBe(true);
+  });
+
+  it('trims whitespace', () => {
+    const { projectId } = createProject('Trim Me', 'url', 'https://x.com');
+    renameProject(projectId, '   Trimmed   ');
+    expect(loadProject(projectId).name).toBe('Trimmed');
+  });
+
+  it('rejects empty names', () => {
+    const { projectId } = createProject('Keep Me', 'url', 'https://x.com');
+    expect(() => renameProject(projectId, '   ')).toThrow();
+    expect(() => renameProject(projectId, '')).toThrow();
+    expect(loadProject(projectId).name).toBe('Keep Me');
+  });
+
+  it('bumps modified timestamp', () => {
+    const { project, projectId } = createProject('Bump Me', 'url', 'https://x.com');
+    const before = project.modified;
+    // Wait a millisecond so timestamps differ
+    const after = new Date(Date.now() + 10).toISOString();
+    const saved = { ...project, modified: before };
+    fs.writeFileSync(path.join(tmpDir, projectId, 'project.json'), JSON.stringify(saved, null, 2));
+    renameProject(projectId, 'Different');
+    expect(loadProject(projectId).modified >= before).toBe(true);
+  });
+});
+
+// ─── archive / unarchive ────────────────────────────────────────────────────
+
+describe('archiveProject / unarchiveProject', () => {
+  it('sets archived timestamp', () => {
+    const { projectId } = createProject('To Archive', 'url', 'https://x.com');
+    archiveProject(projectId);
+    const loaded = loadProject(projectId);
+    expect(loaded.archived).toBeTruthy();
+    expect(new Date(loaded.archived!).toString()).not.toBe('Invalid Date');
+  });
+
+  it('clears archived flag on unarchive', () => {
+    const { projectId } = createProject('Restore Active', 'url', 'https://x.com');
+    archiveProject(projectId);
+    unarchiveProject(projectId);
+    expect(loadProject(projectId).archived).toBeUndefined();
+  });
+
+  it('archived flag surfaces in listProjects summary', () => {
+    const { projectId } = createProject('Listed Archived', 'url', 'https://x.com');
+    archiveProject(projectId);
+    const summary = listProjects().find(p => p.projectId === projectId);
+    expect(summary?.archived).toBeTruthy();
+  });
+});
+
+// ─── trash / restore / purge ────────────────────────────────────────────────
+
+describe('trashProject / restoreProject', () => {
+  it('soft-deletes: trashed timestamp set, directory preserved', () => {
+    const { projectId } = createProject('Soft Delete', 'url', 'https://x.com');
+    trashProject(projectId);
+    expect(fs.existsSync(path.join(tmpDir, projectId))).toBe(true);
+    expect(loadProject(projectId).trashed).toBeTruthy();
+  });
+
+  it('restore clears trashed flag', () => {
+    const { projectId } = createProject('Undo Trash', 'url', 'https://x.com');
+    trashProject(projectId);
+    restoreProject(projectId);
+    expect(loadProject(projectId).trashed).toBeUndefined();
+  });
+
+  it('trashed flag surfaces in listProjects summary', () => {
+    const { projectId } = createProject('Listed Trashed', 'url', 'https://x.com');
+    trashProject(projectId);
+    const summary = listProjects().find(p => p.projectId === projectId);
+    expect(summary?.trashed).toBeTruthy();
+  });
+});
+
+describe('purgeExpiredTrash', () => {
+  it('removes trashed projects older than retention window', () => {
+    const { projectId } = createProject('Old Trash', 'url', 'https://x.com');
+    trashProject(projectId);
+    // Backdate the trashed timestamp past the retention window
+    const project = loadProject(projectId);
+    project.trashed = new Date(Date.now() - TRASH_RETENTION_MS - 1000).toISOString();
+    fs.writeFileSync(path.join(tmpDir, projectId, 'project.json'), JSON.stringify(project, null, 2));
+
+    const purged = purgeExpiredTrash();
+    expect(purged).toContain(projectId);
+    expect(fs.existsSync(path.join(tmpDir, projectId))).toBe(false);
+  });
+
+  it('leaves fresh trashed projects alone', () => {
+    const { projectId } = createProject('Fresh Trash', 'url', 'https://x.com');
+    trashProject(projectId);
+    const purged = purgeExpiredTrash();
+    expect(purged).not.toContain(projectId);
+    expect(fs.existsSync(path.join(tmpDir, projectId))).toBe(true);
+  });
+
+  it('ignores non-trashed projects entirely', () => {
+    const { projectId } = createProject('Active', 'url', 'https://x.com');
+    const purged = purgeExpiredTrash();
+    expect(purged).not.toContain(projectId);
+    expect(fs.existsSync(path.join(tmpDir, projectId))).toBe(true);
   });
 });

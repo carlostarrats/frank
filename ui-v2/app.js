@@ -29,8 +29,15 @@ function switchView(view) {
           switchView(viewForProject(data.project));
         });
       },
-      onCreateProject(name, contentType, url) {
-        sync.createProject(name, contentType, url).then(data => {
+      onCreateProject(name, contentType, url, _file, fileUpload) {
+        const create = fileUpload
+          ? sync.createProjectFromFile(name, contentType, fileUpload.fileName, fileUpload.data)
+          : sync.createProject(name, contentType, url);
+        create.then(data => {
+          if (data.type === 'error') {
+            alert(`Could not create project: ${data.error}`);
+            return;
+          }
           projectManager.setFromLoaded(data);
           switchView(viewForProject(data.project));
         });

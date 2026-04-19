@@ -16,6 +16,9 @@ export interface ProjectV2 {
   modified: string;
   // v2: canvas-backed projects opt in here. Absent on v1 projects.
   canvasEnabled?: boolean;
+  // v2.02: lifecycle flags. Absence = active.
+  archived?: string;  // ISO timestamp when archived
+  trashed?: string;   // ISO timestamp when soft-deleted; auto-purged at 30d
 }
 
 export interface ScreenV2 {
@@ -73,6 +76,28 @@ export interface SendAiMessageRequest {
   requestId?: number;
 }
 export interface DeleteProjectRequest { type: 'delete-project'; projectId: string; requestId?: number; }
+export interface RenameProjectRequest { type: 'rename-project'; projectId: string; name: string; requestId?: number; }
+export interface ArchiveProjectRequest { type: 'archive-project'; projectId: string; requestId?: number; }
+export interface UnarchiveProjectRequest { type: 'unarchive-project'; projectId: string; requestId?: number; }
+export interface TrashProjectRequest { type: 'trash-project'; projectId: string; requestId?: number; }
+export interface RestoreProjectRequest { type: 'restore-project'; projectId: string; requestId?: number; }
+export interface PurgeProjectRequest { type: 'purge-project'; projectId: string; requestId?: number; }
+// File upload: raw bytes arrive as base64 over WebSocket (no multipart available).
+export interface CreateProjectFromFileRequest {
+  type: 'create-project-from-file';
+  name: string;
+  contentType: 'pdf' | 'image';
+  fileName: string;
+  data: string;   // base64-encoded file bytes
+  requestId?: number;
+}
+export interface UploadAssetRequest {
+  type: 'upload-asset';
+  projectId: string;
+  mimeType: string;
+  data: string;   // base64
+  requestId?: number;
+}
 export interface AddScreenRequest { type: 'add-screen'; route: string; label: string; requestId?: number; }
 export interface AddCommentRequest { type: 'add-comment'; screenId: string; anchor: CommentAnchor; text: string; requestId?: number; }
 export interface DeleteCommentRequest { type: 'delete-comment'; commentId: string; requestId?: number; }
@@ -91,6 +116,14 @@ export type AppMessage =
   | LoadProjectRequest
   | CreateProjectRequest
   | DeleteProjectRequest
+  | RenameProjectRequest
+  | ArchiveProjectRequest
+  | UnarchiveProjectRequest
+  | TrashProjectRequest
+  | RestoreProjectRequest
+  | PurgeProjectRequest
+  | CreateProjectFromFileRequest
+  | UploadAssetRequest
   | AddScreenRequest
   | AddCommentRequest
   | DeleteCommentRequest
@@ -114,10 +147,20 @@ export type AppMessage =
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
+export interface ProjectSummary {
+  name: string;
+  projectId: string;
+  contentType: string;
+  modified: string;
+  commentCount: number;
+  archived?: string;
+  trashed?: string;
+}
+
 export interface ProjectListMessage {
   type: 'project-list';
   requestId?: number;
-  projects: Array<{ name: string; projectId: string; contentType: string; modified: string; commentCount: number }>;
+  projects: ProjectSummary[];
 }
 
 export interface ProjectLoadedMessage {
@@ -167,6 +210,13 @@ export interface AiInstructionLoggedMessage { type: 'ai-instruction-logged'; req
 export interface ExportReadyMessage { type: 'export-ready'; requestId?: number; data: unknown; }
 export interface CanvasStateLoadedMessage { type: 'canvas-state-loaded'; requestId?: number; state: string | null; }
 export interface CanvasStateSavedMessage { type: 'canvas-state-saved'; requestId?: number; }
+export interface AssetUploadedMessage {
+  type: 'asset-uploaded';
+  requestId?: number;
+  assetId: string;
+  url: string;
+  bytes: number;
+}
 
 export interface AiConfigMessage {
   type: 'ai-config';
@@ -255,6 +305,7 @@ export type DaemonMessage =
   | ExportReadyMessage
   | CanvasStateLoadedMessage
   | CanvasStateSavedMessage
+  | AssetUploadedMessage
   | AiConfigMessage
   | AiConversationListMessage
   | AiConversationLoadedMessage

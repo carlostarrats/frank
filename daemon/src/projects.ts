@@ -1,7 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { PROJECTS_DIR, type ProjectV2, type Comment } from './protocol.js';
+import { PROJECTS_DIR, type ProjectV2, type Comment, type ProjectSummary } from './protocol.js';
+
+// Soft-deleted projects live on disk for 30 days before auto-purge.
+export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function ensureProjectsDir(): void {
   fs.mkdirSync(PROJECTS_DIR, { recursive: true });
@@ -31,10 +34,10 @@ function commentsJsonPath(projectId: string): string {
 
 // ─── CRUD ───────────────────────────────────────────────────────────────────
 
-export function listProjects(): Array<{ name: string; projectId: string; contentType: string; modified: string; commentCount: number }> {
+export function listProjects(): ProjectSummary[] {
   ensureProjectsDir();
   const entries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
-  const projects: Array<{ name: string; projectId: string; contentType: string; modified: string; commentCount: number }> = [];
+  const projects: ProjectSummary[] = [];
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -49,6 +52,8 @@ export function listProjects(): Array<{ name: string; projectId: string; content
         contentType: project.contentType,
         modified: project.modified,
         commentCount: comments.length,
+        ...(project.archived ? { archived: project.archived } : {}),
+        ...(project.trashed ? { trashed: project.trashed } : {}),
       });
     } catch {
       // Skip corrupted project files
@@ -61,6 +66,41 @@ export function listProjects(): Array<{ name: string; projectId: string; content
 export function loadProject(projectId: string): ProjectV2 {
   const jsonPath = projectJsonPath(projectId);
   return JSON.parse(fs.readFileSync(jsonPath, 'utf8')) as ProjectV2;
+}
+
+// Create a project from an uploaded file (PDF or image). Writes the raw bytes
+// into the project's source/ subdir and returns a project whose `file` field
+// points at a /files/-servable relative path.
+export function createProjectFromFile(name: string, contentType: 'pdf' | 'image', fileName: string, data: Buffer): { project: ProjectV2; projectId: string } {
+  ensureProjectsDir();
+  const projectId = slugify(name) + '-' + crypto.randomBytes(3).toString('hex');
+  const dir = projectDir(projectId);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(path.join(dir, 'snapshots'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'source'), { recursive: true });
+
+  const safeName = fileName.replace(/[^\w.\- ]+/g, '_');
+  const sourcePath = path.join(dir, 'source', safeName);
+  fs.writeFileSync(sourcePath, data);
+  const relativePath = `projects/${projectId}/source/${safeName}`;
+
+  const now = new Date().toISOString();
+  const project: ProjectV2 = {
+    frank_version: '2',
+    name,
+    contentType,
+    file: relativePath,
+    screens: {},
+    screenOrder: [],
+    capture: true,
+    activeShare: null,
+    created: now,
+    modified: now,
+  };
+
+  atomicWrite(projectJsonPath(projectId), JSON.stringify(project, null, 2));
+  atomicWrite(commentsJsonPath(projectId), '[]');
+  return { project, projectId };
 }
 
 export function createProject(name: string, contentType: 'url' | 'pdf' | 'image' | 'canvas', url?: string, file?: string): { project: ProjectV2; projectId: string } {
@@ -101,6 +141,69 @@ export function deleteProject(projectId: string): void {
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// ─── Lifecycle ──────────────────────────────────────────────────────────────
+
+export function renameProject(projectId: string, name: string): ProjectV2 {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error('Project name cannot be empty');
+  const project = loadProject(projectId);
+  project.name = trimmed;
+  saveProject(projectId, project);
+  return project;
+}
+
+export function archiveProject(projectId: string): ProjectV2 {
+  const project = loadProject(projectId);
+  project.archived = new Date().toISOString();
+  saveProject(projectId, project);
+  return project;
+}
+
+export function unarchiveProject(projectId: string): ProjectV2 {
+  const project = loadProject(projectId);
+  delete project.archived;
+  saveProject(projectId, project);
+  return project;
+}
+
+// Soft delete. Project stays on disk for TRASH_RETENTION_MS, then purged.
+export function trashProject(projectId: string): ProjectV2 {
+  const project = loadProject(projectId);
+  project.trashed = new Date().toISOString();
+  saveProject(projectId, project);
+  return project;
+}
+
+export function restoreProject(projectId: string): ProjectV2 {
+  const project = loadProject(projectId);
+  delete project.trashed;
+  saveProject(projectId, project);
+  return project;
+}
+
+// Remove trashed projects whose trashed timestamp is older than TRASH_RETENTION_MS.
+// Called at daemon startup.
+export function purgeExpiredTrash(now: number = Date.now()): string[] {
+  ensureProjectsDir();
+  const entries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
+  const purged: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const jsonPath = path.join(PROJECTS_DIR, entry.name, 'project.json');
+    if (!fs.existsSync(jsonPath)) continue;
+    try {
+      const project = JSON.parse(fs.readFileSync(jsonPath, 'utf8')) as ProjectV2;
+      if (project.trashed && now - new Date(project.trashed).getTime() > TRASH_RETENTION_MS) {
+        deleteProject(entry.name);
+        purged.push(entry.name);
+      }
+    } catch {
+      // Skip corrupted project files
+    }
+  }
+  return purged;
 }
 
 // ─── Screens ────────────────────────────────────────────────────────────────

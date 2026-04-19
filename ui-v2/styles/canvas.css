@@ -190,6 +190,22 @@
   width: 100% !important;
   height: 100% !important;
 }
+.canvas-stage.canvas-stage-dragover::after {
+  content: 'Drop image to add';
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--ring);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--ring), transparent 92%);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 5;
+}
 
 /* ── Right inspector ─────────────────────────────────────────────────────── */
 

@@ -7,6 +7,7 @@
 
 import { rebindAll as rebindConnectors } from './connectors.js';
 import { CONNECTOR_HIT_STROKE } from './shapes.js';
+import { rehydrateImages } from './image.js';
 
 export function serializeContent(contentLayer) {
   // Only persist the content layer's children. The stage size, UI layer, and
@@ -43,4 +44,8 @@ export function deserializeInto(contentLayer, json) {
   // survives round-trip. Walk the restored layer and rebuild the dragmove
   // listeners + per-layer connector index.
   rebindConnectors(contentLayer);
+
+  // Konva.Image serializes attrs but not the `image` reference. Restored
+  // images carry an `assetUrl` attr; re-fetch the HTMLImageElement async.
+  rehydrateImages(contentLayer);
 }
