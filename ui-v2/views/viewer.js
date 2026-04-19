@@ -2,14 +2,15 @@
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { renderToolbar } from '../components/toolbar.js';
-import { setupOverlay, toggleCommentMode, disableCommentMode } from '../overlay/overlay.js';
+import { setupOverlay, toggleCommentMode, disableCommentMode, isCommentModeActive } from '../overlay/overlay.js';
+import { createViewerPinRenderer } from '../overlay/pins.js';
 import { renderCuration } from '../components/curation.js';
 import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
 import { mountAiPanel, toggleAiPanel } from '../components/ai-panel.js';
 import { renderErrorCard } from '../components/error-card.js';
-import { toastError } from '../components/toast.js';
+import { toastError, toastInfo } from '../components/toast.js';
 
 export function renderViewer(container, { onBack }) {
   const project = projectManager.get();
@@ -34,13 +35,42 @@ export function renderViewer(container, { onBack }) {
 
   const sidebar = container.querySelector('#viewer-sidebar');
   const commentToggle = container.querySelector('#toolbar-comment-toggle');
-  if (commentToggle) {
-    commentToggle.addEventListener('click', () => {
-      const isOpen = sidebar.classList.toggle('open');
-      commentToggle.innerHTML = isOpen ? '✕' : '💬';
-      commentToggle.title = isOpen ? 'Close comments' : 'Toggle comments';
-    });
+
+  // Reflect the comment-mode active state on the toolbar button.
+  function syncCommentModeUi() {
+    const active = isCommentModeActive();
+    if (commentToggle) {
+      commentToggle.classList.toggle('active', active);
+      commentToggle.title = active ? 'Exit comment mode' : 'Add comment';
+    }
   }
+
+  function enterCommentModeFromUi() {
+    // Entering comment mode always opens the sidebar so the user lands on a
+    // predictable layout — and the +Add/✕ Cancel affordance stays visible.
+    if (!sidebar.classList.contains('open')) sidebar.classList.add('open');
+    if (!isCommentModeActive()) toggleCommentMode();
+    syncCommentModeUi();
+  }
+  function leaveCommentModeFromUi() {
+    if (isCommentModeActive()) toggleCommentMode();
+    syncCommentModeUi();
+  }
+  function toggleCommentModeFromUi() {
+    isCommentModeActive() ? leaveCommentModeFromUi() : enterCommentModeFromUi();
+  }
+
+  if (commentToggle) {
+    commentToggle.addEventListener('click', toggleCommentModeFromUi);
+  }
+  // Esc anywhere on the viewer exits comment mode — matches the convention
+  // used by the canvas view.
+  const onEscape = (e) => {
+    if (e.key === 'Escape' && isCommentModeActive()) {
+      leaveCommentModeFromUi();
+    }
+  };
+  window.addEventListener('keydown', onEscape);
 
   const aiSidebar = container.querySelector('#viewer-ai-sidebar');
   mountAiPanel(aiSidebar);
@@ -53,25 +83,30 @@ export function renderViewer(container, { onBack }) {
     });
   }
 
-  // Render curation panel in sidebar
+  // Render curation panel in sidebar. Comment mode toggling lives on the
+  // toolbar comment icon — no need for a redundant button inside the panel.
   const screenId = Object.keys(project.screens || {})[0] || null;
-  renderCuration(sidebar, {
-    screenId,
-    onCommentModeToggle() {
-      const isActive = toggleCommentMode();
-      const btn = document.querySelector('#toggle-comment-mode');
-      if (btn) btn.textContent = isActive ? '✕ Cancel' : '+ Add';
-    },
-  });
+  renderCuration(sidebar, { screenId });
 
-  // Manual snapshot trigger from toolbar
+  // Manual snapshot trigger from toolbar — button flashes like the canvas
+  // snapshot button for visual consistency.
   window.addEventListener('frank:take-snapshot', async () => {
     const iframe = document.querySelector('#content-iframe');
     if (!iframe) return;
-    showSnapshotFlash();
-    const snapshot = await captureSnapshot(iframe);
-    if (snapshot) {
-      await sync.saveSnapshot(snapshot.html, null, 'manual');
+    const snapshotBtn = document.querySelector('#toolbar-snapshot');
+    snapshotBtn?.classList.add('flashing');
+    try {
+      const snapshot = await captureSnapshot(iframe);
+      if (snapshot) {
+        await sync.saveSnapshot(snapshot.html, null, 'manual');
+        toastInfo('Snapshot saved');
+      } else {
+        toastError('Could not capture snapshot');
+      }
+    } catch (err) {
+      toastError(`Snapshot failed: ${err.message || err}`);
+    } finally {
+      setTimeout(() => snapshotBtn?.classList.remove('flashing'), 300);
     }
   });
 
@@ -127,18 +162,31 @@ export function renderViewer(container, { onBack }) {
 
   const contentEl = container.querySelector('#viewer-content');
 
+  // The pin renderer attaches after the content element exists; loaders
+  // mount it once their DOM is ready so pins can find the host + overlay.
+  let pinRenderer = null;
+  function mountPinRenderer(hostEl, overlayEl) {
+    if (pinRenderer) pinRenderer.destroy();
+    pinRenderer = createViewerPinRenderer({ hostEl, overlayEl, screenId });
+    pinRenderer.render();
+  }
+  projectManager.onChange(() => { if (pinRenderer) pinRenderer.render(); });
+  window.addEventListener('frank:focus-comment-pin', (e) => {
+    if (pinRenderer) pinRenderer.setFocused(e.detail?.id ?? null);
+  });
+
   if (project.contentType === 'url' && project.url) {
-    loadUrlContent(contentEl, project.url);
+    loadUrlContent(contentEl, project.url, mountPinRenderer);
   } else if (project.contentType === 'pdf' && project.file) {
-    loadPdfContent(contentEl, project.file);
+    loadPdfContent(contentEl, project.file, mountPinRenderer);
   } else if (project.contentType === 'image' && project.file) {
-    loadImageContent(contentEl, project.file);
+    loadImageContent(contentEl, project.file, mountPinRenderer);
   } else {
     contentEl.innerHTML = '<div class="viewer-error">No content to display</div>';
   }
 }
 
-async function loadUrlContent(container, url) {
+async function loadUrlContent(container, url, mountPins) {
   container.innerHTML = `
     <div class="iframe-wrapper" id="iframe-wrapper">
       <iframe
@@ -152,6 +200,8 @@ async function loadUrlContent(container, url) {
   `;
 
   const iframe = container.querySelector('#content-iframe');
+  const overlayEl = container.querySelector('#overlay');
+  mountPins?.(iframe, overlayEl);
 
   // Setup overlay immediately — it listens for load events internally
   setupOverlay(iframe, {
@@ -164,6 +214,7 @@ async function loadUrlContent(container, url) {
         const screenId = Object.keys(projectManager.get()?.screens || {})[0] || 'default';
         sync.addComment(screenId, anchor, text);
         disableCommentMode();
+        syncCommentModeUi();
       });
     },
   });
@@ -252,22 +303,27 @@ async function fallbackToProxy(container, url) {
   }
 }
 
-function loadPdfContent(container, filePath) {
+function loadPdfContent(container, filePath, mountPins) {
   container.innerHTML = `
     <div class="iframe-wrapper">
       <iframe
+        id="content-iframe"
         src="/files/${encodeURIComponent(filePath)}"
         class="content-iframe"
       ></iframe>
       <div class="overlay" id="overlay"></div>
     </div>
   `;
+  const iframe = container.querySelector('#content-iframe');
+  const overlayEl = container.querySelector('#overlay');
+  mountPins?.(iframe, overlayEl);
 }
 
-function loadImageContent(container, filePath) {
+function loadImageContent(container, filePath, mountPins) {
   container.innerHTML = `
     <div class="image-wrapper">
       <img
+        id="content-image"
         src="/files/${encodeURIComponent(filePath)}"
         class="content-image"
         alt="Project content"
@@ -275,6 +331,11 @@ function loadImageContent(container, filePath) {
       <div class="overlay" id="overlay"></div>
     </div>
   `;
+  const img = container.querySelector('#content-image');
+  const overlayEl = container.querySelector('#overlay');
+  // Wait for image load so the host's getBoundingClientRect has final size.
+  img.addEventListener('load', () => mountPins?.(img, overlayEl), { once: true });
+  if (img.complete) mountPins?.(img, overlayEl);
 }
 
 function autoAddScreen(newUrl) {
@@ -295,89 +356,6 @@ function autoAddScreen(newUrl) {
   sync.addScreen(route, label).then(data => {
     projectManager.setFromLoaded({ ...data, projectId: projectManager.getId() });
   });
-}
-
-function showSnapshotFlash() {
-  const wrapper = document.querySelector('#iframe-wrapper') || document.querySelector('.viewer-content');
-  if (!wrapper) return;
-
-  // Remove any existing canvas
-  wrapper.querySelector('.snapshot-particles')?.remove();
-
-  const canvas = document.createElement('canvas');
-  canvas.className = 'snapshot-particles';
-  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:10000;';
-  wrapper.appendChild(canvas);
-
-  const ctx = canvas.getContext('2d');
-  const rect = wrapper.getBoundingClientRect();
-  canvas.width = rect.width;
-  canvas.height = rect.height;
-
-  const w = canvas.width;
-  const h = canvas.height;
-  const particles = [];
-  const count = 1000;
-
-  // Spawn particles from edges
-  for (let i = 0; i < count; i++) {
-    const edge = Math.floor(Math.random() * 4);
-    let x, y, vx, vy;
-    const speed = 0.45 + Math.random() * 1.2;
-
-    if (edge === 0) {        // top
-      x = Math.random() * w; y = 0;
-      vx = (Math.random() - 0.5) * 1.5; vy = speed;
-    } else if (edge === 1) { // bottom
-      x = Math.random() * w; y = h;
-      vx = (Math.random() - 0.5) * 1.5; vy = -speed;
-    } else if (edge === 2) { // left
-      x = 0; y = Math.random() * h;
-      vx = speed; vy = (Math.random() - 0.5) * 1.5;
-    } else {                 // right
-      x = w; y = Math.random() * h;
-      vx = -speed; vy = (Math.random() - 0.5) * 1.5;
-    }
-
-    particles.push({
-      x, y, vx, vy,
-      size: 0.5 + Math.random() * 1.5,
-      life: 1,
-      decay: 0.006 + Math.random() * 0.010,
-      delay: Math.random() * 15, // stagger spawn in frames
-    });
-  }
-
-  let frame = 0;
-  function animate() {
-    ctx.clearRect(0, 0, w, h);
-    let alive = false;
-
-    for (const p of particles) {
-      if (frame < p.delay) { alive = true; continue; }
-      if (p.life <= 0) continue;
-      alive = true;
-
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= p.decay;
-
-      const alpha = Math.max(0, p.life);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-      ctx.fill();
-    }
-
-    frame++;
-    if (alive) {
-      requestAnimationFrame(animate);
-    } else {
-      canvas.remove();
-    }
-  }
-
-  requestAnimationFrame(animate);
 }
 
 function escapeHtml(text) {

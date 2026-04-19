@@ -6,7 +6,7 @@ import { PROJECTS_DIR, type Comment } from './protocol.js';
 export interface CurationEntry {
   id: string;
   commentIds: string[];
-  action: 'approve' | 'dismiss' | 'remix' | 'batch';
+  action: 'approve' | 'dismiss' | 'remix' | 'batch' | 'reset';
   originalTexts: string[];
   remixedText: string;
   dismissReason: string;
@@ -32,7 +32,7 @@ export function loadCurations(projectId: string): CurationEntry[] {
 export function addCuration(
   projectId: string,
   commentIds: string[],
-  action: 'approve' | 'dismiss' | 'remix' | 'batch',
+  action: 'approve' | 'dismiss' | 'remix' | 'batch' | 'reset',
   originalTexts: string[],
   remixedText: string = '',
   dismissReason: string = ''
@@ -56,7 +56,7 @@ export function addCuration(
 export function applyCurationToComments(
   projectId: string,
   commentIds: string[],
-  newStatus: 'approved' | 'dismissed' | 'remixed'
+  newStatus: 'approved' | 'dismissed' | 'remixed' | 'pending'
 ): void {
   const commentsPath = path.join(PROJECTS_DIR, projectId, 'comments.json');
   if (!fs.existsSync(commentsPath)) return;

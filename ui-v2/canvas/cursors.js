@@ -95,3 +95,7 @@ export const TOOL_CURSORS = {
   // Text uses the native text cursor — icon wouldn't add anything.
   text: 'text',
 };
+
+// Comment-mode cursor: speech bubble + plus, same visual grammar as the
+// click-to-place shape tools so users read it as "click to drop a comment".
+export const COMMENT_CURSOR = cursorUrl(withPlus(SPEECH_ICON));

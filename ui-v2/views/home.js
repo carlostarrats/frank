@@ -3,13 +3,13 @@
 import sync from '../core/sync.js';
 import { renderUrlInput } from '../components/url-input.js';
 import { showHelpPanel } from '../components/help-panel.js';
+import { showSettingsPanel } from '../components/settings-panel.js';
 
 const DEFAULT_UI_STATE = {
   search: '',
   sort: 'recent',           // 'recent' | 'oldest' | 'alpha' | 'type'
   filter: 'all',            // 'all' | 'canvas' | 'url' | 'pdf' | 'image'
-  archivedOpen: false,
-  trashOpen: false,
+  tab: 'recent',            // 'recent' | 'archived' | 'trash'
 };
 
 let uiState = { ...DEFAULT_UI_STATE };
@@ -22,7 +22,14 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
         <img src="frank-logo.svg" alt="Frank" class="home-logo">
         <span class="home-version">v2.02</span>
         <div class="home-header-spacer"></div>
-        <button class="home-help-btn" id="home-help-btn" title="Getting started">
+        <button class="home-help-btn" id="home-settings-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Settings</span>
+        </button>
+        <button class="home-help-btn" id="home-help-btn" title="Getting started" aria-label="Help">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <span>Help</span>
         </button>
@@ -53,6 +60,10 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
     if (name === null) return;
     const trimmed = name.trim() || 'Untitled Canvas';
     onCreateProject(trimmed, 'canvas', undefined);
+  });
+
+  container.querySelector('#home-settings-btn').addEventListener('click', () => {
+    showSettingsPanel();
   });
 
   container.querySelector('#home-help-btn').addEventListener('click', () => {
@@ -103,45 +114,57 @@ function renderProjects(host, projects, { onOpenProject, refresh }) {
     return;
   }
 
+
+  const variant = uiState.tab;
+  const list = variant === 'archived' ? archived : variant === 'trash' ? trashed : active;
+
+  const trashNotice = variant === 'trash'
+    ? `<p class="home-trash-notice">Deleted projects stay here for 30 days, then are permanently removed.</p>`
+    : '';
+
   host.innerHTML = `
-    ${renderToolbar(active)}
-    <div class="home-section" id="section-recent">
-      <h3 class="home-section-title">Recent projects</h3>
-      <div class="project-list" id="list-active"></div>
+    ${renderTabs(active.length, archived.length, trashed.length)}
+    <div class="home-section">
+      ${trashNotice}
+      ${renderToolbar(list)}
+      <div class="project-list${variant === 'trash' ? ' project-list-trash' : ''}" id="list-current"></div>
     </div>
-    ${archived.length > 0 ? renderCollapsibleHeader('archived', 'Archived', archived.length, uiState.archivedOpen) : ''}
-    ${archived.length > 0 && uiState.archivedOpen ? `<div class="project-list" id="list-archived"></div>` : ''}
-    ${trashed.length > 0 ? renderCollapsibleHeader('trash', `Trash`, trashed.length, uiState.trashOpen) : ''}
-    ${trashed.length > 0 && uiState.trashOpen ? `<div class="project-list project-list-trash" id="list-trash"></div>` : ''}
   `;
 
   wireToolbar(host, refresh);
+  wireTabs(host, refresh);
 
-  const filtered = applyFilters(active, uiState);
-  const activeList = host.querySelector('#list-active');
+  const filtered = applyFilters(list, uiState);
+  const listEl = host.querySelector('#list-current');
   if (filtered.length === 0) {
-    activeList.innerHTML = `<p class="project-list-empty">No projects match</p>`;
+    const isFiltering = uiState.search.trim() !== '' || uiState.filter !== 'all';
+    const message = isFiltering ? 'No projects match' : 'None';
+    listEl.innerHTML = `<p class="project-list-empty">${message}</p>`;
   } else {
-    activeList.innerHTML = filtered.map(p => renderCard(p, 'active')).join('');
-    wireCards(activeList, filtered, 'active', { onOpenProject, refresh });
+    const cardVariant = variant === 'archived' ? 'archived' : variant === 'trash' ? 'trash' : 'active';
+    listEl.innerHTML = filtered.map(p => renderCard(p, cardVariant)).join('');
+    wireCards(listEl, filtered, cardVariant, { onOpenProject, refresh });
   }
+}
 
-  if (archived.length > 0 && uiState.archivedOpen) {
-    const el = host.querySelector('#list-archived');
-    el.innerHTML = archived.map(p => renderCard(p, 'archived')).join('');
-    wireCards(el, archived, 'archived', { onOpenProject, refresh });
-  }
+function renderTabs(recentCount, archivedCount, trashedCount) {
+  const tab = (id, label, count) => {
+    const active = uiState.tab === id ? ' active' : '';
+    return `<button class="home-tab${active}" data-tab="${id}">${label}<span class="home-tab-count">${count}</span></button>`;
+  };
+  return `
+    <div class="home-tabs" role="tablist">
+      ${tab('recent', 'Recent projects', recentCount)}
+      ${tab('archived', 'Archived', archivedCount)}
+      ${tab('trash', 'Deleted', trashedCount)}
+    </div>
+  `;
+}
 
-  if (trashed.length > 0 && uiState.trashOpen) {
-    const el = host.querySelector('#list-trash');
-    el.innerHTML = trashed.map(p => renderCard(p, 'trash')).join('');
-    wireCards(el, trashed, 'trash', { onOpenProject, refresh });
-  }
-
-  host.querySelectorAll('.home-section-toggle').forEach(btn => {
+function wireTabs(host, refresh) {
+  host.querySelectorAll('.home-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      const key = btn.dataset.section === 'archived' ? 'archivedOpen' : 'trashOpen';
-      uiState[key] = !uiState[key];
+      uiState.tab = btn.dataset.tab;
       refresh();
     });
   });
@@ -169,18 +192,20 @@ function renderToolbar(activeProjects) {
         value="${escapeHtml(uiState.search)}"
         id="home-search-input"
       >
-      <select class="input home-sort" id="home-sort-select">
-        <option value="recent"${uiState.sort === 'recent' ? ' selected' : ''}>Most recent</option>
-        <option value="oldest"${uiState.sort === 'oldest' ? ' selected' : ''}>Oldest</option>
-        <option value="alpha"${uiState.sort === 'alpha' ? ' selected' : ''}>A–Z</option>
-        <option value="type"${uiState.sort === 'type' ? ' selected' : ''}>By type</option>
-      </select>
-      <div class="home-filter-chips">
-        ${chip('all', 'All')}
-        ${chip('canvas', 'Canvas')}
-        ${chip('url', 'URL')}
-        ${chip('pdf', 'PDF')}
-        ${chip('image', 'Image')}
+      <div class="home-filter-row">
+        <div class="home-filter-chips">
+          ${chip('all', 'All')}
+          ${chip('canvas', 'Canvas')}
+          ${chip('url', 'URL')}
+          ${chip('pdf', 'PDF')}
+          ${chip('image', 'Image')}
+        </div>
+        <select class="input home-sort" id="home-sort-select" title="Sort">
+          <option value="recent"${uiState.sort === 'recent' ? ' selected' : ''}>Recent</option>
+          <option value="oldest"${uiState.sort === 'oldest' ? ' selected' : ''}>Oldest</option>
+          <option value="alpha"${uiState.sort === 'alpha' ? ' selected' : ''}>A–Z</option>
+          <option value="type"${uiState.sort === 'type' ? ' selected' : ''}>Type</option>
+        </select>
       </div>
     </div>
   `;
@@ -236,19 +261,6 @@ function applyFilters(projects, state) {
   list.sort(sortFn);
 
   return list;
-}
-
-// ─── Section collapsible headers ────────────────────────────────────────────
-
-function renderCollapsibleHeader(section, label, count, open) {
-  const arrow = open ? '▾' : '▸';
-  return `
-    <button class="home-section-toggle" data-section="${section}">
-      <span class="home-section-toggle-arrow">${arrow}</span>
-      <span class="home-section-toggle-label">${label}</span>
-      <span class="home-section-toggle-count">${count}</span>
-    </button>
-  `;
 }
 
 // ─── Card render + wiring ───────────────────────────────────────────────────

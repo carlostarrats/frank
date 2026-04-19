@@ -5,7 +5,7 @@ A collaboration layer for any web content. Point it at any URL — localhost, st
 
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
-Current branch: `dev-v2.03`.
+Current branch: `dev-v2.04`.
 
 ---
 
@@ -28,9 +28,11 @@ Current branch: `dev-v2.03`.
 - Canvas image drops + comment attachments live at `~/.frank/projects/{id}/assets/`, content-addressed by sha256.
 
 ### Self-Hosted Cloud
-- Sharing uses a **self-hosted Vercel project** (`frank-cloud/`) that the user deploys to their own Vercel account.
-- Frank never sends data to our servers. Users own their cloud infrastructure.
-- Cloud is optional — everything except sharing works offline.
+- Sharing talks to a backend **the user hosts**. There is no Anthropic-run cloud.
+- The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md): four JSON-over-HTTPS endpoints (`/api/health`, `POST+GET /api/share`, `POST /api/comment`).
+- `frank-cloud/` is the **reference implementation** for Vercel + Blob. Any host that serves the contract works — Cloudflare Workers, Deno Deploy, self-hosted Node, etc. The Settings modal (home header → cog icon) has a "Use Vercel" tab with the deploy commands and a "Use your own" tab for alternative backends.
+- The CLI equivalent is `frank connect <url> --key <key>`, which writes URL + key to `~/.frank/config.json` (mode 0600, secret-aware write). The Settings modal hits the same daemon handlers (`set-cloud-config`, `test-cloud-connection`).
+- Cloud is optional — everything except sharing works offline. Until it's configured, the Share button warns that cloud isn't set up.
 - For canvas sharing, the daemon bundles the canvas state + every referenced asset as inline data URLs into the share payload, so the cloud viewer can render without round-tripping back to the daemon.
 
 ### Plain JS Frontend
@@ -72,10 +74,10 @@ frank/
 │   │   ├── sync.js           # WebSocket client; reconnect toasts on disconnect/recover
 │   │   └── project.js        # In-memory project state manager
 │   ├── views/
-│   │   ├── home.js           # Project list — create, rename, archive, trash, search/sort/filter, Help button
-│   │   ├── viewer.js         # Content viewer — iframe + overlay + comments + AI panel + error card on proxy fail
-│   │   ├── canvas.js         # Konva canvas view — tools, comments, snapshots, share, export, shortcuts, undo/redo
-│   │   └── timeline.js       # Chronological view + Report (MD/PDF) export
+│   │   ├── home.js           # Project list — tabs (Recent/Archived/Deleted), create, rename, archive, trash, search/sort/filter, Settings + Help buttons
+│   │   ├── viewer.js         # Content viewer — iframe + overlay + comment pins + popover + AI panel + error card on proxy fail
+│   │   ├── canvas.js         # Konva canvas view — tools, comments, snapshots, share, export, shortcuts, undo (button + Cmd+Z), copy/paste/duplicate, timeline
+│   │   └── timeline.js       # Chronological view + unified Export dropdown (JSON/MD/PDF) + Show-folder button
 │   ├── canvas/
 │   │   ├── stage.js          # Konva Stage + Layer setup, pan (space+drag), zoom
 │   │   ├── tools.js          # Tool modes: select, rect, text, sticky, freehand, arrow, elbow, shapes, paths
@@ -90,26 +92,29 @@ frank/
 │   │   ├── properties.js     # Right-side inspector (fill, stroke, alignment, dissolve group)
 │   │   ├── comments.js       # Shape-anchored comments: pins + dragmove follow + orphan treatment
 │   │   ├── image.js          # Drop images → upload asset → Konva.Image; rehydrate on load
-│   │   ├── shortcuts.js      # V/R/T/P/N/A, Esc, Cmd+Z/Shift+Z, Cmd+D
+│   │   ├── shortcuts.js      # V/R/T/P/N/A, Esc, Cmd+Z/Shift+Z, Cmd+D, Cmd+C/Cmd+V (copy/paste shapes)
+│   │   ├── cursors.js        # SVG data-URL cursors for every tool + COMMENT_CURSOR (shared with viewer)
 │   │   ├── history.js        # In-memory undo/redo ring buffer
 │   │   ├── svg-export.js     # Konva content layer → standalone SVG string
 │   │   └── export.js         # PNG/SVG/PDF/JSON download helpers (PDF routes SVG→svg2pdf)
 │   ├── overlay/
-│   │   ├── overlay.js        # Click handling, comment mode toggle
+│   │   ├── overlay.js        # Click handling, comment mode toggle, custom COMMENT_CURSOR on same-origin iframes
 │   │   ├── element-detect.js # Smart element detection (bubble to meaningful)
-│   │   ├── anchoring.js      # Triple-anchor: CSS selector + DOM path + coords
+│   │   ├── anchoring.js      # Triple-anchor: CSS selector + DOM path + coords; free-pin anchor for empty-space clicks
+│   │   ├── pins.js           # Viewer-side pin rendering — numbered colored markers + shared popover (parity with canvas)
 │   │   ├── highlight.js      # Element highlight rendering
 │   │   └── snapshot.js       # DOM snapshot capture for sharing
 │   ├── components/
-│   │   ├── toolbar.js        # Top toolbar (viewer)
-│   │   ├── curation.js       # Feedback curation panel (approve/dismiss/remix/batch)
+│   │   ├── toolbar.js        # Top toolbar (viewer) + exported SVG icons (commentPlus/camera/link/download/timeline/undo) shared with canvas
+│   │   ├── curation.js       # Feedback curation panel — inline edit, approve/dismiss toggles, pin-number color badge, focus-pulse, Copy-for-AI (batch), Delete (batch)
 │   │   ├── comments.js       # Comment input (used by overlay callback)
 │   │   ├── share-popover.js  # Share link management (viewer + canvas)
 │   │   ├── ai-routing.js     # Clipboard AI routing (non-Claude fallback)
 │   │   ├── ai-panel.js       # In-app Claude conversation, streaming
 │   │   ├── url-input.js      # URL paste + file picker + drag-drop (PDF / image)
 │   │   ├── help-panel.js     # Getting-started modal (5 feature cards, focus trap)
-│   │   ├── toast.js          # info/warn/error notifications (top-right, stackable)
+│   │   ├── settings-panel.js # Settings modal — tabbed Cloud backend config (Vercel / custom) + Test connection
+│   │   ├── toast.js          # info/warn/error notifications (top-right, stackable, info shows checkmark)
 │   │   └── error-card.js     # Inline error block (message + suggestion + retry)
 │   └── styles/
 │       ├── tokens.css        # Design tokens, resets, :focus-visible rule
@@ -141,12 +146,13 @@ frank/
 │   ├── src/ai-conversations.ts  # Per-project AI conversation storage (size + msg count caps)
 │   ├── src/ai-providers/claude.ts  # Claude API client, context builder with token budget
 │   └── src/*.test.ts         # Vitest tests (132 across 12 files)
-├── frank-cloud/              # Self-hosted Vercel project for sharing
+├── frank-cloud/              # Reference cloud backend — Vercel + Blob (users host their own)
 │   ├── api/                  # Serverless functions (share, comment, health)
 │   ├── public/viewer/        # Share viewer page (iframe OR canvas render via Konva CDN)
 │   ├── vercel.json           # Routes, headers, security
 │   └── README.md             # Deploy guide with security checklist
 ├── CLAUDE.md
+├── CLOUD_API.md              # Cloud API contract — required reading if porting to another host
 ├── PROGRESS.md
 └── README.md
 ```
@@ -158,7 +164,8 @@ frank/
 - **URL-first or canvas-first**: the input is a URL, file (PDF/image), or a blank canvas — not a JSON schema
 - **Daemon is sole file writer**: UI never touches the filesystem
 - **All data local by default**: nothing leaves the machine unless user hits Share (or uses the AI panel, which calls Claude directly with the user's own key)
-- **Self-hosted cloud**: users deploy their own sharing backend
+- **Self-hosted cloud**: users deploy their own sharing backend (Vercel reference in `frank-cloud/` or any host implementing `CLOUD_API.md`)
+- **Setup is required for sharing**: Share button warns until cloud is configured via Settings modal or `frank connect`
 - **No build step**: `ui-v2/` must be servable as-is
 - **Smart element detection**: clicks bubble up to meaningful elements, not raw DOM nodes
 - **Triple-anchor comments** for DOM targets; **shape-anchor comments** for canvas shapes (pin follows on drag; orphaned pins survive at last-known position)
@@ -184,10 +191,45 @@ frank/
 
 | View | What it shows |
 |---|---|
-| **Home** | Project list + URL/file entry. Toolbar with **search / sort / type-filter chips**. Cards support **inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete**. Keyboard: ↑/↓ between cards, Enter to open, Delete to trash, F2 to rename. Persistent **Help** button opens a 5-card Getting Started modal. |
-| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar + AI panel sidebar. Proxy failures render an inline **error card with Retry**. |
-| **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Shape-anchored comments** (toggle 💬), **snapshots** (◉, thumbnail saved), **share** (↗, bundled assets), **export dropdown** (PNG / SVG / PDF / JSON), **undo/redo**, **Cmd+D duplicate**, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
-| **Timeline** | Chronological view of comments + snapshots + curations + AI instructions. Canvas snapshots show a Canvas badge + inline thumbnail. Three export buttons: JSON / Report (MD) / Report (PDF). |
+| **Home** | Project list + URL/file entry. **Tabs** (Recent / Archived / Deleted) replace the old collapsible sections. Search / sort / type-filter chips below the tab. Cards support **inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete**. Keyboard: ↑/↓ between cards, Enter to open, Delete to trash, F2 to rename. Header has a **Settings** cog (cloud backend config) and **Help** button. |
+| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar + AI panel sidebar. **Numbered colored pins** render on the overlay for each comment; click → same draggable Close/Edit/Delete popover used by canvas; feedback-row click → pin pulses. Empty-space clicks drop free pins. Proxy failures render an inline **error card with Retry**. |
+| **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Shape- and pin-anchored comments** (SVG icon, speech-bubble-plus cursor), **snapshots** (camera icon, thumbnail saved, toast), **share** (link icon, bundled assets), **export dropdown** (PNG / SVG / PDF / JSON), **undo** (button + Cmd+Z, clears selection so no orphan transformer handles), **timeline** (shared event with viewer), **Cmd+C / Cmd+V / Cmd+D** copy/paste/duplicate shapes, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
+| **Timeline** | Chronological view of comments + snapshots + curations + AI instructions. Canvas snapshots show a Canvas badge + inline thumbnail. **Show folder** (reveal in Finder/Explorer) + unified **Export** dropdown (JSON / Markdown / PDF). Close (X) returns to canvas or viewer depending on the project. |
+
+## Commenting — unified across viewer and canvas
+
+As of v2.04 the two surfaces share one commenting UX end-to-end. Anything
+that touches pins, popovers, curation, or feedback-to-AI should stay
+unified on both sides.
+
+- **Pin rendering** — canvas uses Konva circles on `uiLayer`; viewer uses
+  absolutely-positioned HTML buttons on `.overlay`. Both use the same
+  `PIN_PALETTE` (10 hues cycled by comment index) and the same visual
+  grammar (circle + number, subtle shadow). Stale canvas pins go dashed/grey.
+- **Popover** — uses the `.canvas-comment-popover` CSS class in both
+  surfaces. Draggable by its header, clamped inside the viewport on open.
+  Buttons: Close / Edit / Delete. Edit dispatches `frank:edit-comment` →
+  feedback panel opens, scrolls to the row, enters inline edit mode.
+- **Comment-mode cursor** — `COMMENT_CURSOR` (speech-bubble + plus SVG) is
+  exported from `canvas/cursors.js` and applied in both the canvas stage and
+  (on same-origin iframes) the viewer iframe body.
+- **Free-pin on empty click** — both surfaces support it. Canvas emits
+  `{ type: 'pin', x, y }` in world coords; viewer emits the same shape with
+  x/y as percentages of the iframe viewport.
+- **Feedback panel** — same `renderCuration` component mounted in both
+  sidebars. Click a row to focus it (subtle tint + accented border) and
+  trigger a continuous pulse on the matching pin. Click again to clear.
+  Status toggles (approve/dismiss) are two-way: clicking the active
+  status resets to pending via the `reset` curation action.
+- **Data flow** — the daemon broadcasts `project-loaded` after every
+  curate/delete/remix action; `app.js` handles the broadcast and calls
+  `projectManager.setFromLoaded()`, which re-renders both the feedback
+  panel and the pins. Before v2.04 the broadcast was ignored, which is
+  why status changes appeared to do nothing.
+
+Surface-specific features (canvas has undo/export/inspector/shapes; viewer
+has URL proxy/AI panel/multi-page tracking) are intentional — they reflect
+different tools, not visual drift.
 
 ## AI panel
 
@@ -207,9 +249,13 @@ frank/
 - `trashed?: string` — ISO timestamp when soft-deleted. Auto-purged after 30 days at daemon startup (`purgeExpiredTrash`).
 
 ### Comment anchor variants
-- `type: 'element'` — DOM target (viewer). Carries `cssSelector`, `domPath`, visual coords.
-- `type: 'pin'` — Free-floating pin (viewer). Carries coords + optional `pageNumber` (PDF).
+- `type: 'element'` — DOM target (viewer). Carries `cssSelector`, `domPath`, visual coords **as percentages of the iframe viewport** (not pixels).
+- `type: 'pin'` — Free-floating pin. On viewer, coords are percentages + optional `pageNumber` (PDF). On canvas, coords are absolute world coords.
 - `type: 'shape'` — Canvas shape target. Carries `shapeId`, world coords, and `shapeLastKnown: { x, y }` that updates on every `dragmove` so deleted-shape pins survive at their final position.
+
+### Curation actions
+- `approve` / `dismiss` / `remix` / `batch` — apply a status.
+- `reset` (added v2.04) — sets status back to `pending`. Used by the toggle-style buttons in the feedback panel so clicking the active status undoes it.
 
 ### Snapshot variants
 - DOM snapshot: `snapshot.html` + optional screenshot. Used by URL/PDF/image projects.
@@ -222,11 +268,11 @@ frank/
 
 ## Error surfaces
 
-Every failure path in v2.02 uses one of two components:
-- `toast.js` — transient: info auto-dismisses 4s, warn 6s, error persists until dismissed. Actions supported (e.g. "Retry now").
+Every failure path uses one of two components:
+- `toast.js` — transient: info auto-dismisses 4s, warn 6s, error persists until dismissed. Info toasts show a green ✓ icon. Actions supported (e.g. "Retry now").
 - `error-card.js` — inline: replaces failed content (viewer proxy failure, future upload-heavy surfaces).
 
-Wired: viewer proxy failure (error card), canvas save double-failure (toast + retry), canvas export failure (toast), project-creation failure (toast), WebSocket disconnect (persistent error toast) + reconnect (info toast).
+Wired: viewer proxy failure (error card), canvas save double-failure (toast + retry), canvas export failure (toast), project-creation failure (toast), WebSocket disconnect (persistent error toast) + reconnect (info toast), snapshot saved/failed (toast on both canvas and viewer), cloud settings test/save status (inline + toast).
 
 ---
 

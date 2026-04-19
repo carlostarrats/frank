@@ -11,7 +11,8 @@
 import { showConnectorHandles } from './endpoint-edit.js';
 import { groupNodes, dissolveGroup } from './templates.js';
 
-export function createSelection({ stage, contentLayer, uiLayer, getTool, onChange, onCommit }) {
+export function createSelection({ stage, contentLayer, uiLayer, getTool, getCommentMode, onChange, onCommit }) {
+  const isInCommentMode = () => typeof getCommentMode === 'function' && getCommentMode() === 'on';
   const Konva = window.Konva;
   const tr = new Konva.Transformer({
     rotateAnchorOffset: 24,
@@ -94,6 +95,7 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
 
   stage.on('mousedown.marquee', (e) => {
     if (getTool() !== 'select') return;
+    if (isInCommentMode()) return; // marquee + selection off while commenting
     // Normal mode: marquee only starts from empty stage. Crowded-canvas
     // escape hatch: Alt/Option-drag forces a marquee regardless of what
     // shape is under the cursor. Matches Figma / Sketch.
@@ -189,6 +191,8 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
   stage.on('click tap', (e) => {
     // Selection tool only
     if (getTool() !== 'select') return;
+    // Comment mode owns all stage clicks — don't select shapes or clear.
+    if (isInCommentMode()) return;
 
     // Marquee-drag just completed — skip the "empty click = clear" branch.
     // Reset after consuming so the next real click on empty stage still

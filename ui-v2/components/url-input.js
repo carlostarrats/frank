@@ -9,8 +9,8 @@ export function renderUrlInput(container, { onSubmit, onFileSubmit }) {
   container.innerHTML = `
     <div class="url-input-wrapper" id="url-input-wrapper">
       <div class="url-input-header">
-        <h2>What are you working on?</h2>
-        <p class="url-input-subtitle">Paste a URL or drop a file to start collaborating</p>
+        <h2>A local-first collaboration layer for any web content.</h2>
+        <p class="url-input-subtitle">Runs on your machine. Point Frank at a URL, drop in a file, or start a canvas — then comment, curate, and route feedback to AI. Every decision captured. Nothing leaves your computer unless you share.</p>
       </div>
       <div class="url-input-form">
         <input
@@ -30,7 +30,7 @@ export function renderUrlInput(container, { onSubmit, onFileSubmit }) {
       </div>
       <div class="url-input-hint">
         <span>Supports: URLs (localhost, staging, production), PDFs, and images.</span>
-        <button class="url-input-browse" id="url-browse">Browse files…</button>
+        <button class="url-input-browse" id="url-browse">Select files…</button>
         <input type="file" id="url-file-picker" accept="${ACCEPTED_ATTR}" hidden>
       </div>
       <div class="url-input-error" id="url-error" style="display:none"></div>

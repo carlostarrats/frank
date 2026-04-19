@@ -68,6 +68,10 @@
   border-left-color: transparent;
 }
 .curation-item.selected { border-left-color: var(--primary); }
+.curation-item.focused {
+  background: color-mix(in oklch, var(--primary), transparent 97%);
+  border-left-color: var(--primary);
+}
 .curation-status-approved { border-left-color: var(--success); }
 .curation-status-dismissed { border-left-color: var(--muted-foreground); opacity: 0.6; }
 .curation-status-remixed { border-left-color: var(--warning); }
@@ -80,6 +84,21 @@
   margin-bottom: var(--space-1);
 }
 .curation-check input { cursor: pointer; }
+.curation-pin-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #111;
+  font-variant-numeric: tabular-nums;
+}
+.curation-item { cursor: pointer; }
+.curation-item > *:not(.curation-item-header) { cursor: default; }
 .curation-badge {
   font-size: 10px;
   padding: 1px var(--space-2);
@@ -116,10 +135,11 @@
   display: flex;
   gap: var(--space-1);
   margin-top: var(--space-2);
-  opacity: 0;
+  opacity: 0.7;
   transition: opacity var(--duration-fast) var(--ease-standard);
 }
-.curation-item:hover .curation-actions { opacity: 1; }
+.curation-item:hover .curation-actions,
+.curation-item.focused .curation-actions { opacity: 1; }
 .curation-act {
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
@@ -138,10 +158,15 @@
   background: var(--accent);
   border-color: var(--border);
 }
+.curation-act.on {
+  color: var(--text);
+  background: color-mix(in oklch, var(--primary), transparent 80%);
+  border-color: var(--primary);
+}
 
 .curation-batch {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-2) 0;
   border-top: 1px solid var(--border);
@@ -149,19 +174,27 @@
   font-size: var(--text-sm);
   color: var(--muted-foreground);
 }
-.curation-remix-area {
-  border-top: 1px solid var(--border);
-  padding-top: var(--space-3);
-  margin-top: var(--space-2);
+.curation-batch > button { width: 100%; }
+.curation-batch-delete {
+  color: var(--danger);
+  border-color: color-mix(in oklch, var(--danger), transparent 60%);
 }
-.curation-remix-text {
+.curation-batch-delete:hover {
+  background: color-mix(in oklch, var(--danger), transparent 85%);
+  color: var(--danger);
+}
+/* In-place editor that replaces the comment text while editing. The user can
+   drag the lower-right corner to enlarge the textarea and see more. */
+.curation-text-edit {
   width: 100%;
-  resize: none;
-  min-height: 60px;
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.5;
   margin-bottom: var(--space-2);
 }
-.curation-remix-actions {
-  display: flex;
-  gap: var(--space-2);
-  justify-content: flex-end;
+.curation-act-primary {
+  color: var(--text);
+  border-color: var(--ring);
 }

@@ -1,16 +1,24 @@
 // timeline.js — Chronological view of snapshots, comments, curations, AI instructions
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
+import { iconDownload } from '../components/toolbar.js';
 
 export function renderTimeline(container, { onBack }) {
   container.innerHTML = `
     <div class="toolbar">
       <span class="toolbar-title">Timeline</span>
       <div class="toolbar-spacer"></div>
-      <button class="toolbar-btn toolbar-comment-btn" id="timeline-back" title="Close timeline">✕</button>
-      <button class="toolbar-btn" id="timeline-export">Export JSON</button>
-      <button class="toolbar-btn" id="timeline-report-md">Report (MD)</button>
-      <button class="toolbar-btn" id="timeline-report-pdf">Report (PDF)</button>
+      <button class="toolbar-btn" id="timeline-reveal" title="Show project folder on disk">Show folder</button>
+      <div class="timeline-export-wrapper">
+        <button class="toolbar-btn toolbar-icon-btn" id="timeline-export-btn" title="Export" aria-label="Export">${iconDownload()}</button>
+        <div class="timeline-export-menu" id="timeline-export-menu" hidden>
+          <button data-format="json" class="timeline-export-item">JSON</button>
+          <button data-format="markdown" class="timeline-export-item">Markdown</button>
+          <button data-format="pdf" class="timeline-export-item">PDF</button>
+        </div>
+      </div>
+      <span class="toolbar-close-gap"></span>
+      <button class="toolbar-btn toolbar-comment-btn" id="timeline-back" title="Close timeline" aria-label="Close timeline">✕</button>
     </div>
     <div class="timeline-body" id="timeline-body">
       <div class="viewer-loading">Loading timeline...</div>
@@ -18,26 +26,54 @@ export function renderTimeline(container, { onBack }) {
   `;
 
   container.querySelector('#timeline-back').addEventListener('click', onBack);
-  container.querySelector('#timeline-export').addEventListener('click', async () => {
-    const result = await sync.exportProject();
-    if (result.data) {
-      const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
-      downloadBlob(blob, `${projectManager.get()?.name || 'project'}-export.json`);
-    }
+  container.querySelector('#timeline-reveal').addEventListener('click', async () => {
+    const result = await sync.revealProjectFolder();
+    if (result?.type === 'error') alert(`Could not open folder: ${result.error}`);
   });
-  container.querySelector('#timeline-report-md').addEventListener('click', async () => {
-    const result = await sync.exportReport('markdown');
-    if (result.type === 'error') { alert(`Export failed: ${result.error}`); return; }
-    const blob = new Blob([result.data], { type: 'text/markdown' });
-    downloadBlob(blob, `${projectManager.get()?.name || 'project'}-report.md`);
+
+  // Export dropdown — mirrors the canvas export menu: one download icon, a
+  // popover menu with the three formats, click-outside closes.
+  const exportBtn = container.querySelector('#timeline-export-btn');
+  const exportMenu = container.querySelector('#timeline-export-menu');
+  const closeExportMenu = () => exportMenu.setAttribute('hidden', '');
+  exportBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (exportMenu.hasAttribute('hidden')) exportMenu.removeAttribute('hidden');
+    else closeExportMenu();
   });
-  container.querySelector('#timeline-report-pdf').addEventListener('click', async () => {
-    const result = await sync.exportReport('pdf');
-    if (result.type === 'error') { alert(`Export failed: ${result.error}`); return; }
-    // PDF arrives base64-encoded.
-    const bytes = Uint8Array.from(atob(result.data), c => c.charCodeAt(0));
-    const blob = new Blob([bytes], { type: 'application/pdf' });
-    downloadBlob(blob, `${projectManager.get()?.name || 'project'}-report.pdf`);
+  const onExportClickOutside = (e) => {
+    if (!exportMenu.contains(e.target) && e.target !== exportBtn && !exportBtn.contains(e.target)) closeExportMenu();
+  };
+  document.addEventListener('click', onExportClickOutside);
+
+  exportMenu.querySelectorAll('.timeline-export-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeExportMenu();
+      const format = item.dataset.format;
+      const projectName = projectManager.get()?.name || 'project';
+      try {
+        if (format === 'json') {
+          const result = await sync.exportProject();
+          if (!result?.data) throw new Error('No data');
+          const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+          downloadBlob(blob, `${projectName}-export.json`);
+        } else if (format === 'markdown') {
+          const result = await sync.exportReport('markdown');
+          if (result.type === 'error') throw new Error(result.error);
+          const blob = new Blob([result.data], { type: 'text/markdown' });
+          downloadBlob(blob, `${projectName}.md`);
+        } else if (format === 'pdf') {
+          const result = await sync.exportReport('pdf');
+          if (result.type === 'error') throw new Error(result.error);
+          const bytes = Uint8Array.from(atob(result.data), c => c.charCodeAt(0));
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          downloadBlob(blob, `${projectName}.pdf`);
+        }
+      } catch (err) {
+        alert(`Export failed: ${err.message || err}`);
+      }
+    });
   });
 
   function downloadBlob(blob, filename) {

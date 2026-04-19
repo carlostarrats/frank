@@ -108,6 +108,9 @@ export interface DeleteCommentRequest { type: 'delete-comment'; commentId: strin
 export interface ProxyUrlRequest { type: 'proxy-url'; url: string; requestId?: number; }
 export interface UploadShareRequest { type: 'upload-share'; snapshot: unknown; coverNote: string; contentType: string; oldShareId?: string; oldRevokeToken?: string; requestId?: number; }
 export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; }
+export interface GetCloudConfigRequest { type: 'get-cloud-config'; requestId?: number; }
+export interface SetCloudConfigRequest { type: 'set-cloud-config'; cloudUrl: string; apiKey: string; requestId?: number; }
+export interface TestCloudConnectionRequest { type: 'test-cloud-connection'; requestId?: number; }
 export interface SaveSnapshotRequest { type: 'save-snapshot'; html: string; screenshot: string | null; trigger: 'manual' | 'share' | 'ai-applied'; triggeredBy?: string; requestId?: number; }
 export interface SaveCanvasSnapshotRequest {
   type: 'save-canvas-snapshot';
@@ -119,10 +122,11 @@ export interface SaveCanvasSnapshotRequest {
 }
 export interface ListSnapshotsRequest { type: 'list-snapshots'; requestId?: number; }
 export interface StarSnapshotRequest { type: 'star-snapshot'; snapshotId: string; label: string; requestId?: number; }
-export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch'; remixedText?: string; dismissReason?: string; requestId?: number; }
+export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch' | 'reset'; remixedText?: string; dismissReason?: string; requestId?: number; }
 export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackIds: string[]; curationIds: string[]; instruction: string; requestId?: number; }
 export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
 export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }
+export interface RevealProjectFolderRequest { type: 'reveal-project-folder'; projectId?: string; requestId?: number; }
 
 export type AppMessage =
   | ListProjectsRequest
@@ -143,6 +147,9 @@ export type AppMessage =
   | ProxyUrlRequest
   | UploadShareRequest
   | CloudStatusRequest
+  | GetCloudConfigRequest
+  | SetCloudConfigRequest
+  | TestCloudConnectionRequest
   | SaveSnapshotRequest
   | SaveCanvasSnapshotRequest
   | ListSnapshotsRequest
@@ -151,6 +158,7 @@ export type AppMessage =
   | LogAiInstructionRequest
   | ExportProjectRequest
   | ExportReportRequest
+  | RevealProjectFolderRequest
   | LoadCanvasStateRequest
   | SaveCanvasStateRequest
   | GetAiConfigRequest
@@ -216,6 +224,18 @@ export interface CloudStatusMessage {
   requestId?: number;
   connected: boolean;
   cloudUrl: string | null;
+}
+export interface CloudConfigMessage {
+  type: 'cloud-config';
+  requestId?: number;
+  cloudUrl: string | null;
+  hasApiKey: boolean;
+}
+export interface CloudTestResultMessage {
+  type: 'cloud-test-result';
+  requestId?: number;
+  ok: boolean;
+  error?: string;
 }
 
 export interface SnapshotSavedMessage { type: 'snapshot-saved'; requestId?: number; snapshot: unknown; }
@@ -311,6 +331,7 @@ export interface ConversationFullMessage {
   conversationId: string;
   reason: 'bytes' | 'messages';
 }
+export interface FolderRevealedMessage { type: 'folder-revealed'; requestId?: number; path: string; }
 
 export type DaemonMessage =
   | ProjectListMessage
@@ -320,6 +341,8 @@ export type DaemonMessage =
   | ErrorMessage
   | ShareUploadedMessage
   | CloudStatusMessage
+  | CloudConfigMessage
+  | CloudTestResultMessage
   | SnapshotSavedMessage
   | SnapshotListMessage
   | CurationDoneMessage
@@ -336,7 +359,8 @@ export type DaemonMessage =
   | AiStreamDeltaMessage
   | AiStreamEndedMessage
   | AiStreamErrorMessage
-  | ConversationFullMessage;
+  | ConversationFullMessage
+  | FolderRevealedMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 

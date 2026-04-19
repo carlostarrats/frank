@@ -18,7 +18,7 @@ function showAiRoutingModal(commentIds, comments, combined) {
   modal.innerHTML = `
     <div class="ai-routing-overlay" id="ai-close-overlay"></div>
     <div class="ai-routing-dialog">
-      <h3>Send to AI</h3>
+      <h3>Copy for AI</h3>
       <div class="ai-routing-context">
         <div class="ai-routing-label">Reviewer feedback (${comments.length} comments)</div>
         <div class="ai-routing-feedback">

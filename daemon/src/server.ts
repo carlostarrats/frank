@@ -3,8 +3,9 @@ import path from 'path';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
+import { exec } from 'child_process';
 import {
-  WEBSOCKET_PORT, HTTP_PORT, FRANK_DIR,
+  WEBSOCKET_PORT, HTTP_PORT, FRANK_DIR, PROJECTS_DIR,
   type AppMessage, type DaemonMessage, type Comment,
 } from './protocol.js';
 import {
@@ -17,7 +18,7 @@ import { saveAsset, ALLOWED_MIME_TYPES } from './assets.js';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB cap for base64-over-WS uploads
 import { proxyRequest } from './proxy.js';
-import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments } from './cloud.js';
+import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments, saveCloudConfig, healthCheck } from './cloud.js';
 import { mergeCloudComments } from './projects.js';
 import { saveSnapshot, saveCanvasSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
 import { addCuration, applyCurationToComments } from './curation.js';
@@ -417,6 +418,43 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       break;
     }
 
+    case 'get-cloud-config': {
+      // Returns the URL (fine to read) and a boolean for whether a key is
+      // stored; we never echo the key back to the client.
+      reply({
+        type: 'cloud-config',
+        cloudUrl: getCloudUrl(),
+        hasApiKey: isCloudConnected(),
+      });
+      break;
+    }
+
+    case 'set-cloud-config': {
+      try {
+        const url = (msg.cloudUrl || '').replace(/\/$/, '').trim();
+        const key = (msg.apiKey || '').trim();
+        if (!url || !key) throw new Error('Both URL and API key are required');
+        if (!/^https?:\/\//.test(url)) throw new Error('URL must start with http:// or https://');
+        saveCloudConfig(url, key);
+        reply({ type: 'cloud-config', cloudUrl: url, hasApiKey: true });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'test-cloud-connection': {
+      (async () => {
+        try {
+          const result = await healthCheck();
+          reply({ type: 'cloud-test-result', ok: result.ok, error: result.error });
+        } catch (e: any) {
+          reply({ type: 'cloud-test-result', ok: false, error: e.message });
+        }
+      })();
+      break;
+    }
+
     case 'save-snapshot': {
       if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
@@ -465,8 +503,8 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       try {
         const localComments = loadComments(activeProjectId);
         const origTexts = msg.commentIds.map(id => localComments.find(c => c.id === id)?.text || '');
-        const statusMap: Record<string, 'approved' | 'dismissed' | 'remixed'> = {
-          approve: 'approved', dismiss: 'dismissed', remix: 'remixed', batch: 'approved',
+        const statusMap: Record<string, 'approved' | 'dismissed' | 'remixed' | 'pending'> = {
+          approve: 'approved', dismiss: 'dismissed', remix: 'remixed', batch: 'approved', reset: 'pending',
         };
         const curation = addCuration(activeProjectId, msg.commentIds, msg.action, origTexts, msg.remixedText || '', msg.dismissReason || '');
         applyCurationToComments(activeProjectId, msg.commentIds, statusMap[msg.action]);
@@ -512,6 +550,23 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           reply({ type: 'error', error: e.message });
         }
       })();
+      break;
+    }
+
+    case 'reveal-project-folder': {
+      const id = msg.projectId || activeProjectId;
+      if (!id) { reply({ type: 'error', error: 'No project to reveal' }); break; }
+      const target = path.join(PROJECTS_DIR, id);
+      if (!fs.existsSync(target)) { reply({ type: 'error', error: 'Project folder not found' }); break; }
+      // Platform-specific reveal. Fail silently if the OS command errors.
+      const cmd =
+        process.platform === 'darwin' ? `open "${target}"` :
+        process.platform === 'win32' ? `explorer "${target}"` :
+        `xdg-open "${target}"`;
+      exec(cmd, (err) => {
+        if (err) reply({ type: 'error', error: `Could not open folder: ${err.message}` });
+        else reply({ type: 'folder-revealed', path: target });
+      });
       break;
     }
 
