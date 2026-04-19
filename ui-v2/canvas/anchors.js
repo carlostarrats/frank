@@ -9,20 +9,40 @@
 // Connectors are never valid snap targets (that was the "arrows tying to
 // arrows" bug), so `isSnappableShape` filters them out.
 
+// Produce 8 anchor points on the shape's OWN bounding box (pre-transform),
+// then push each point through the shape's absolute transform so rotation
+// and scale are preserved. The points come out in `relativeTo` layer space,
+// matching how the connector's endpoints are stored.
+//
+// The old implementation used getClientRect, which returns the axis-aligned
+// bounding box AFTER transform — for a 45°-rotated square that's the big
+// square containing the diamond, so the "corners" landed out in empty
+// space and the endpoint couldn't snap to the shape's actual corners.
 function allAnchors(shape, relativeTo) {
-  const r = shape.getClientRect({ skipStroke: true, relativeTo });
-  const hw = r.width / 2;
-  const hh = r.height / 2;
-  return [
-    { id: 'tl', x: r.x,          y: r.y },
-    { id: 'tm', x: r.x + hw,     y: r.y },
-    { id: 'tr', x: r.x + r.width, y: r.y },
-    { id: 'rm', x: r.x + r.width, y: r.y + hh },
-    { id: 'br', x: r.x + r.width, y: r.y + r.height },
-    { id: 'bm', x: r.x + hw,     y: r.y + r.height },
-    { id: 'bl', x: r.x,          y: r.y + r.height },
-    { id: 'lm', x: r.x,          y: r.y + hh },
+  const local = shape.getSelfRect();
+  const x0 = local.x;
+  const y0 = local.y;
+  const x1 = x0 + local.width;
+  const y1 = y0 + local.height;
+  const mx = (x0 + x1) / 2;
+  const my = (y0 + y1) / 2;
+  const localPoints = [
+    { id: 'tl', x: x0, y: y0 },
+    { id: 'tm', x: mx, y: y0 },
+    { id: 'tr', x: x1, y: y0 },
+    { id: 'rm', x: x1, y: my },
+    { id: 'br', x: x1, y: y1 },
+    { id: 'bm', x: mx, y: y1 },
+    { id: 'bl', x: x0, y: y1 },
+    { id: 'lm', x: x0, y: my },
   ];
+  const shapeToAbs = shape.getAbsoluteTransform();
+  const absToRel = relativeTo.getAbsoluteTransform().copy().invert();
+  return localPoints.map((p) => {
+    const abs = shapeToAbs.point({ x: p.x, y: p.y });
+    const rel = absToRel.point(abs);
+    return { id: p.id, x: rel.x, y: rel.y };
+  });
 }
 
 export function isSnappableShape(node, contentLayer) {
