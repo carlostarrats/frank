@@ -124,7 +124,9 @@ const ARROW_POINTER = 8;
 
 // Generous hit area so users can click thin connector lines without needing
 // pixel-perfect aim. This stays invisible — only the stroke (2px) renders.
-const CONNECTOR_HIT_STROKE = 20;
+// Exported so serialize.js can apply the same value to connectors restored
+// from disk (which otherwise fall back to stroke width = 2 hit area).
+export const CONNECTOR_HIT_STROKE = 30;
 
 export function createArrow({ points, stroke = STROKE, strokeWidth = 2 }) {
   const Konva = window.Konva;

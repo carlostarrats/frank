@@ -66,6 +66,35 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
   uiLayer.add(endHandle);
   uiLayer.batchDraw();
 
+  // When the connector's bound source or target shape moves, connectors.js
+  // re-computes the connector's points. We need to move the handles along
+  // with them — otherwise the handles float off where they were when the
+  // connector was selected. Subscribe to dragmove/transformend on both
+  // bound shapes and reposition the handles after each update.
+  const followListeners = [];
+  function attachFollowers() {
+    for (const l of followListeners) {
+      l.node.off('dragmove.endpoint-handles transformend.endpoint-handles', l.handler);
+    }
+    followListeners.length = 0;
+    for (const attr of ['sourceId', 'targetId']) {
+      const id = connector.getAttr(attr);
+      if (!id) continue;
+      const node = contentLayer.findOne('#' + id);
+      if (!node) continue;
+      const handler = () => {
+        const s = endpointFromPoints('start');
+        const e = endpointFromPoints('end');
+        startHandle.position({ x: s.x, y: s.y });
+        endHandle.position({ x: e.x, y: e.y });
+        uiLayer.batchDraw();
+      };
+      node.on('dragmove.endpoint-handles transformend.endpoint-handles', handler);
+      followListeners.push({ node, handler });
+    }
+  }
+  attachFollowers();
+
   function targetAtPointer() {
     const p = stage.getPointerPosition();
     if (!p) return null;
@@ -128,12 +157,20 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
     startHandle.position({ x: startPt.x, y: startPt.y });
     endHandle.position({ x: endPt.x, y: endPt.y });
 
+    // Bindings may have changed — re-subscribe to the new source/target
+    // dragmove events so future shape moves keep the handles glued.
+    attachFollowers();
+
     uiLayer.batchDraw();
     if (onChange) onChange();
   }
 
   function destroy() {
     overlay.hide();
+    for (const l of followListeners) {
+      l.node.off('dragmove.endpoint-handles transformend.endpoint-handles', l.handler);
+    }
+    followListeners.length = 0;
     startHandle.destroy();
     endHandle.destroy();
     uiLayer.batchDraw();
