@@ -30,6 +30,7 @@ import { attachShortcuts } from '../canvas/shortcuts.js';
 import { createHistory } from '../canvas/history.js';
 import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js';
 import { toastError, toastInfo } from '../components/toast.js';
+import { iconCommentPlus, iconCamera, iconLink, iconDownload } from '../components/toolbar.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -94,11 +95,11 @@ export function renderCanvas(container, { onBack }) {
         <button class="btn-ghost canvas-back" title="Back">←</button>
         <div class="canvas-title">${escapeHtml(project.name)}</div>
         <div class="canvas-topbar-spacer"></div>
-        <button class="btn-ghost canvas-comment-toggle" id="canvas-comment-toggle" title="Comment on shape">💬</button>
-        <button class="btn-ghost canvas-snapshot-btn" id="canvas-snapshot-btn" title="Take snapshot">◉</button>
-        <button class="btn-ghost canvas-share-btn" id="canvas-share-btn" title="Share canvas">↗</button>
+        <button class="btn-ghost canvas-icon-btn canvas-comment-toggle" id="canvas-comment-toggle" title="Comment on shape" aria-label="Toggle comment mode">${iconCommentPlus()}</button>
+        <button class="btn-ghost canvas-icon-btn canvas-snapshot-btn" id="canvas-snapshot-btn" title="Take snapshot" aria-label="Take snapshot">${iconCamera()}</button>
+        <button class="btn-ghost canvas-icon-btn canvas-share-btn" id="canvas-share-btn" title="Share canvas" aria-label="Share canvas">${iconLink()}</button>
         <div class="canvas-export-wrapper">
-          <button class="btn-ghost canvas-export-btn" id="canvas-export-btn" title="Export">⤓</button>
+          <button class="btn-ghost canvas-icon-btn canvas-export-btn" id="canvas-export-btn" title="Export" aria-label="Export">${iconDownload()}</button>
           <div class="canvas-export-menu" id="canvas-export-menu" hidden>
             <button data-format="png" class="canvas-export-item">Export PNG</button>
             <button data-format="svg" class="canvas-export-item">Export SVG (vector)</button>
@@ -164,12 +165,23 @@ export function renderCanvas(container, { onBack }) {
     onChange: commitChange,
   });
 
+  // `comments` is built below; read its mode lazily so createSelection can
+  // short-circuit when comment mode is on without a forward-reference error.
+  let commentsRef = null;
   const selection = createSelection({
     stage,
     contentLayer,
     uiLayer,
     getTool: () => tools.getTool(),
+    getCommentMode: () => commentsRef ? commentsRef.getMode() : 'off',
     onChange: (nodes) => {
+      // Don't show the inspector at all while in comment mode — the user is
+      // focused on annotating, not editing.
+      if (commentsRef && commentsRef.getMode() === 'on') {
+        inspector.setSelection([]);
+        inspectorHost.classList.remove('open');
+        return;
+      }
       inspector.setSelection(nodes);
       // Collapse the inspector sidebar when nothing's selected; expand when
       // there's something to edit. Matches the AI-panel show/hide pattern.
@@ -225,16 +237,18 @@ export function renderCanvas(container, { onBack }) {
     uiLayer,
     onCommit: commitChange,
   });
+  commentsRef = comments;
+
+  // Feedback panel → canvas: clicking a comment row focuses/un-focuses it.
+  // While focused, the matching pin pulses continuously; id=null clears.
+  const onFocusPin = (e) => {
+    comments.setFocusedPin(e.detail?.id ?? null);
+  };
+  window.addEventListener('frank:focus-comment-pin', onFocusPin);
 
   // Curation sidebar mirrors the viewer layout; filters to 'canvas' screen.
   const curationHost = container.querySelector('#canvas-curation-host');
-  renderCuration(curationHost, {
-    screenId: CANVAS_SCREEN_ID,
-    onCommentModeToggle() {
-      const next = comments.getMode() === 'on' ? 'off' : 'on';
-      comments.setMode(next);
-    },
-  });
+  renderCuration(curationHost, { screenId: CANVAS_SCREEN_ID });
 
   const commentToggleBtn = container.querySelector('#canvas-comment-toggle');
   commentToggleBtn.addEventListener('click', () => {
@@ -250,24 +264,38 @@ export function renderCanvas(container, { onBack }) {
       tools.activate('select');
       selection.clear();
       markActiveTool(drawerEl, 'select');
+      // Hide the inspector panel — comment mode shouldn't show object props.
+      inspector.setSelection([]);
+      inspectorHost.classList.remove('open');
     }
   });
 
-  // In comment mode, clicking a shape creates a comment anchored to it. We
-  // intercept on the stage so the creation tools don't fire in parallel.
+  // In comment mode, clicking anywhere on the stage creates a comment — on a
+  // shape it becomes a shape-anchored pin; on empty canvas it becomes a
+  // free-floating pin at the world coords. Selection / properties are
+  // suppressed while mode is on so the properties panel doesn't pop open.
   stage.on('click.comments tap.comments', (e) => {
     if (comments.getMode() !== 'on') return;
-    const target = e.target;
-    if (!target || target === stage) return;
-    // Walk up until we're at a direct contentLayer child (skip over group
-    // children so the comment anchors to the whole group, matching the pattern
-    // for snap and selection).
-    let shape = target;
+
+    // Ignore clicks that land on existing comment pins (uiLayer) — those have
+    // their own handler that opens the popover.
+    if (e.target && e.target.getLayer && e.target.getLayer() === uiLayer) return;
+
+    e.cancelBubble = true;
+
+    // Empty stage: drop a free pin at the pointer's world coords.
+    if (!e.target || e.target === stage) {
+      const pt = stage.getRelativePointerPosition() || { x: 0, y: 0 };
+      comments.handleEmptyClickInMode(pt.x, pt.y);
+      return;
+    }
+
+    // Otherwise walk up to a direct contentLayer child and anchor to it.
+    let shape = e.target;
     while (shape && shape.getParent && shape.getParent() !== contentLayer) {
       shape = shape.getParent();
     }
-    if (!shape || shape === contentLayer || shape.getLayer && shape.getLayer() === uiLayer) return;
-    e.cancelBubble = true;
+    if (!shape || shape === contentLayer) return;
     comments.handleShapeClickInMode(shape);
   });
 

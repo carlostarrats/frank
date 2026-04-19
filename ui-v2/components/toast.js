@@ -28,7 +28,7 @@ function renderToast({ kind = 'info', message, actionLabel, onAction, ttl }) {
   toast.setAttribute('role', kind === 'error' ? 'alert' : 'status');
 
   const iconFor = {
-    info:  '',
+    info:  '✓',
     warn:  '!',
     error: '×',
   };

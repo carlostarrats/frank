@@ -119,7 +119,7 @@ export interface SaveCanvasSnapshotRequest {
 }
 export interface ListSnapshotsRequest { type: 'list-snapshots'; requestId?: number; }
 export interface StarSnapshotRequest { type: 'star-snapshot'; snapshotId: string; label: string; requestId?: number; }
-export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch'; remixedText?: string; dismissReason?: string; requestId?: number; }
+export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch' | 'reset'; remixedText?: string; dismissReason?: string; requestId?: number; }
 export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackIds: string[]; curationIds: string[]; instruction: string; requestId?: number; }
 export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
 export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }

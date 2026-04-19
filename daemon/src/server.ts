@@ -465,8 +465,8 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       try {
         const localComments = loadComments(activeProjectId);
         const origTexts = msg.commentIds.map(id => localComments.find(c => c.id === id)?.text || '');
-        const statusMap: Record<string, 'approved' | 'dismissed' | 'remixed'> = {
-          approve: 'approved', dismiss: 'dismissed', remix: 'remixed', batch: 'approved',
+        const statusMap: Record<string, 'approved' | 'dismissed' | 'remixed' | 'pending'> = {
+          approve: 'approved', dismiss: 'dismissed', remix: 'remixed', batch: 'approved', reset: 'pending',
         };
         const curation = addCuration(activeProjectId, msg.commentIds, msg.action, origTexts, msg.remixedText || '', msg.dismissReason || '');
         applyCurationToComments(activeProjectId, msg.commentIds, statusMap[msg.action]);

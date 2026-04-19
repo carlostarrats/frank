@@ -94,7 +94,7 @@
 
 .comment-textarea {
   width: 100%;
-  resize: none;
+  resize: vertical;
   min-height: 5rem;
   margin-bottom: var(--space-2);
 }

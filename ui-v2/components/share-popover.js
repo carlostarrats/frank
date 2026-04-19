@@ -15,7 +15,13 @@ export function showSharePopover(anchorEl, { onClose }) {
   overlay.innerHTML = `
     <div class="share-modal">
       <div class="share-modal-header">
-        <h3>🔗 Share</h3>
+        <h3>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:6px">
+            <path d="M10.5 13.5 a4 4 0 0 1 0-5.66 l2.5-2.5 a4 4 0 0 1 5.66 5.66 l-1.5 1.5"/>
+            <path d="M13.5 10.5 a4 4 0 0 1 0 5.66 l-2.5 2.5 a4 4 0 0 1-5.66-5.66 l1.5-1.5"/>
+          </svg>
+          Share
+        </h3>
         <button class="share-modal-close" id="share-close">✕</button>
       </div>
       <div class="share-popover-inner">

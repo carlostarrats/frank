@@ -81,6 +81,10 @@ window.addEventListener('frank:open-timeline', () => {
 sync.onMessage((msg) => {
   if (msg.type === 'comment-added') {
     projectManager.addComment(msg.comment);
+  } else if (msg.type === 'project-loaded' && msg.comments) {
+    // Daemon broadcasts this after curate / delete / remix actions. Keep the
+    // in-memory comment list in sync so status changes show in the UI.
+    projectManager.setFromLoaded(msg);
   }
 });
 

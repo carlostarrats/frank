@@ -2,7 +2,7 @@
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { renderToolbar } from '../components/toolbar.js';
-import { setupOverlay, toggleCommentMode, disableCommentMode } from '../overlay/overlay.js';
+import { setupOverlay, toggleCommentMode, disableCommentMode, isCommentModeActive } from '../overlay/overlay.js';
 import { renderCuration } from '../components/curation.js';
 import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent } from '../overlay/snapshot.js';
@@ -34,13 +34,42 @@ export function renderViewer(container, { onBack }) {
 
   const sidebar = container.querySelector('#viewer-sidebar');
   const commentToggle = container.querySelector('#toolbar-comment-toggle');
-  if (commentToggle) {
-    commentToggle.addEventListener('click', () => {
-      const isOpen = sidebar.classList.toggle('open');
-      commentToggle.innerHTML = isOpen ? '✕' : '💬';
-      commentToggle.title = isOpen ? 'Close comments' : 'Toggle comments';
-    });
+
+  // Reflect the comment-mode active state on the toolbar button.
+  function syncCommentModeUi() {
+    const active = isCommentModeActive();
+    if (commentToggle) {
+      commentToggle.classList.toggle('active', active);
+      commentToggle.title = active ? 'Exit comment mode' : 'Add comment';
+    }
   }
+
+  function enterCommentModeFromUi() {
+    // Entering comment mode always opens the sidebar so the user lands on a
+    // predictable layout — and the +Add/✕ Cancel affordance stays visible.
+    if (!sidebar.classList.contains('open')) sidebar.classList.add('open');
+    if (!isCommentModeActive()) toggleCommentMode();
+    syncCommentModeUi();
+  }
+  function leaveCommentModeFromUi() {
+    if (isCommentModeActive()) toggleCommentMode();
+    syncCommentModeUi();
+  }
+  function toggleCommentModeFromUi() {
+    isCommentModeActive() ? leaveCommentModeFromUi() : enterCommentModeFromUi();
+  }
+
+  if (commentToggle) {
+    commentToggle.addEventListener('click', toggleCommentModeFromUi);
+  }
+  // Esc anywhere on the viewer exits comment mode — matches the convention
+  // used by the canvas view.
+  const onEscape = (e) => {
+    if (e.key === 'Escape' && isCommentModeActive()) {
+      leaveCommentModeFromUi();
+    }
+  };
+  window.addEventListener('keydown', onEscape);
 
   const aiSidebar = container.querySelector('#viewer-ai-sidebar');
   mountAiPanel(aiSidebar);
@@ -53,16 +82,10 @@ export function renderViewer(container, { onBack }) {
     });
   }
 
-  // Render curation panel in sidebar
+  // Render curation panel in sidebar. Comment mode toggling lives on the
+  // toolbar comment icon — no need for a redundant button inside the panel.
   const screenId = Object.keys(project.screens || {})[0] || null;
-  renderCuration(sidebar, {
-    screenId,
-    onCommentModeToggle() {
-      const isActive = toggleCommentMode();
-      const btn = document.querySelector('#toggle-comment-mode');
-      if (btn) btn.textContent = isActive ? '✕ Cancel' : '+ Add';
-    },
-  });
+  renderCuration(sidebar, { screenId });
 
   // Manual snapshot trigger from toolbar
   window.addEventListener('frank:take-snapshot', async () => {
@@ -164,6 +187,7 @@ async function loadUrlContent(container, url) {
         const screenId = Object.keys(projectManager.get()?.screens || {})[0] || 'default';
         sync.addComment(screenId, anchor, text);
         disableCommentMode();
+        syncCommentModeUi();
       });
     },
   });
