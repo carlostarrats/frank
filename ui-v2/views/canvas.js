@@ -25,6 +25,14 @@ import { TEMPLATES } from '../canvas/templates.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
+// Unicode cloud (☁) and speech (💬) render as full-color emoji on macOS,
+// which breaks visual parity with the outline glyphs used elsewhere in the
+// drawer. Small inline SVGs at the same weight (stroke 1.5, 14×14) give
+// us clean monochrome outlines.
+const CLOUD_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18h10a3.5 3.5 0 0 0 0-7 4.5 4.5 0 0 0-8.82-1.1A3 3 0 0 0 7 18z"/></svg>`;
+
+const SPEECH_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v10H10l-5 4v-4H4z"/></svg>`;
+
 const TOOL_SECTIONS = [
   {
     id: 'basic', label: 'Basic',
@@ -62,8 +70,8 @@ const TOOL_SECTIONS = [
   {
     id: 'decorative', label: 'Decorative',
     tools: [
-      { id: 'cloud',  label: 'Cloud',         icon: '☁' },
-      { id: 'speech', label: 'Speech bubble', icon: '💬' },
+      { id: 'cloud',  label: 'Cloud',         icon: CLOUD_ICON },
+      { id: 'speech', label: 'Speech bubble', icon: SPEECH_ICON },
     ],
   },
 ];
