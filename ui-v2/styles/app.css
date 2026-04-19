@@ -552,6 +552,15 @@
   transition: background 0.15s;
 }
 .project-card:hover { background: var(--bg-surface); }
+.project-card:focus { outline: none; }
+.project-card:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  background: var(--bg-surface);
+}
+/* Focused card also needs its action button visible so keyboard users
+ * can discover the ⋯ menu without hovering. */
+.project-card:focus-visible .project-card-actions { opacity: 1; }
 .project-card-name {
   font-weight: 500;
   padding: 2px 4px;

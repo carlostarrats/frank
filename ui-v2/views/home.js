@@ -20,7 +20,7 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
     <div class="home">
       <div class="home-header">
         <img src="frank-logo.svg" alt="Frank" class="home-logo">
-        <span class="home-version">v1.0</span>
+        <span class="home-version">v2.02</span>
         <div class="home-header-spacer"></div>
         <button class="home-help-btn" id="home-help-btn" title="Getting started">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -259,21 +259,33 @@ function renderCard(p, variant) {
   const meta = variant === 'trash' && p.trashed
     ? `${p.contentType} · Deleted ${timeAgo(p.trashed)} · Auto-removes in ${daysUntilPurge(p.trashed)}d`
     : `${p.contentType} · ${p.commentCount} comments · ${timeAgo(p.modified)}`;
+  // role/tabindex so the card is focusable; screen readers announce it as a
+  // button-like row with the project name.
+  const accessibleLabel = variant === 'trash'
+    ? `${p.name}, trashed — press Enter to focus, arrow keys to navigate`
+    : `${p.name} — press Enter to open, F2 to rename, Delete to move to trash`;
   return `
-    <div class="${classes.join(' ')}" data-id="${p.projectId}" data-variant="${variant}">
+    <div class="${classes.join(' ')}"
+         data-id="${p.projectId}"
+         data-variant="${variant}"
+         role="button"
+         tabindex="0"
+         aria-label="${escapeHtml(accessibleLabel)}">
       <div class="project-card-info">
         <span class="project-card-name" data-id="${p.projectId}">${escapeHtml(p.name)}</span>
         <span class="project-card-meta">${escapeHtml(meta)}</span>
       </div>
       <div class="project-card-actions">
-        <button class="btn-ghost project-menu-btn" data-id="${p.projectId}" title="More actions">⋯</button>
+        <button class="btn-ghost project-menu-btn" data-id="${p.projectId}" title="More actions" aria-label="More actions for ${escapeHtml(p.name)}">⋯</button>
       </div>
     </div>
   `;
 }
 
 function wireCards(host, projects, variant, { onOpenProject, refresh }) {
-  host.querySelectorAll('.project-card').forEach(card => {
+  const cards = Array.from(host.querySelectorAll('.project-card'));
+
+  cards.forEach((card, idx) => {
     const id = card.dataset.id;
     const project = projects.find(p => p.projectId === id);
 
@@ -286,7 +298,53 @@ function wireCards(host, projects, variant, { onOpenProject, refresh }) {
       onOpenProject(id);
     });
 
-    // Inline rename: click on name starts edit (active + archived).
+    // Keyboard navigation:
+    //   Enter / Space  — open the project (active + archived)
+    //   F2             — start inline rename
+    //   Delete / Bksp  — trash (active + archived) or purge (trash)
+    //   ↑ / ↓          — move focus between adjacent cards
+    card.addEventListener('keydown', (e) => {
+      // Don't hijack keys while the user is editing the name.
+      if (card.querySelector('.project-card-name[contenteditable]')) return;
+
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (variant === 'trash') return;
+        e.preventDefault();
+        onOpenProject(id);
+        return;
+      }
+      if (e.key === 'F2' && variant !== 'trash') {
+        e.preventDefault();
+        const nameEl = card.querySelector('.project-card-name');
+        startRename(nameEl, project, refresh);
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        if (variant === 'trash') {
+          if (confirm(`Delete "${project.name}" permanently? This cannot be undone.`)) {
+            sync.purgeProject(id).then(refresh);
+          }
+        } else {
+          confirmTrash(project, refresh);
+        }
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = cards[idx + 1] || cards[0];
+        next?.focus();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = cards[idx - 1] || cards[cards.length - 1];
+        prev?.focus();
+      }
+    });
+
+    // Inline rename on name click (active + archived). Mouse-only entry
+    // point — the keyboard path uses F2 above.
     const nameEl = card.querySelector('.project-card-name');
     if (variant !== 'trash') {
       nameEl.addEventListener('click', (e) => {

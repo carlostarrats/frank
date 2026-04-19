@@ -83,12 +83,56 @@ export function showHelpPanel({ onFocusUrlInput, onCreateCanvas }) {
   `;
   document.body.appendChild(overlay);
 
-  const close = () => overlay.remove();
+  // Save the currently-focused element so we can restore focus on close
+  // (WCAG guidance: modal close returns focus to the control that opened it).
+  const previousFocus = document.activeElement;
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKeyDown, true);
+    if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+  };
+
   overlay.querySelector('#help-close').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  document.addEventListener('keydown', function onEsc(e) {
-    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); }
-  });
+
+  // Keyboard handling: Esc closes, Tab cycles only within the modal (focus trap).
+  function focusable() {
+    return Array.from(overlay.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
+    ));
+  }
+  function onKeyDown(e) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      close();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const items = focusable();
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    // If focus has drifted outside the modal (e.g. programmatic focus on
+    // something behind us), put it back inside.
+    if (!overlay.contains(document.activeElement)) {
+      e.preventDefault();
+      first.focus();
+      return;
+    }
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+  document.addEventListener('keydown', onKeyDown, true);
+
+  // Initial focus goes on the close button — avoids accidentally firing a
+  // CTA if the user hits Enter immediately.
+  setTimeout(() => overlay.querySelector('#help-close').focus(), 0);
 
   overlay.querySelectorAll('.help-card-cta').forEach(btn => {
     btn.addEventListener('click', (e) => {
