@@ -30,7 +30,6 @@ const TOOL_SECTIONS = [
     id: 'basic', label: 'Basic',
     tools: [
       { id: 'select',    label: 'Select',    icon: '↖' },
-      { id: 'rectangle', label: 'Rectangle', icon: '▭' },
       { id: 'text',      label: 'Text',      icon: 'T' },
       { id: 'sticky',    label: 'Sticky',    icon: '◪' },
       { id: 'freehand',  label: 'Pen',       icon: '✎' },
@@ -39,8 +38,10 @@ const TOOL_SECTIONS = [
   {
     id: 'shapes', label: 'Shapes',
     tools: [
-      // Circle doubles as Ellipse — drag for a perfect circle, then stretch
-      // via the Transformer handles to make an ellipse.
+      // Rectangle doubles as Square — hold Shift while dragging to lock to
+      // 1:1 and get a perfect square. Circle is the same: Ellipse with
+      // equal radii; Shift locks it as a perfect circle during drag.
+      { id: 'rectangle', label: 'Rectangle', icon: '▭' },
       { id: 'circle',    label: 'Circle',    icon: '○' },
       { id: 'triangle',  label: 'Triangle',  icon: '△' },
       { id: 'diamond',   label: 'Diamond',   icon: '◇' },
@@ -114,7 +115,12 @@ export function renderCanvas(container, { onBack }) {
     contentLayer,
     uiLayer,
     getTool: () => tools.getTool(),
-    onChange: (nodes) => inspector.setSelection(nodes),
+    onChange: (nodes) => {
+      inspector.setSelection(nodes);
+      // Collapse the inspector sidebar when nothing's selected; expand when
+      // there's something to edit. Matches the AI-panel show/hide pattern.
+      inspectorHost.classList.toggle('open', nodes.length > 0);
+    },
   });
 
   const tools = createToolController({

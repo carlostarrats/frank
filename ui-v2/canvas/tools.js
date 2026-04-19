@@ -113,6 +113,10 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit,
   }
 
   // ── Drag-to-size shapes (rect, circle, ellipse) ────────────────────────────
+  //
+  // Passing the event-level `shiftKey` into the resizer lets the shape stay
+  // locked to its natural-1:1 aspect while Shift is held — square instead of
+  // rectangle, perfect circle instead of ellipse. Matches Figma/Sketch.
   function bindDragShape(factory, resize) {
     return () => {
       let node = null;
@@ -125,9 +129,10 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit,
         node = factory(start);
         contentLayer.add(node);
       };
-      const onMove = () => {
+      const onMove = (e) => {
         if (!node || !start) return;
-        resize(node, start, stageToContent(stage));
+        const shift = !!(e.evt && e.evt.shiftKey);
+        resize(node, start, stageToContent(stage), { shift });
       };
       const onUp = () => {
         if (!node) return;
@@ -270,13 +275,26 @@ export function createToolController({ stage, contentLayer, isPanning, onCommit,
 }
 
 // ── Shape-specific resizers (used by bindDragShape) ──────────────────────────
-function resizeRect(rect, start, pos) {
-  rect.width(pos.x - start.x);
-  rect.height(pos.y - start.y);
+function resizeRect(rect, start, pos, { shift } = {}) {
+  let w = pos.x - start.x;
+  let h = pos.y - start.y;
+  if (shift) {
+    const d = Math.max(Math.abs(w), Math.abs(h));
+    w = Math.sign(w || 1) * d;
+    h = Math.sign(h || 1) * d;
+  }
+  rect.width(w);
+  rect.height(h);
 }
-function resizeEllipse(ellipse, start, pos) {
-  ellipse.radiusX(Math.max(1, Math.abs(pos.x - start.x)));
-  ellipse.radiusY(Math.max(1, Math.abs(pos.y - start.y)));
+function resizeEllipse(ellipse, start, pos, { shift } = {}) {
+  let rx = Math.max(1, Math.abs(pos.x - start.x));
+  let ry = Math.max(1, Math.abs(pos.y - start.y));
+  if (shift) {
+    const r = Math.max(rx, ry);
+    rx = r; ry = r;
+  }
+  ellipse.radiusX(rx);
+  ellipse.radiusY(ry);
 }
 
 function finalizeOrDiscard(node) {

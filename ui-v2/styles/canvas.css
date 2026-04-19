@@ -194,11 +194,20 @@
 /* ── Right inspector ─────────────────────────────────────────────────────── */
 
 .canvas-inspector-host {
-  width: 260px;
+  width: 0;
+  min-width: 0;
   flex-shrink: 0;
   background: var(--sidebar);
   color: var(--sidebar-foreground);
-  border-left: 1px solid var(--sidebar-border);
+  border-left: 1px solid transparent;
+  overflow: hidden;
+  transition: width var(--duration-base) var(--ease-standard),
+              border-color var(--duration-base) var(--ease-standard);
+}
+.canvas-inspector-host.open {
+  width: 260px;
+  min-width: 260px;
+  border-left-color: var(--sidebar-border);
   overflow-y: auto;
 }
 

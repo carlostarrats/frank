@@ -12,8 +12,18 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
     anchorStrokeWidth: 1,
     borderStrokeWidth: 1,
     anchorCornerRadius: 2,
+    // Free resize by default; Shift temporarily locks aspect ratio (see
+    // shift-key listeners below). Matches Figma/Sketch convention.
+    keepRatio: false,
   });
   uiLayer.add(tr);
+
+  // Shift-to-lock-aspect-ratio during transformer resize.
+  const onKeyToggle = (e) => {
+    if (e.key === 'Shift') tr.keepRatio(e.type === 'keydown');
+  };
+  window.addEventListener('keydown', onKeyToggle);
+  window.addEventListener('keyup', onKeyToggle);
 
   function notify() {
     if (onChange) onChange(tr.nodes());
@@ -105,6 +115,8 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, onChang
 
   function destroy() {
     window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('keydown', onKeyToggle);
+    window.removeEventListener('keyup', onKeyToggle);
     tr.destroy();
   }
 
