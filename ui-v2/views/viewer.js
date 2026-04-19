@@ -8,6 +8,8 @@ import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
 import { mountAiPanel, toggleAiPanel } from '../components/ai-panel.js';
+import { renderErrorCard } from '../components/error-card.js';
+import { toastError } from '../components/toast.js';
 
 export function renderViewer(container, { onBack }) {
   const project = projectManager.get();
@@ -240,13 +242,13 @@ async function fallbackToProxy(container, url) {
     }
   } catch (e) {
     console.warn('[viewer] proxy failed:', e);
-    container.innerHTML = `
-      <div class="viewer-error">
-        <h3>Unable to load this URL</h3>
-        <p>The site may be blocking iframe embedding and the proxy couldn't reach it.</p>
-        <p class="viewer-error-url">${escapeHtml(url)}</p>
-      </div>
-    `;
+    renderErrorCard(container, {
+      title: 'Unable to load this URL',
+      message: `The site may be blocking iframe embedding, and Frank's proxy couldn't reach it.`,
+      suggestion: `URL: ${url}\n\nChecks: is the server running? Is it reachable from this machine? Does it require an allowlist or VPN?`,
+      actionLabel: 'Retry',
+      onAction: () => fallbackToProxy(container, url),
+    });
   }
 }
 

@@ -29,6 +29,7 @@ import { showSharePopover, updateSharePopover } from '../components/share-popove
 import { attachShortcuts } from '../canvas/shortcuts.js';
 import { createHistory } from '../canvas/history.js';
 import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js';
+import { toastError, toastInfo } from '../components/toast.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -131,12 +132,30 @@ export function renderCanvas(container, { onBack }) {
   });
 
   let saveTimer = null;
+  let saveFailureCount = 0;
   const commitChange = () => {
     history.commit();
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       const json = serializeContent(contentLayer);
-      sync.saveCanvasState(json).catch((err) => console.warn('[canvas] save failed:', err));
+      sync.saveCanvasState(json).then(() => {
+        saveFailureCount = 0;
+      }).catch((err) => {
+        console.warn('[canvas] save failed:', err);
+        saveFailureCount++;
+        // After two back-to-back failures, warn the user non-blockingly.
+        if (saveFailureCount === 2) {
+          toastError('Canvas auto-save failing. Check that the daemon is running.', {
+            actionLabel: 'Retry now',
+            onAction: () => {
+              sync.saveCanvasState(json).then(() => {
+                saveFailureCount = 0;
+                toastInfo('Saved.');
+              }).catch(() => toastError('Still failing. Export JSON to keep a safe copy.'));
+            },
+          });
+        }
+      });
     }, SAVE_DEBOUNCE_MS);
   };
 
@@ -305,7 +324,7 @@ export function renderCanvas(container, { onBack }) {
         else if (format === 'json') exportJson({ contentLayer, name: project.name });
       } catch (err) {
         console.warn('[canvas] export failed:', err);
-        alert(`Export failed: ${err.message || err}`);
+        toastError(`Export failed: ${err.message || err}`);
       }
     });
   });

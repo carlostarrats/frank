@@ -8,6 +8,9 @@ let messageHandlers = [];
 let isConnected = false;
 let reconnectTimer = null;
 
+let connectionLostToast = null;
+let wasEverConnected = false;
+
 function connect() {
   ws = new WebSocket(WS_URL);
 
@@ -15,6 +18,17 @@ function connect() {
     console.log('[sync] connected');
     isConnected = true;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (connectionLostToast) {
+      connectionLostToast.dismiss();
+      connectionLostToast = null;
+      if (wasEverConnected) {
+        // Reconnected after a drop — confirm visually.
+        import('../components/toast.js').then(({ toastInfo }) => {
+          toastInfo('Reconnected to the daemon.');
+        });
+      }
+    }
+    wasEverConnected = true;
   };
 
   ws.onmessage = (event) => {
@@ -35,6 +49,14 @@ function connect() {
   ws.onclose = () => {
     console.log('[sync] disconnected');
     isConnected = false;
+    // Only surface a toast when we were connected first — on initial boot
+    // failure we leave console.log to avoid flashing a toast during the
+    // very first second of page load.
+    if (wasEverConnected && !connectionLostToast) {
+      import('../components/toast.js').then(({ toastError }) => {
+        connectionLostToast = toastError('Lost connection to daemon. Trying to reconnect…');
+      });
+    }
     reconnectTimer = setTimeout(connect, 2000);
   };
 

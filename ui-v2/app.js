@@ -6,6 +6,7 @@ import { renderViewer } from './views/viewer.js';
 import { renderTimeline } from './views/timeline.js';
 import { renderCanvas } from './views/canvas.js';
 import { setupAiRouting } from './components/ai-routing.js';
+import { toastError } from './components/toast.js';
 
 const state = {
   currentView: 'home',
@@ -35,11 +36,13 @@ function switchView(view) {
           : sync.createProject(name, contentType, url);
         create.then(data => {
           if (data.type === 'error') {
-            alert(`Could not create project: ${data.error}`);
+            toastError(`Could not create project: ${data.error}`);
             return;
           }
           projectManager.setFromLoaded(data);
           switchView(viewForProject(data.project));
+        }).catch((err) => {
+          toastError(`Could not create project: ${err.message || err}`);
         });
       },
     });

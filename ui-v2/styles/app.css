@@ -349,6 +349,114 @@
   line-height: 1.5;
 }
 
+/* Toasts */
+.toast-host {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: min(420px, calc(100vw - 32px));
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  animation: toast-enter 0.18s ease-out;
+}
+.toast.toast-leaving { opacity: 0; transform: translateX(8px); transition: opacity 0.15s, transform 0.15s; }
+@keyframes toast-enter {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.toast-icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+}
+.toast-info .toast-icon { background: color-mix(in oklch, var(--ring), transparent 75%); color: var(--ring); }
+.toast-warn { border-color: #a68300; }
+.toast-warn .toast-icon { background: #a68300; color: #1c1500; }
+.toast-error { border-color: var(--danger); }
+.toast-error .toast-icon { background: var(--danger); color: #fff; }
+.toast-message { flex: 1; line-height: 1.4; }
+.toast-action {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 3px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.toast-action:hover { background: color-mix(in oklch, var(--ring), transparent 80%); }
+.toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+.toast-close:hover { color: var(--text); }
+
+/* Error card */
+.error-card {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text);
+  max-width: 520px;
+  margin: 24px auto;
+}
+.error-card-icon { color: var(--danger); flex: 0 0 auto; margin-top: 2px; }
+.error-card-body { flex: 1; }
+.error-card-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.error-card-message {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.error-card-suggestion {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.error-card-actions {
+  display: flex;
+  gap: 8px;
+}
+.error-card-action, .error-card-dismiss {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+
 .home-logo {
   height: 36px;
   filter: brightness(0) invert(1);
