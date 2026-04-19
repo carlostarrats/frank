@@ -70,13 +70,19 @@ export function renderTimeline(container, { onBack }) {
           }
           if (item.type === 'snapshot') {
             const s = item.data;
+            const projectId = projectManager.getId();
+            const thumbUrl = s.canvasState && projectId
+              ? `/files/projects/${projectId}/snapshots/${s.id}/thumbnail.png`
+              : null;
             return `
               <div class="timeline-item timeline-snapshot">
                 <div class="timeline-dot dot-snapshot"></div>
                 <div class="timeline-content">
                   <span class="timeline-badge badge-snapshot">${s.starred ? '⭐ ' : ''}Snapshot</span>
+                  ${s.canvasState ? '<span class="timeline-badge badge-canvas">Canvas</span>' : ''}
                   ${s.label ? `<strong>${esc(s.label)}</strong> — ` : ''}${s.trigger}
                   <div class="timeline-meta">${new Date(s.ts).toLocaleString()}</div>
+                  ${thumbUrl ? `<img class="timeline-thumbnail" src="${thumbUrl}" alt="Snapshot thumbnail" onerror="this.remove()">` : ''}
                 </div>
               </div>
             `;

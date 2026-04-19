@@ -98,6 +98,9 @@ const sync = {
   saveSnapshot(html, screenshot, trigger, triggeredBy) {
     return send({ type: 'save-snapshot', html, screenshot, trigger, triggeredBy });
   },
+  saveCanvasSnapshot(canvasState, thumbnail, trigger, triggeredBy) {
+    return send({ type: 'save-canvas-snapshot', canvasState, thumbnail, trigger, triggeredBy });
+  },
   listSnapshots() { return send({ type: 'list-snapshots' }); },
   starSnapshot(snapshotId, label) { return send({ type: 'star-snapshot', snapshotId, label }); },
   curateComment(commentIds, action, remixedText, dismissReason) {

@@ -63,9 +63,11 @@ function renderViewer(app, data) {
     </div>
   `;
 
-  // Render content
+  // Render content — branch on snapshot shape.
   const contentEl = document.getElementById('v-content');
-  if (snapshot?.html) {
+  if (snapshot?.canvasState) {
+    renderCanvasSnapshot(contentEl, snapshot);
+  } else if (snapshot?.html) {
     const iframe = document.createElement('iframe');
     iframe.className = 'v-iframe';
     iframe.sandbox = 'allow-same-origin';
@@ -151,6 +153,106 @@ function renderCommentList(comments) {
 
 function getAuthor() { return localStorage.getItem('frank-author') || ''; }
 function saveAuthor(name) { localStorage.setItem('frank-author', name); }
+
+// ─── Canvas snapshot rendering ──────────────────────────────────────────────
+
+async function renderCanvasSnapshot(host, snapshot) {
+  host.innerHTML = '<div class="viewer-loading">Loading canvas…</div>';
+  try {
+    await loadKonvaOnce();
+  } catch {
+    host.innerHTML = '<div class="v-error"><p>Could not load canvas renderer.</p></div>';
+    return;
+  }
+
+  host.innerHTML = '<div class="v-canvas-wrapper" id="v-canvas-wrapper"></div>';
+  const wrapper = host.querySelector('#v-canvas-wrapper');
+  const width = wrapper.clientWidth || 900;
+  const height = wrapper.clientHeight || 600;
+
+  const Konva = window.Konva;
+  const stage = new Konva.Stage({ container: wrapper, width, height });
+  const contentLayer = new Konva.Layer();
+  stage.add(contentLayer);
+
+  // Deserialize the canvas content. Image nodes reference assetUrl; swap each
+  // one for the inline data URL bundled in snapshot.assets.
+  const parsed = typeof snapshot.canvasState === 'string'
+    ? JSON.parse(snapshot.canvasState)
+    : snapshot.canvasState;
+  const assets = snapshot.assets || {};
+
+  for (const def of (parsed.children || [])) {
+    try {
+      const node = Konva.Node.create(JSON.stringify(def));
+      if (!node) continue;
+      node.draggable(false);
+      contentLayer.add(node);
+    } catch (err) {
+      console.warn('[v] deserialize failed', err);
+    }
+  }
+
+  // Rehydrate Image nodes with bundled data URLs.
+  const images = contentLayer.find('Image');
+  for (const node of images) {
+    const url = node.getAttr('assetUrl');
+    const dataUrl = assets[url];
+    if (!dataUrl) continue;
+    await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => { node.image(img); resolve(); };
+      img.onerror = resolve;
+      img.src = dataUrl;
+    });
+  }
+
+  // Fit content into viewport.
+  const bounds = contentLayer.getClientRect();
+  if (bounds && bounds.width > 0 && bounds.height > 0) {
+    const scale = Math.min((width - 40) / bounds.width, (height - 40) / bounds.height, 1);
+    stage.scale({ x: scale, y: scale });
+    stage.position({
+      x: (width - bounds.width * scale) / 2 - bounds.x * scale,
+      y: (height - bounds.height * scale) / 2 - bounds.y * scale,
+    });
+  }
+
+  // Wheel zoom for reviewers.
+  stage.on('wheel', (e) => {
+    e.evt.preventDefault();
+    const oldScale = stage.scaleX();
+    const pointer = stage.getPointerPosition();
+    const mousePt = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    };
+    const step = 1.08;
+    const newScale = e.evt.deltaY > 0 ? oldScale / step : oldScale * step;
+    const clamped = Math.max(0.1, Math.min(8, newScale));
+    stage.scale({ x: clamped, y: clamped });
+    stage.position({
+      x: pointer.x - mousePt.x * clamped,
+      y: pointer.y - mousePt.y * clamped,
+    });
+  });
+
+  contentLayer.draw();
+}
+
+let konvaPromise = null;
+function loadKonvaOnce() {
+  if (window.Konva) return Promise.resolve();
+  if (konvaPromise) return konvaPromise;
+  konvaPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/konva@9/konva.min.js';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Konva load failed'));
+    document.head.appendChild(s);
+  });
+  return konvaPromise;
+}
 
 function esc(text) {
   const d = document.createElement('div');

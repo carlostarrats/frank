@@ -37,12 +37,16 @@ export interface ActiveShare {
 }
 
 export interface CommentAnchor {
-  type: 'element' | 'pin';
+  type: 'element' | 'pin' | 'shape';
   cssSelector?: string;    // Primary anchor for element type
   domPath?: string;        // Fallback for element type
-  x: number;               // Visual coordinates (% of viewport)
+  x: number;               // Visual coords (% of viewport for element/pin; world coords for shape)
   y: number;
   pageNumber?: number;     // For PDFs
+  shapeId?: string;        // Target shape for canvas anchors
+  // Last-known world position. Pin stays here if the shape is deleted so the
+  // comment survives the edit. Updated whenever the shape is repositioned.
+  shapeLastKnown?: { x: number; y: number };
 }
 
 export interface Comment {
@@ -105,6 +109,14 @@ export interface ProxyUrlRequest { type: 'proxy-url'; url: string; requestId?: n
 export interface UploadShareRequest { type: 'upload-share'; snapshot: unknown; coverNote: string; contentType: string; oldShareId?: string; oldRevokeToken?: string; requestId?: number; }
 export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; }
 export interface SaveSnapshotRequest { type: 'save-snapshot'; html: string; screenshot: string | null; trigger: 'manual' | 'share' | 'ai-applied'; triggeredBy?: string; requestId?: number; }
+export interface SaveCanvasSnapshotRequest {
+  type: 'save-canvas-snapshot';
+  canvasState: string;           // JSON blob from serializeContent
+  thumbnail?: string | null;     // data URL (or raw base64)
+  trigger: 'manual' | 'share' | 'ai-applied';
+  triggeredBy?: string;
+  requestId?: number;
+}
 export interface ListSnapshotsRequest { type: 'list-snapshots'; requestId?: number; }
 export interface StarSnapshotRequest { type: 'star-snapshot'; snapshotId: string; label: string; requestId?: number; }
 export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch'; remixedText?: string; dismissReason?: string; requestId?: number; }
@@ -131,6 +143,7 @@ export type AppMessage =
   | UploadShareRequest
   | CloudStatusRequest
   | SaveSnapshotRequest
+  | SaveCanvasSnapshotRequest
   | ListSnapshotsRequest
   | StarSnapshotRequest
   | CurateCommentRequest

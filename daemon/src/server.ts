@@ -19,7 +19,7 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB cap for base64-over-WS upload
 import { proxyRequest } from './proxy.js';
 import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments } from './cloud.js';
 import { mergeCloudComments } from './projects.js';
-import { saveSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
+import { saveSnapshot, saveCanvasSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
 import { addCuration, applyCurationToComments } from './curation.js';
 import { addAiInstruction } from './ai-chain.js';
 import { exportProject } from './export.js';
@@ -420,6 +420,17 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
         const meta = saveSnapshot(activeProjectId, msg.html, msg.screenshot, msg.trigger, msg.triggeredBy);
+        reply({ type: 'snapshot-saved', snapshot: meta });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'save-canvas-snapshot': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      try {
+        const meta = saveCanvasSnapshot(activeProjectId, msg.canvasState, msg.thumbnail || null, msg.trigger, msg.triggeredBy);
         reply({ type: 'snapshot-saved', snapshot: meta });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });

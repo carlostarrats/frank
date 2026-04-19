@@ -31,6 +31,45 @@ function atomicWrite(filePath: string, content: string): void {
   fs.renameSync(tmpPath, filePath);
 }
 
+// Save a canvas snapshot: serialized Konva state + optional thumbnail PNG.
+// Separate from the DOM-snapshot path so canvas projects don't need to fake
+// an HTML doc. Meta flags `canvasState: true` so the timeline can branch on it.
+export function saveCanvasSnapshot(
+  projectId: string,
+  canvasState: string,
+  thumbnailBase64: string | null,
+  trigger: 'manual' | 'share' | 'ai-applied',
+  triggeredBy: string | null = null
+): SnapshotMeta {
+  const id = 'snap-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex');
+  const dir = snapshotDir(projectId, id);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const meta: SnapshotMeta = {
+    id,
+    trigger,
+    triggeredBy,
+    starred: false,
+    label: '',
+    frankVersion: '2',
+    ts: new Date().toISOString(),
+    canvasState: true,  // marker only; the actual state lives in canvas-state.json
+  };
+
+  atomicWrite(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2));
+  atomicWrite(path.join(dir, 'canvas-state.json'), canvasState);
+
+  if (thumbnailBase64) {
+    // Thumbnail arrives as "data:image/png;base64,..." — strip prefix.
+    const idx = thumbnailBase64.indexOf(',');
+    const raw = idx >= 0 ? thumbnailBase64.slice(idx + 1) : thumbnailBase64;
+    const buf = Buffer.from(raw, 'base64');
+    fs.writeFileSync(path.join(dir, 'thumbnail.png'), buf);
+  }
+
+  return meta;
+}
+
 export function saveSnapshot(
   projectId: string,
   html: string,

@@ -54,8 +54,21 @@
   background: color-mix(in oklch, var(--primary), transparent 85%);
   color: var(--primary);
 }
+.badge-canvas {
+  background: color-mix(in oklch, var(--ring), transparent 85%);
+  color: var(--ring);
+}
 .timeline-meta {
   font-size: 11px;
   color: var(--muted-foreground);
   margin-top: 2px;
+}
+.timeline-thumbnail {
+  display: block;
+  margin-top: 6px;
+  max-width: 280px;
+  max-height: 160px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
 }
