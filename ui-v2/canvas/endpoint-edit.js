@@ -14,11 +14,12 @@
 // side. The opposite-end binding is preserved.
 
 import { bindConnector, unbindConnector, _ensureId } from './connectors.js';
+import { createAnchorOverlay, nearestAnchor, isSnappableShape } from './anchors.js';
 
 export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, onChange }) {
   const Konva = window.Konva;
   let hoveredTarget = null;
-  let snapIndicator = null;
+  const overlay = createAnchorOverlay({ uiLayer, contentLayer });
 
   function endpointFromPoints(which) {
     const pts = connector.points();
@@ -73,50 +74,30 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
     let n = hit;
     while (n && n.getLayer() !== contentLayer) n = n.getParent();
     if (!n || n === contentLayer || n === connector) return null;
+    if (!isSnappableShape(n, contentLayer)) return null;
     return n;
-  }
-
-  function highlight(shape) {
-    clearHighlight();
-    if (!shape) return;
-    hoveredTarget = shape;
-    const rect = shape.getClientRect({ skipStroke: true, relativeTo: uiLayer });
-    snapIndicator = new Konva.Rect({
-      x: rect.x - 4,
-      y: rect.y - 4,
-      width: rect.width + 8,
-      height: rect.height + 8,
-      stroke: '#60a5fa',
-      strokeWidth: 2,
-      dash: [6, 4],
-      listening: false,
-      cornerRadius: 2,
-    });
-    uiLayer.add(snapIndicator);
-    uiLayer.batchDraw();
-  }
-  function clearHighlight() {
-    hoveredTarget = null;
-    if (snapIndicator) { snapIndicator.destroy(); snapIndicator = null; }
   }
 
   function onDragMove(handle, which) {
     updatePointsFor(which, handle.x(), handle.y());
     const target = targetAtPointer();
     if (target) {
-      if (target !== hoveredTarget) highlight(target);
+      overlay.show(target);
+      hoveredTarget = target;
+      const anchor = nearestAnchor(target, { x: handle.x(), y: handle.y() }, contentLayer);
+      overlay.highlight(anchor.id);
     } else if (hoveredTarget) {
-      clearHighlight();
+      overlay.hide();
+      hoveredTarget = null;
     }
     uiLayer.batchDraw();
   }
 
   function onDragEnd(handle, which) {
     const target = hoveredTarget;
-    clearHighlight();
+    overlay.hide();
 
     const attr = which === 'start' ? 'sourceId' : 'targetId';
-    const otherAttr = which === 'start' ? 'targetId' : 'sourceId';
     // Detach existing binding for this end BEFORE rebinding so the index in
     // connectors.js stays clean.
     unbindConnector(contentLayer, connector);
@@ -124,15 +105,14 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
     if (target) {
       const id = _ensureId(target);
       connector.setAttr(attr, id);
-      const rect = target.getClientRect({ skipStroke: true, relativeTo: contentLayer });
-      const cx = rect.x + rect.width / 2;
-      const cy = rect.y + rect.height / 2;
-      handle.x(cx);
-      handle.y(cy);
-      updatePointsFor(which, cx, cy);
+      const anchor = nearestAnchor(target, { x: handle.x(), y: handle.y() }, contentLayer);
+      handle.x(anchor.x);
+      handle.y(anchor.y);
+      updatePointsFor(which, anchor.x, anchor.y);
     } else {
       connector.setAttr(attr, null);
     }
+    hoveredTarget = null;
 
     // Re-register with whatever bindings remain. If both ends are now
     // unbound, the rebind is a no-op — the connector sits where it is.
@@ -153,7 +133,7 @@ export function showConnectorHandles(connector, { stage, contentLayer, uiLayer, 
   }
 
   function destroy() {
-    clearHighlight();
+    overlay.hide();
     startHandle.destroy();
     endHandle.destroy();
     uiLayer.batchDraw();

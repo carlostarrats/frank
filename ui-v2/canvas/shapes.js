@@ -122,6 +122,10 @@ export function createParallelogram({ x, y, width = 160, height = 80 } = {}) {
 // arrows (not dominated triangles).
 const ARROW_POINTER = 8;
 
+// Generous hit area so users can click thin connector lines without needing
+// pixel-perfect aim. This stays invisible — only the stroke (2px) renders.
+const CONNECTOR_HIT_STROKE = 20;
+
 export function createArrow({ points, stroke = STROKE, strokeWidth = 2 }) {
   const Konva = window.Konva;
   return new Konva.Arrow({
@@ -131,6 +135,7 @@ export function createArrow({ points, stroke = STROKE, strokeWidth = 2 }) {
     stroke,
     fill: stroke,
     strokeWidth,
+    hitStrokeWidth: CONNECTOR_HIT_STROKE,
     draggable: true,
     name: 'shape connector',
   });
@@ -147,6 +152,7 @@ export function createElbow({ x1, y1, x2, y2, horizontalFirst = true, stroke = S
     stroke,
     fill: stroke,
     strokeWidth,
+    hitStrokeWidth: CONNECTOR_HIT_STROKE,
     draggable: true,
     tension: 0,
     lineJoin: 'round',

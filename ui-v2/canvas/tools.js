@@ -13,6 +13,7 @@ import {
 } from './shapes.js';
 import { bindConnector, _ensureId } from './connectors.js';
 import { TOOL_CURSORS } from './cursors.js';
+import { createAnchorOverlay, nearestAnchor, isSnappableShape } from './anchors.js';
 
 export function createToolController({ stage, contentLayer, uiLayer, isPanning, onCommit, onShapeClick }) {
   let currentTool = 'select';
@@ -208,34 +209,33 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
       let start = null;
       let sourceId = null;
       let hoveredTarget = null;
-      let snapIndicator = null;
+      const overlay = createAnchorOverlay({ uiLayer, contentLayer });
 
-      function highlightTarget(shape) {
-        clearHighlight();
-        if (!shape) return;
-        hoveredTarget = shape;
-        const rect = shape.getClientRect({ skipStroke: true, relativeTo: uiLayer });
-        snapIndicator = new window.Konva.Rect({
-          x: rect.x - 4,
-          y: rect.y - 4,
-          width: rect.width + 8,
-          height: rect.height + 8,
-          stroke: '#60a5fa',
-          strokeWidth: 2,
-          dash: [6, 4],
-          listening: false,
-          cornerRadius: 2,
-        });
-        uiLayer.add(snapIndicator);
+      // While a connector tool is active, content-layer shapes must not be
+      // draggable — otherwise mousedown on a shape starts both the connector
+      // tool AND a shape drag, and the user watches the shape follow their
+      // cursor instead of an arrow being drawn. Stash the previous value
+      // on each node so we restore it when the tool deactivates.
+      function suppressShapeDrag() {
+        for (const child of contentLayer.getChildren()) {
+          if (typeof child.draggable !== 'function') continue;
+          child._wasDraggable = child.draggable();
+          child.draggable(false);
+        }
       }
-      function clearHighlight() {
-        hoveredTarget = null;
-        if (snapIndicator) { snapIndicator.destroy(); snapIndicator = null; }
+      function restoreShapeDrag() {
+        for (const child of contentLayer.getChildren()) {
+          if (typeof child.draggable !== 'function') continue;
+          if ('_wasDraggable' in child) {
+            child.draggable(child._wasDraggable);
+            delete child._wasDraggable;
+          }
+        }
       }
+      suppressShapeDrag();
 
-      // Find the topmost content-layer child the pointer is currently over,
-      // skipping the connector itself (we don't want to snap to the line
-      // we're drawing).
+      // Walk up from an event target to the nearest content-layer child
+      // that's a valid snap target. Connectors are excluded (isSnappable).
       function targetUnderPointer() {
         const p = stage.getPointerPosition();
         if (!p) return null;
@@ -245,6 +245,7 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
         while (n && n.getLayer() !== contentLayer) n = n.getParent();
         if (!n || n === contentLayer) return null;
         if (n === connector) return null;
+        if (!isSnappableShape(n, contentLayer)) return null;
         return n;
       }
 
@@ -259,12 +260,31 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
         return { x: sp.x + Math.cos(snapped) * dist, y: sp.y + Math.sin(snapped) * dist };
       }
 
+      function resolveSnap(pos) {
+        const target = targetUnderPointer();
+        if (!target || _ensureId(target) === sourceId) {
+          overlay.hide();
+          hoveredTarget = null;
+          return { pos, target: null };
+        }
+        overlay.show(target);
+        hoveredTarget = target;
+        const anchor = nearestAnchor(target, pos, contentLayer);
+        overlay.highlight(anchor.id);
+        return { pos: { x: anchor.x, y: anchor.y }, target };
+      }
+
       const onDown = (e) => {
         if (isPanning()) return;
         start = stageToContent(stage);
         if (e.target !== stage) {
           const shape = nearestShape(e.target);
-          if (shape) sourceId = _ensureId(shape);
+          if (shape && isSnappableShape(shape, contentLayer)) {
+            sourceId = _ensureId(shape);
+            // Snap start to the nearest anchor on the source shape.
+            const anchor = nearestAnchor(shape, start, contentLayer);
+            start = { x: anchor.x, y: anchor.y };
+          }
         }
         connector = kind === 'elbow'
           ? createElbow({ x1: start.x, y1: start.y, x2: start.x, y2: start.y })
@@ -273,20 +293,9 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
       };
       const onMove = (e) => {
         if (!connector || !start) return;
-        let pos = stageToContent(stage);
-
-        // Snap to any shape under the cursor (except the source). Highlight
-        // the target so the user gets visual feedback before release.
-        const target = targetUnderPointer();
-        if (target && _ensureId(target) !== sourceId) {
-          if (target !== hoveredTarget) highlightTarget(target);
-          const rect = target.getClientRect({ skipStroke: true, relativeTo: contentLayer });
-          pos = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-        } else if (hoveredTarget) {
-          clearHighlight();
-        }
-
-        if (e.evt && e.evt.shiftKey) pos = constrainAngle(start, pos);
+        const raw = stageToContent(stage);
+        const shifted = (e.evt && e.evt.shiftKey) ? constrainAngle(start, raw) : raw;
+        const { pos } = resolveSnap(shifted);
 
         if (kind === 'elbow') {
           connector.points([start.x, start.y, pos.x, start.y, pos.x, pos.y]);
@@ -295,10 +304,10 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
         }
       };
       const onUp = () => {
-        // Re-probe at the final pointer position so fast drags (where the
-        // last mousemove didn't land on the target) still snap.
-        const finalTarget = hoveredTarget || targetUnderPointer();
-        clearHighlight();
+        // Re-probe at the final pointer position so fast drags still snap.
+        const raw = stageToContent(stage);
+        const { pos: finalPos, target: finalTarget } = resolveSnap(raw);
+        overlay.hide();
         if (!connector) return;
         const pts = connector.points();
         const dx = pts[pts.length - 2] - pts[0];
@@ -309,17 +318,12 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
           let targetId = null;
           if (finalTarget && _ensureId(finalTarget) !== sourceId) {
             targetId = _ensureId(finalTarget);
-            // Snap the visible endpoint to the target's center so the
-            // pre-recompute points match what we bind to.
-            const rect = finalTarget.getClientRect({ skipStroke: true, relativeTo: contentLayer });
-            const cx = rect.x + rect.width / 2;
-            const cy = rect.y + rect.height / 2;
             const next = pts.slice();
-            next[next.length - 2] = cx;
-            next[next.length - 1] = cy;
+            next[next.length - 2] = finalPos.x;
+            next[next.length - 1] = finalPos.y;
             if (kind === 'elbow' && next.length === 6) {
-              next[2] = cx;         // midX = endX
-              next[3] = next[1];    // midY = startY
+              next[2] = finalPos.x;
+              next[3] = next[1];
             }
             connector.points(next);
           }
@@ -331,13 +335,15 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
         connector = null;
         start = null;
         sourceId = null;
+        hoveredTarget = null;
       };
       stage.on('mousedown.tool', onDown);
       stage.on('mousemove.tool', onMove);
       stage.on('mouseup.tool', onUp);
       return [() => {
         stage.off('mousedown.tool mousemove.tool mouseup.tool');
-        clearHighlight();
+        overlay.hide();
+        restoreShapeDrag();
       }];
     };
   }
