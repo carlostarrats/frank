@@ -1,8 +1,9 @@
 // settings-panel.js — Settings modal. The Cloud section is tabbed: "Use
-// Vercel" contains the guided deploy + fields; "Use your own" is the
-// generic-endpoint form. Tabs are self-contained — switching doesn't carry
-// state between them, so the user only ever sees the info that applies to
-// the path they picked.
+// Vercel" leads with a Deploy-to-Vercel button, then two collapsibles
+// (condensed terminal + full walkthrough), then the URL/key fields. "Use
+// your own" is the generic-endpoint form. Tabs are self-contained —
+// switching doesn't carry state between them, so the user only ever
+// sees the info that applies to the path they picked.
 
 import sync from '../core/sync.js';
 import { toastInfo, toastError } from './toast.js';
@@ -35,45 +36,71 @@ export function showSettingsPanel() {
 
           <!-- Vercel tab -->
           <div class="settings-tab-panel" data-tab="vercel" role="tabpanel">
-            <details class="settings-cli">
-              <summary>Prefer the terminal?</summary>
-              <p class="settings-field-hint">Skip this form and save both values from your shell:</p>
-              <div class="settings-cmd">
-                <code>frank connect &lt;url&gt; --key &lt;FRANK_API_KEY&gt;</code>
-                <button class="settings-cmd-copy" data-copy="frank connect <url> --key <FRANK_API_KEY>">Copy</button>
-              </div>
-            </details>
-
             <p class="settings-hint">
               Deploy the reference backend (in <code>frank-cloud/</code>) to
-              your own Vercel account. Three commands and a paste.
+              your own Vercel account. One click, then paste two values back
+              here.
             </p>
 
-            <ol class="settings-guide-steps">
-              <li>
-                <span>Install the Vercel CLI and log in (one time):</span>
-                <div class="settings-cmd">
-                  <code>npm i -g vercel &amp;&amp; vercel login</code>
-                  <button class="settings-cmd-copy" data-copy="npm i -g vercel && vercel login">Copy</button>
-                </div>
-              </li>
-              <li>
-                <span>Deploy the reference backend from this repo:</span>
-                <div class="settings-cmd">
-                  <code>cd frank-cloud &amp;&amp; vercel --prod</code>
-                  <button class="settings-cmd-copy" data-copy="cd frank-cloud && vercel --prod">Copy</button>
-                </div>
-                <span class="settings-field-hint">Vercel prints a URL like <code>https://frank-cloud-xyz.vercel.app</code>.</span>
-              </li>
-              <li>
-                <span>Add your API key to the deployment:</span>
-                <div class="settings-cmd">
-                  <code>vercel env add FRANK_API_KEY production</code>
-                  <button class="settings-cmd-copy" data-copy="vercel env add FRANK_API_KEY production">Copy</button>
-                </div>
-                <span class="settings-field-hint">Paste a long random string when prompted. Redeploy once (<code>vercel --prod</code>) so the env var takes effect.</span>
-              </li>
-            </ol>
+            <a
+              class="settings-deploy-btn"
+              href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcarlostarrats%2Ffrank&root-directory=frank-cloud&project-name=frank-cloud&env=FRANK_API_KEY&envDescription=Random%20string%20Frank%20sends%20in%20the%20Authorization%20header.%20Generate%20a%20long%20random%20value%20and%20keep%20it%20secret.&envLink=https%3A%2F%2Fgithub.com%2Fcarlostarrats%2Ffrank%2Fblob%2Fmain%2FCLOUD_API.md"
+              target="_blank"
+              rel="noopener"
+            >
+              <svg width="16" height="16" viewBox="0 0 76 65" aria-hidden="true" focusable="false"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z" fill="currentColor"/></svg>
+              <span>Deploy to Vercel</span>
+            </a>
+            <p class="settings-field-hint">
+              Opens Vercel in a new tab. You'll sign into your own account,
+              set a value for <code>FRANK_API_KEY</code> when prompted, and
+              click Deploy. When it finishes, copy the deployment URL and
+              the key value into the fields below.
+            </p>
+
+            <details class="settings-cli">
+              <summary>Prefer the terminal?</summary>
+              <p class="settings-field-hint">Already have the Vercel CLI set up? Run:</p>
+              <div class="settings-cmd">
+                <code>cd frank-cloud &amp;&amp; vercel --prod</code>
+                <button class="settings-cmd-copy" data-copy="cd frank-cloud && vercel --prod">Copy</button>
+              </div>
+              <div class="settings-cmd">
+                <code>vercel env add FRANK_API_KEY production</code>
+                <button class="settings-cmd-copy" data-copy="vercel env add FRANK_API_KEY production">Copy</button>
+              </div>
+              <p class="settings-field-hint">Redeploy once (<code>vercel --prod</code>) so the env var takes effect, then paste the URL and key below.</p>
+            </details>
+
+            <details class="settings-cli">
+              <summary>Full setup walkthrough</summary>
+              <p class="settings-field-hint">Step-by-step for first-time Vercel users:</p>
+              <ol class="settings-guide-steps">
+                <li>
+                  <span>Install the Vercel CLI and log in (one time):</span>
+                  <div class="settings-cmd">
+                    <code>npm i -g vercel &amp;&amp; vercel login</code>
+                    <button class="settings-cmd-copy" data-copy="npm i -g vercel && vercel login">Copy</button>
+                  </div>
+                </li>
+                <li>
+                  <span>Deploy the reference backend from this repo:</span>
+                  <div class="settings-cmd">
+                    <code>cd frank-cloud &amp;&amp; vercel --prod</code>
+                    <button class="settings-cmd-copy" data-copy="cd frank-cloud && vercel --prod">Copy</button>
+                  </div>
+                  <span class="settings-field-hint">Vercel prints a URL like <code>https://frank-cloud-xyz.vercel.app</code>.</span>
+                </li>
+                <li>
+                  <span>Add your API key to the deployment:</span>
+                  <div class="settings-cmd">
+                    <code>vercel env add FRANK_API_KEY production</code>
+                    <button class="settings-cmd-copy" data-copy="vercel env add FRANK_API_KEY production">Copy</button>
+                  </div>
+                  <span class="settings-field-hint">Paste a long random string when prompted. Redeploy once (<code>vercel --prod</code>) so the env var takes effect.</span>
+                </li>
+              </ol>
+            </details>
 
             <label class="settings-field">
               <span class="settings-label">Vercel deployment URL</span>
