@@ -49,8 +49,9 @@ let activeProjectId: string | null = null;
 // Active proxy targets: maps a slug to a target URL
 const proxyTargets = new Map<string, string>();
 
-// One LiveShareController per projectId. Cleaned up on stop-live-share /
-// project close / SIGINT.
+// One LiveShareController per projectId. Paused on stop-live-share (entry
+// stays in the map so resume-live-share can reuse the same controller);
+// removed on revoke-share / SIGINT.
 const liveShares = new Map<string, LiveShareController>();
 
 function liveShareRate(contentType: 'canvas' | 'image' | 'pdf' | 'url'): number {

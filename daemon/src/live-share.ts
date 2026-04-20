@@ -122,6 +122,11 @@ export class LiveShareController {
 
   pause(): void {
     this.paused = true;
+    // Cancel any pending retry (including the 1500ms transient-error retry
+    // set by flush()) so paused = true really means "no outbound traffic."
+    // flush() also guards on this.paused defensively in case a timer slips
+    // through before pause() is called.
+    if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
     if (this.sessionTimer) { clearTimeout(this.sessionTimer); this.sessionTimer = null; }
     if (this.throttleTimer) { clearTimeout(this.throttleTimer); this.throttleTimer = null; }
     this.authorStream?.close();
@@ -159,7 +164,7 @@ export class LiveShareController {
 
   private async flush(): Promise<void> {
     this.flushTimer = null;
-    if (this.stopped || !this.pending) return;
+    if (this.stopped || this.paused || !this.pending) return;
     const update = this.pending;
     this.pending = null;
     this.lastFlushAt = Date.now();
