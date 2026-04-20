@@ -230,6 +230,7 @@ export interface CloudConfigMessage {
   requestId?: number;
   cloudUrl: string | null;
   hasApiKey: boolean;
+  configuredAt: string | null;
 }
 export interface CloudTestResultMessage {
   type: 'cloud-test-result';
