@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .superpowers/
+
+# Git worktrees (isolated workspaces; never committed)
+.worktrees/
