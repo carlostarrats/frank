@@ -117,8 +117,8 @@ const sync = {
   },
   deleteComment(commentId) { return send({ type: 'delete-comment', commentId }); },
   requestProxy(url) { return send({ type: 'proxy-url', url }); },
-  uploadShare(snapshot, coverNote, contentType, oldShareId, oldRevokeToken) {
-    return send({ type: 'upload-share', snapshot, coverNote, contentType, oldShareId, oldRevokeToken });
+  uploadShare(snapshot, coverNote, contentType, oldShareId, oldRevokeToken, expiryDays) {
+    return send({ type: 'upload-share', snapshot, coverNote, contentType, oldShareId, oldRevokeToken, expiryDays });
   },
   getCloudStatus() {
     return send({ type: 'cloud-status' });

@@ -1,7 +1,65 @@
 // toolbar.js — Top toolbar for the viewer
 import { showSharePopover } from './share-popover.js';
 
-export function renderToolbar(container, { projectName, url, onBack }) {
+// v3 Phase 5: ambient LIVE badge on the toolbar share button. Tracks the
+// frank:live-share-state DOM events emitted by core/sync.js — same source
+// the share popover consumes. The popover handles detailed interaction;
+// this badge is a passive, always-visible signal.
+//
+// Known limitation (documented, not fixed): toolbarLiveState grows over the
+// session as the user opens different projects with active live shares.
+// Entries are harmless (stale entries don't render anything because the
+// corresponding share button doesn't exist after project switch), but the
+// map isn't pruned. A future cleanup hook could prune on project-close.
+const toolbarLiveState = new Map(); // projectId → { status, viewers }
+
+window.addEventListener('frank:live-share-state', (e) => {
+  const { projectId, status, viewers } = e.detail;
+  toolbarLiveState.set(projectId, { status, viewers });
+  rerenderBadge(projectId);
+});
+
+window.addEventListener('frank:share-revoked', (e) => {
+  toolbarLiveState.delete(e.detail.projectId);
+  rerenderBadge(e.detail.projectId);
+});
+
+function rerenderBadge(projectId) {
+  // Marker-based selector. Both the viewer's toolbar (components/toolbar.js)
+  // and the canvas view's inline share button (views/canvas.js) tag their
+  // share buttons with data-frank-share-btn + data-project-id. Neither
+  // existing button's class name is shared between the two views, so we
+  // use a neutral data-attribute marker rather than a class selector.
+  const shareBtn = document.querySelector('[data-frank-share-btn][data-project-id="' + projectId + '"]');
+  if (!shareBtn) return;
+  const badge = shareBtn.querySelector('.toolbar-live-badge');
+  const state = toolbarLiveState.get(projectId);
+  if (!state || (state.status !== 'live' && state.status !== 'throttled')) {
+    if (badge) badge.remove();
+    return;
+  }
+  const count = state.viewers || 0;
+  const label = count === 1 ? 'LIVE · 1' : `LIVE · ${count}`;
+  if (badge) {
+    badge.textContent = label;
+  } else {
+    const el = document.createElement('span');
+    el.className = 'toolbar-live-badge';
+    el.textContent = label;
+    shareBtn.appendChild(el);
+  }
+}
+
+// Called from view render paths after the share button is mounted to sync
+// badge state on project switch. Without this, a user who starts live share
+// on project A, switches to project B, then switches back to A would not
+// see the badge until the next state event fires — potentially 30s later
+// at the next state-promotion tick.
+export function syncToolbarLiveBadge(projectId) {
+  rerenderBadge(projectId);
+}
+
+export function renderToolbar(container, { projectName, url, onBack, projectId }) {
   container.innerHTML = `
     <div class="toolbar">
       <button class="btn-ghost toolbar-back" id="toolbar-back" title="Back" aria-label="Back">←</button>
@@ -20,7 +78,7 @@ export function renderToolbar(container, { projectName, url, onBack }) {
           ${iconTimeline()}
         </button>
         <button class="toolbar-btn toolbar-ai-toggle" id="toolbar-ai-toggle" title="Ask Claude">AI</button>
-        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-share" title="Share" aria-label="Share">
+        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-share" data-frank-share-btn data-project-id="${projectId || ''}" title="Share" aria-label="Share">
           ${iconLink()}
         </button>
       </div>

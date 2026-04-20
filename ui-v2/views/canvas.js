@@ -30,7 +30,7 @@ import { attachShortcuts } from '../canvas/shortcuts.js';
 import { createHistory } from '../canvas/history.js';
 import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js';
 import { toastError, toastInfo } from '../components/toast.js';
-import { iconCommentPlus, iconCamera, iconLink, iconDownload, iconUndo, iconTimeline } from '../components/toolbar.js';
+import { iconCommentPlus, iconCamera, iconLink, iconDownload, iconUndo, iconTimeline, syncToolbarLiveBadge } from '../components/toolbar.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -99,7 +99,7 @@ export function renderCanvas(container, { onBack }) {
         <button class="btn-ghost canvas-icon-btn canvas-comment-toggle" id="canvas-comment-toggle" title="Comment on shape" aria-label="Toggle comment mode">${iconCommentPlus()}</button>
         <button class="btn-ghost canvas-icon-btn" id="canvas-timeline-btn" title="Timeline" aria-label="Timeline">${iconTimeline()}</button>
         <button class="btn-ghost canvas-icon-btn canvas-snapshot-btn" id="canvas-snapshot-btn" title="Take snapshot" aria-label="Take snapshot">${iconCamera()}</button>
-        <button class="btn-ghost canvas-icon-btn canvas-share-btn" id="canvas-share-btn" title="Share canvas" aria-label="Share canvas">${iconLink()}</button>
+        <button class="btn-ghost canvas-icon-btn canvas-share-btn" id="canvas-share-btn" data-frank-share-btn data-project-id="${project.id}" title="Share canvas" aria-label="Share canvas">${iconLink()}</button>
         <div class="canvas-export-wrapper">
           <button class="btn-ghost canvas-icon-btn canvas-export-btn" id="canvas-export-btn" title="Export" aria-label="Export">${iconDownload()}</button>
           <div class="canvas-export-menu" id="canvas-export-menu" hidden>
@@ -376,6 +376,7 @@ export function renderCanvas(container, { onBack }) {
   shareBtn.addEventListener('click', () => {
     showSharePopover(shareBtn, { onClose() {} });
   });
+  syncToolbarLiveBadge(project.id);  // v3 Phase 5: sync badge on canvas mount
 
   const onCaptureSnapshot = async (e) => {
     // Only handle canvas-originated captures. The viewer handler in viewer.js
@@ -388,6 +389,9 @@ export function renderCanvas(container, { onBack }) {
         snapshot,
         e.detail.coverNote,
         'canvas',
+        undefined,  // oldShareId — unused on fresh creation
+        undefined,  // oldRevokeToken
+        e.detail.expiryDays,
       );
       if (result.error) {
         updateSharePopover({ error: result.error });
@@ -397,7 +401,7 @@ export function renderCanvas(container, { onBack }) {
         id: result.shareId,
         revokeToken: result.revokeToken,
         createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+        expiresAt: new Date(Date.now() + (e.detail.expiryDays ?? 7) * 86400000).toISOString(),
         coverNote: e.detail.coverNote,
         lastSyncedNoteId: null,
         unseenNotes: 0,
