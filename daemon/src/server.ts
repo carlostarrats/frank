@@ -18,7 +18,7 @@ import { saveAsset, ALLOWED_MIME_TYPES } from './assets.js';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB cap for base64-over-WS uploads
 import { proxyRequest } from './proxy.js';
-import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments, saveCloudConfig, healthCheck } from './cloud.js';
+import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments, saveCloudConfig, healthCheck, getCloudConfiguredAt } from './cloud.js';
 import { mergeCloudComments } from './projects.js';
 import { saveSnapshot, saveCanvasSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
 import { addCuration, applyCurationToComments } from './curation.js';
@@ -420,11 +420,14 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
 
     case 'get-cloud-config': {
       // Returns the URL (fine to read) and a boolean for whether a key is
-      // stored; we never echo the key back to the client.
+      // stored; we never echo the key back to the client. configuredAt is
+      // the ISO timestamp of the most recent save, used by the UI to show
+      // an "Already configured on …" hint.
       reply({
         type: 'cloud-config',
         cloudUrl: getCloudUrl(),
         hasApiKey: isCloudConnected(),
+        configuredAt: getCloudConfiguredAt(),
       });
       break;
     }
@@ -436,7 +439,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         if (!url || !key) throw new Error('Both URL and API key are required');
         if (!/^https?:\/\//.test(url)) throw new Error('URL must start with http:// or https://');
         saveCloudConfig(url, key);
-        reply({ type: 'cloud-config', cloudUrl: url, hasApiKey: true });
+        reply({ type: 'cloud-config', cloudUrl: url, hasApiKey: true, configuredAt: getCloudConfiguredAt() });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }

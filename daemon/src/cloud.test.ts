@@ -16,7 +16,7 @@ vi.mock('./protocol.js', () => {
   };
 });
 
-import { saveCloudConfig, isCloudConnected, getCloudUrl } from './cloud.js';
+import { saveCloudConfig, isCloudConnected, getCloudUrl, getCloudConfiguredAt } from './cloud.js';
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'frank-test-cloud-'));
@@ -76,5 +76,31 @@ describe('getCloudUrl', () => {
   it('returns the cloud URL after configuration', () => {
     saveCloudConfig('https://cloud.example.com', 'key');
     expect(getCloudUrl()).toBe('https://cloud.example.com');
+  });
+});
+
+describe('getCloudConfiguredAt', () => {
+  it('returns null when not configured', () => {
+    expect(getCloudConfiguredAt()).toBeNull();
+  });
+
+  it('returns an ISO timestamp after saving cloud config', () => {
+    const before = Date.now();
+    saveCloudConfig('https://cloud.example.com', 'key');
+    const iso = getCloudConfiguredAt();
+    expect(iso).not.toBeNull();
+    const ts = Date.parse(iso as string);
+    expect(Number.isNaN(ts)).toBe(false);
+    expect(ts).toBeGreaterThanOrEqual(before - 1000);
+    expect(ts).toBeLessThanOrEqual(Date.now() + 1000);
+  });
+
+  it('updates the timestamp when config is re-saved', async () => {
+    saveCloudConfig('https://a.com', 'k1');
+    const first = getCloudConfiguredAt() as string;
+    await new Promise((r) => setTimeout(r, 10));
+    saveCloudConfig('https://b.com', 'k2');
+    const second = getCloudConfiguredAt() as string;
+    expect(Date.parse(second)).toBeGreaterThan(Date.parse(first));
   });
 });

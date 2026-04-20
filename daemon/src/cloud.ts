@@ -51,7 +51,13 @@ export function saveCloudConfig(cloudUrl: string, apiKey: string): void {
   const config = readRawConfig();
   config.cloudUrl = cloudUrl;
   config.apiKey = apiKey;
+  config.cloudConfiguredAt = new Date().toISOString();
   writeConfigSecure(config);
+}
+
+export function getCloudConfiguredAt(): string | null {
+  const config = readRawConfig();
+  return (config.cloudConfiguredAt as string) || null;
 }
 
 export function getClaudeApiKey(): string | null {

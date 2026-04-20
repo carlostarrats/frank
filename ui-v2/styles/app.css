@@ -66,9 +66,23 @@
   text-align: center;
 }
 
-/* Settings modal — reuses help-modal chrome; body styles below. */
-.settings-modal { max-width: 620px; }
-.settings-body { display: flex; flex-direction: column; gap: 24px; }
+/* Settings modal — reuses help-modal chrome; body styles below.
+   Caps the modal height to the viewport and moves scrolling into
+   .settings-body so the header + close button stay pinned. */
+.settings-modal {
+  max-width: 620px;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  min-height: 0;
+}
 .settings-section { display: flex; flex-direction: column; gap: 12px; }
 .settings-section h3 {
   font-size: 15px;
@@ -97,6 +111,67 @@
 .settings-status-info { color: var(--text-muted); }
 .settings-status-ok { color: var(--success); }
 .settings-status-error { color: var(--danger); }
+
+/* Primary Deploy-to-Vercel CTA on the Vercel tab */
+.settings-deploy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  align-self: flex-start;
+  padding: 10px 18px;
+  background: var(--text-primary);
+  color: var(--bg-app);
+  border: 1px solid var(--text-primary);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.04s;
+}
+.settings-deploy-btn:hover { opacity: 0.9; }
+.settings-deploy-btn:active { transform: translateY(1px); }
+.settings-deploy-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.settings-deploy-btn svg { flex-shrink: 0; }
+
+/* Hint shown under the Deploy button when cloud is already configured.
+   Uses the success token family to match curation badges + ok toasts. */
+.settings-configured-at {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--success);
+  padding: 8px 10px;
+  background: color-mix(in oklch, var(--success), transparent 85%);
+  border: 1px solid color-mix(in oklch, var(--success), transparent 60%);
+  border-radius: var(--radius-sm);
+}
+
+/* Visual break between the setup tiers and the URL/key field group.
+   Flex container already contributes 12px gap on each side, so total
+   breathing room ends up ~28px above and below. */
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+/* Bulleted list used inside the "Why would I want a new deployment?"
+   collapsible. Matches the surrounding field-hint typography. */
+.settings-why-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
 /* Cloud-mode tabs (Use Vercel / Use your own) */
 .settings-tabs {
