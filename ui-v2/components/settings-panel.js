@@ -36,6 +36,8 @@ export function showSettingsPanel() {
 
           <!-- Vercel tab -->
           <div class="settings-tab-panel" data-tab="vercel" role="tabpanel">
+            <p class="settings-configured-at" data-configured-at hidden></p>
+
             <p class="settings-hint">
               Deploy the reference backend (in <code>frank-cloud/</code>) to
               your own Vercel account. One click, then paste two values back
@@ -57,7 +59,6 @@ export function showSettingsPanel() {
               click Deploy. When it finishes, copy the deployment URL and
               the key value into the fields below.
             </p>
-            <p class="settings-configured-at" data-configured-at hidden></p>
 
             <details class="settings-cli">
               <summary>Prefer the terminal?</summary>
