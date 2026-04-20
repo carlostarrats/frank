@@ -4,6 +4,14 @@
 
 **v2.06** — Builds on v2.02–v2.05: file drop on the home view, drag-and-drop images onto the canvas, shape-anchored comments that follow shapes on drag, canvas snapshots with inline thumbnails, canvas sharing through your own Frank Cloud, vector PDF/SVG export, project reports, undo/redo, tool shortcuts, non-canvas keyboard accessibility, and a project-management surface (rename, archive, soft-delete, search/sort/filter). Latest additions: one-click **Deploy to Vercel** button in Settings (no terminal required), "Already configured on <date>" hint, and a scrollable Settings modal for tall content.
 
+## v3 — live share (in progress)
+
+Phase 1 of v3 ships the transport layer: SSE streams (viewer + daemon), a per-share rolling diff buffer with monotonic revisions, author online/offline detection, viewer presence, share revocation, and a 2-hour session auto-pause. Project-type integrations (canvas live render, image annotations, PDF sync) land in phases 2–4; URL live-share is deferred to v3.1.
+
+- Contract: [`CLOUD_API.md`](CLOUD_API.md) v3 section
+- Plan: [`docs/superpowers/plans/2026-04-19-v3-phase1-sse-foundation.md`](docs/superpowers/plans/2026-04-19-v3-phase1-sse-foundation.md)
+- Reference backend env vars + setup: [`frank-cloud/README.md`](frank-cloud/README.md)
+
 **Frank is a terminal tool.** You start it from the command line, and it opens a browser-based UI at `localhost:42068`. Requires [Node.js](https://nodejs.org/) (v18+).
 
 
