@@ -165,6 +165,14 @@ function saveAuthor(name) { localStorage.setItem('frank-author', name); }
 let __canvasStage = null;
 const __assetCache = {}; // url → dataUrl, merged across state + diff events
 
+// v3 Phase 3 — image live share cache. Cold-open render seeds this with the
+// initial snapshot's fileDataUrl; renderImageLive compares incoming payload
+// fileDataUrl against it to skip redundant `img.src =` assignments when the
+// image hasn't changed (the 30s-promotion case: same image, new comments).
+// If a future feature ever swaps the source image mid-session, the cache
+// comparison triggers a visible img.src update.
+let __imageCache = null; // { fileDataUrl, mimeType } or null
+
 async function renderCanvas(payload) {
   // payload shape: { canvasState: string, assets: Record<url, dataUrl> }
   if (!payload || !payload.canvasState) return;
@@ -430,20 +438,8 @@ init();
 // canvas JSON (assets are already in __assetCache from the most recent state
 // event or the initial snapshot).
 
-// v3 Phase 3 — image live share.
-// Cache the image data URL across events. Purpose: the cold-open initial
-// render writes the <img>'s src once; subsequent state events compare their
-// payload.fileDataUrl against __imageCache to skip redundant `img.src =`
-// assignments when the image hasn't changed (which is the 30s-promotion
-// case — same image, new comments). Without the cache we'd re-assign src
-// to an identical data URL on every state event, which is a no-op in
-// practice but an unnecessary DOM write.
-//
-// If a future feature ever swaps the source image mid-session (re-upload
-// through a UI that doesn't exist yet), the cache comparison correctly
-// triggers a visible img.src update.
-let __imageCache = null; // { fileDataUrl, mimeType } or null
-
+// v3 Phase 3 — image live share renderer. Declaration of __imageCache lives
+// alongside __canvasStage and __assetCache above, by convention.
 function renderImageLive(payload) {
   // payload is either:
   //   state: { fileDataUrl, mimeType, comments }
