@@ -363,8 +363,8 @@ export interface LiveShareStateMessage {
   type: 'live-share-state';
   projectId: string;
   // 'unsupported' = backend is v2-only (see Migration Coexistence section).
-  // Distinct from 'error' because the share itself is fine, just no live.
-  status: 'idle' | 'connecting' | 'live' | 'paused' | 'offline' | 'error' | 'unsupported';
+  // 'throttled' = daemon hit bandwidth cap; live is still active but current edits are buffered.
+  status: 'idle' | 'connecting' | 'live' | 'paused' | 'offline' | 'error' | 'unsupported' | 'throttled';
   viewers: number;
   revision: number;
   lastError: string | null;

@@ -712,6 +712,9 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             onError: (err) => {
               ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'error', viewers: ctl.viewers, revision: ctl.revision, lastError: err }));
             },
+            onBandwidthStatus: (throttled) => {
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: throttled ? 'throttled' : 'live', viewers: ctl.viewers, revision: ctl.revision, lastError: null }));
+            },
             onSessionTimeout: () => {
               // UI banner copy (Phase 5 renders it verbatim from this lastError):
               //   "Live share paused — sessions auto-pause after 2 hours to prevent
