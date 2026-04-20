@@ -1329,3 +1329,25 @@
   color: var(--text-muted, rgba(255, 255, 255, 0.5));
   flex: 1;
 }
+
+/* v3 Phase 5: ambient LIVE badge on toolbar share buttons */
+[data-frank-share-btn] {
+  position: relative;  /* anchor for the absolute-positioned badge */
+}
+.toolbar-live-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  padding: 2px 6px;
+  background: #ef4444;
+  color: #fff;
+  font: 600 9px/1.2 -apple-system, system-ui, sans-serif;
+  border-radius: 8px;
+  letter-spacing: 0.02em;
+  animation: toolbar-live-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes toolbar-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}

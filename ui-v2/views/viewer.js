@@ -1,7 +1,7 @@
 // viewer.js — Content viewer: iframe wrapper with overlay and comments
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
-import { renderToolbar } from '../components/toolbar.js';
+import { renderToolbar, syncToolbarLiveBadge } from '../components/toolbar.js';
 import { setupOverlay, toggleCommentMode, disableCommentMode, isCommentModeActive } from '../overlay/overlay.js';
 import { createViewerPinRenderer } from '../overlay/pins.js';
 import { renderCuration } from '../components/curation.js';
@@ -31,7 +31,9 @@ export function renderViewer(container, { onBack }) {
     projectName: project.name,
     url: project.url || project.file || '',
     onBack,
+    projectId: project.id,
   });
+  syncToolbarLiveBadge(project.id);
 
   const sidebar = container.querySelector('#viewer-sidebar');
   const commentToggle = container.querySelector('#toolbar-comment-toggle');
