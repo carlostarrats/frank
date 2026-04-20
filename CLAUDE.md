@@ -5,7 +5,7 @@ A collaboration layer for any web content. Point it at any URL — localhost, st
 
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
-Current branch: `dev-v2.04`.
+Current branch: `dev-v2.07`.
 
 ---
 
@@ -30,8 +30,9 @@ Current branch: `dev-v2.04`.
 ### Self-Hosted Cloud
 - Sharing talks to a backend **the user hosts**. There is no Anthropic-run cloud.
 - The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md): four JSON-over-HTTPS endpoints (`/api/health`, `POST+GET /api/share`, `POST /api/comment`).
-- `frank-cloud/` is the **reference implementation** for Vercel + Blob. Any host that serves the contract works — Cloudflare Workers, Deno Deploy, self-hosted Node, etc. The Settings modal (home header → cog icon) has a "Use Vercel" tab with the deploy commands and a "Use your own" tab for alternative backends.
+- `frank-cloud/` is the **reference implementation** for Vercel + Blob. Any host that serves the contract works — Cloudflare Workers, Deno Deploy, self-hosted Node, etc. The Settings modal (home header → cog icon) has a "Use Vercel" tab leading with a one-click **Deploy to Vercel** button (`vercel.com/new/clone?...` with `root-directory=frank-cloud` + `FRANK_API_KEY` env prompt) and a "Use your own" tab for alternative backends. Two collapsibles under the deploy button — "Prefer the terminal?" (condensed two-command path) and "Full setup walkthrough" — cover the CLI routes.
 - The CLI equivalent is `frank connect <url> --key <key>`, which writes URL + key to `~/.frank/config.json` (mode 0600, secret-aware write). The Settings modal hits the same daemon handlers (`set-cloud-config`, `test-cloud-connection`).
+- `saveCloudConfig()` also writes `cloudConfiguredAt` (ISO timestamp). It flows back through `get/set-cloud-config` so the Settings UI can show a green "Already configured on <date>" hint at the top of both tabs when a config is on file.
 - Cloud is optional — everything except sharing works offline. Until it's configured, the Share button warns that cloud isn't set up.
 - For canvas sharing, the daemon bundles the canvas state + every referenced asset as inline data URLs into the share payload, so the cloud viewer can render without round-tripping back to the daemon.
 
@@ -113,7 +114,7 @@ frank/
 │   │   ├── ai-panel.js       # In-app Claude conversation, streaming
 │   │   ├── url-input.js      # URL paste + file picker + drag-drop (PDF / image)
 │   │   ├── help-panel.js     # Getting-started modal (5 feature cards, focus trap)
-│   │   ├── settings-panel.js # Settings modal — tabbed Cloud backend config (Vercel / custom) + Test connection
+│   │   ├── settings-panel.js # Settings modal — tabbed Cloud backend config (Vercel / custom), Deploy-to-Vercel CTA, "Why would I want a new deployment?" help, configured-at green hint, scrollable body with pinned header + Test connection
 │   │   ├── toast.js          # info/warn/error notifications (top-right, stackable, info shows checkmark)
 │   │   └── error-card.js     # Inline error block (message + suggestion + retry)
 │   └── styles/
@@ -145,7 +146,7 @@ frank/
 │   ├── src/canvas.ts         # Canvas state I/O (one JSON blob per project)
 │   ├── src/ai-conversations.ts  # Per-project AI conversation storage (size + msg count caps)
 │   ├── src/ai-providers/claude.ts  # Claude API client, context builder with token budget
-│   └── src/*.test.ts         # Vitest tests (132 across 12 files)
+│   └── src/*.test.ts         # Vitest tests (135 across 12 files)
 ├── frank-cloud/              # Reference cloud backend — Vercel + Blob (users host their own)
 │   ├── api/                  # Serverless functions (share, comment, health)
 │   ├── public/viewer/        # Share viewer page (iframe OR canvas render via Konva CDN)
@@ -278,7 +279,7 @@ Wired: viewer proxy failure (error card), canvas save double-failure (toast + re
 
 ## Testing
 
-The daemon has a Vitest test suite (**132 tests across 12 files**). Tests use temp directories — never touch real `~/.frank/`.
+The daemon has a Vitest test suite (**135 tests across 12 files**). Tests use temp directories — never touch real `~/.frank/`.
 
 ```bash
 cd daemon

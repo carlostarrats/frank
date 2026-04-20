@@ -2,7 +2,7 @@
 
 > A persistent context layer for AI-assisted development. Start from a URL, drop a PDF or image, or open a blank canvas. Comment on any element or shape, share for feedback, iterate with Claude in-app — every decision captured along the way.
 
-**v2.02** — Builds on the v2 release: file drop on the home view, drag-and-drop images onto the canvas, shape-anchored comments that follow shapes on drag, canvas snapshots with inline thumbnails, canvas sharing through your own Frank Cloud, vector PDF/SVG export, project reports, undo/redo, tool shortcuts, non-canvas keyboard accessibility, and a project-management surface (rename, archive, soft-delete, search/sort/filter).
+**v2.06** — Builds on v2.02–v2.05: file drop on the home view, drag-and-drop images onto the canvas, shape-anchored comments that follow shapes on drag, canvas snapshots with inline thumbnails, canvas sharing through your own Frank Cloud, vector PDF/SVG export, project reports, undo/redo, tool shortcuts, non-canvas keyboard accessibility, and a project-management surface (rename, archive, soft-delete, search/sort/filter). Latest additions: one-click **Deploy to Vercel** button in Settings (no terminal required), "Already configured on <date>" hint, and a scrollable Settings modal for tall content.
 
 **Frank is a terminal tool.** You start it from the command line, and it opens a browser-based UI at `localhost:42068`. Requires [Node.js](https://nodejs.org/) (v18+).
 
@@ -220,10 +220,12 @@ Sharing is optional and self-hosted. Frank doesn't talk to any Anthropic-operate
 
 You must set this up before the Share button can generate real links. Two paths, pick one:
 
-**UI (easy):** Open Frank, click the **Settings** cog in the home header, choose a tab:
+**UI (easy, no terminal):** Open Frank, click the **Settings** cog in the home header, choose a tab:
 
-- **Use Vercel** — the modal shows three copy-paste commands: install the Vercel CLI, deploy `frank-cloud/` to your account, add `FRANK_API_KEY` as an env var. Paste the resulting URL + key into the form and click **Test connection**.
+- **Use Vercel** — click the **Deploy to Vercel** button. A new browser tab opens on Vercel's one-click clone page with the repo, root directory (`frank-cloud/`), project name, and `FRANK_API_KEY` env prompt all pre-filled. Sign into your own Vercel account, set the API key when asked, click Deploy. When it finishes, copy the deployment URL + the key value back into Frank's form and click **Test connection**. If you already have the Vercel CLI set up, two collapsibles below the button give you the condensed (`cd frank-cloud && vercel --prod`) or full walkthrough paths. Once configured, a green "Already configured on <date>" hint appears at the top of the tab so you know the state.
 - **Use your own** — for Cloudflare Workers, Deno Deploy, a Node server, anything that implements the [Cloud API contract](CLOUD_API.md). Paste the URL and bearer token, test.
+
+One Vercel deploy hosts every project you ever share — you do not redeploy per share. The Settings modal has a "Why would I want a new deployment?" expand for when that question comes up.
 
 **Terminal (identical effect):**
 
@@ -296,7 +298,7 @@ cd daemon && npm run build
 
 ### Testing
 
-The daemon has a Vitest test suite (**132 tests across 12 files**). Tests use temp directories — they never touch real `~/.frank/`.
+The daemon has a Vitest test suite (**135 tests across 12 files**). Tests use temp directories — they never touch real `~/.frank/`.
 
 ```bash
 cd daemon
