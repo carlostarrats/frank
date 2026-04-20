@@ -130,6 +130,64 @@ describe('live share — integration with fake cloud', () => {
     await ctl.stop();
   });
 
+  it('image payload flows through decide-send to the fake cloud as a state event', async () => {
+    clearV2OnlyMarker();
+    const liveFile = path.join(tmp, 'p1', 'live.json');
+    if (fs.existsSync(liveFile)) fs.unlinkSync(liveFile);
+
+    // Seed a project.json + source file + comments.json for p1.
+    fs.writeFileSync(
+      path.join(tmp, 'p1', 'project.json'),
+      JSON.stringify({
+        frank_version: '2',
+        name: 'test',
+        contentType: 'image',
+        file: 'projects/p1/source/pic.png',
+        screens: {},
+        screenOrder: [],
+        capture: false,
+        activeShare: null,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      }),
+      'utf8',
+    );
+    fs.mkdirSync(path.join(tmp, 'p1', 'source'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'p1', 'source', 'pic.png'),
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    );
+    fs.writeFileSync(path.join(tmp, 'p1', 'comments.json'), JSON.stringify([]), 'utf8');
+
+    const { buildImageLivePayload } = await import('./image-live.js');
+    const { decideImageSend, __resetForTests } = await import('./image-send-state.js');
+    __resetForTests();
+
+    const payload = await buildImageLivePayload('p1');
+    expect(payload).not.toBeNull();
+    expect(payload!.mimeType).toBe('image/png');
+
+    const ctl = new LiveShareController({
+      projectId: 'p1',
+      shareId: 'share-image',
+      contentType: 'image',
+      ratePerSecond: 30,
+    });
+    const decision = decideImageSend('share-image', payload!);
+    expect(decision.kind).toBe('state');
+    ctl.pushState(decision.payload);
+    await new Promise((r) => setTimeout(r, 250));
+
+    const posts = fake.getPosts().filter((p) => p.shareId === 'share-image');
+    expect(posts.length).toBe(1);
+    expect(posts[0].type).toBe('state');
+    const body = posts[0].payload as { fileDataUrl: string; mimeType: string; comments: unknown[] };
+    expect(body.fileDataUrl).toMatch(/^data:image\/png;base64,/);
+    expect(body.mimeType).toBe('image/png');
+    expect(body.comments).toEqual([]);
+    await ctl.stop();
+  });
+
   it('pushState after resume delivers to backend (not dropped by paused state)', async () => {
     clearV2OnlyMarker();
     const liveFile = path.join(tmp, 'p1', 'live.json');
