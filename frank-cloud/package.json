@@ -4,7 +4,8 @@
   "private": true,
   "license": "SEE LICENSE IN ../LICENSE",
   "dependencies": {
-    "@vercel/blob": "^0.27.0"
+    "@vercel/blob": "^0.27.0",
+    "@vercel/kv": "^3.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
