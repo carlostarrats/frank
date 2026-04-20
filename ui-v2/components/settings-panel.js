@@ -57,6 +57,7 @@ export function showSettingsPanel() {
               click Deploy. When it finishes, copy the deployment URL and
               the key value into the fields below.
             </p>
+            <p class="settings-configured-at" data-configured-at hidden></p>
 
             <details class="settings-cli">
               <summary>Prefer the terminal?</summary>
@@ -102,6 +103,8 @@ export function showSettingsPanel() {
               </ol>
             </details>
 
+            <hr class="settings-divider">
+
             <label class="settings-field">
               <span class="settings-label">Vercel deployment URL</span>
               <input type="url" data-field="url" class="input" placeholder="https://frank-cloud-xyz.vercel.app" autocomplete="off" spellcheck="false">
@@ -135,6 +138,8 @@ export function showSettingsPanel() {
               — Cloudflare Workers, Deno Deploy, a Node server, anything that
               serves the four endpoints.
             </p>
+
+            <hr class="settings-divider">
 
             <label class="settings-field">
               <span class="settings-label">Endpoint URL</span>
@@ -195,6 +200,16 @@ export function showSettingsPanel() {
       overlay.querySelectorAll('input[data-field="key"]').forEach((el) => {
         el.placeholder = '•••••••• (key on file — retype to change)';
       });
+      if (config.configuredAt) {
+        const when = new Date(config.configuredAt);
+        if (!Number.isNaN(when.getTime())) {
+          const label = `Already configured on ${when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} at ${when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Redeploying creates a new Vercel project; pick it up again here when it's done.`;
+          overlay.querySelectorAll('[data-configured-at]').forEach((el) => {
+            el.textContent = label;
+            el.removeAttribute('hidden');
+          });
+        }
+      }
     }
   });
 
