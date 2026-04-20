@@ -125,14 +125,15 @@
 }
 .settings-deploy-btn svg { flex-shrink: 0; }
 
-/* Hint shown under the Deploy button when cloud is already configured. */
+/* Hint shown under the Deploy button when cloud is already configured.
+   Uses the success token family to match curation badges + ok toasts. */
 .settings-configured-at {
   font-size: 11px;
   line-height: 1.5;
-  color: var(--text-muted);
+  color: var(--success);
   padding: 8px 10px;
-  background: color-mix(in oklch, var(--muted), transparent 70%);
-  border: 1px solid var(--border);
+  background: color-mix(in oklch, var(--success), transparent 85%);
+  border: 1px solid color-mix(in oklch, var(--success), transparent 60%);
   border-radius: var(--radius-sm);
 }
 
