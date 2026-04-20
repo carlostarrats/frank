@@ -173,6 +173,9 @@ export function renderViewer(container, { onBack }) {
         snapshot,
         e.detail.coverNote,
         project.contentType,
+        undefined,  // oldShareId — unused on fresh creation
+        undefined,  // oldRevokeToken
+        e.detail.expiryDays,
       );
       if (result.error) {
         updateSharePopover({ error: result.error });
