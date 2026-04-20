@@ -38,6 +38,8 @@ import { buildContext, streamChat } from './ai-providers/claude.js';
 import Anthropic from '@anthropic-ai/sdk';
 import { buildCanvasLivePayload } from './canvas-live.js';
 import { decideCanvasSend, clearSendState } from './canvas-send-state.js';
+import { buildImageLivePayload } from './image-live.js';
+import { decideImageSend, clearImageSendState } from './image-send-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,6 +61,31 @@ function liveShareRate(contentType: 'canvas' | 'image' | 'pdf' | 'url'): number 
   if (contentType === 'pdf') return 5;
   if (contentType === 'image') return 1;
   return 1;
+}
+
+// Phase 3: image projects fork a live push off each comment change. Phase 4
+// will add PDF. Canvas doesn't use this path — it has its own canvas-state
+// fork in save-canvas-state (Phase 2).
+//
+// Race behavior: two near-simultaneous comment events (e.g., add + curate
+// firing within ~100ms) each call this function. Both call buildImageLivePayload,
+// which re-reads the LATEST comments.json each time — so both pushes reflect
+// post-both-events state, not pre-event state. The LiveShareController's
+// pushState/pushDiff coalesces under the hood (Phase 1 `live-share.ts`:
+// `this.pending = { kind, payload }` replaces any pending update; `flushTimer`
+// debounces), so the backend only sees the final state, not intermediate ones.
+async function forkImageLivePush(projectId: string): Promise<void> {
+  const ctl = liveShares.get(projectId);
+  if (!ctl) return;
+  const project = loadProject(projectId);
+  if (!project || project.contentType !== 'image' || !project.activeShare?.id) return;
+  try {
+    const payload = await buildImageLivePayload(projectId);
+    if (!payload) return;
+    const decision = decideImageSend(project.activeShare.id, payload);
+    if (decision.kind === 'state') ctl.pushState(decision.payload);
+    else ctl.pushDiff(decision.payload);
+  } catch { /* best-effort; persistence already succeeded */ }
 }
 
 export function startServer(): void {
@@ -362,6 +389,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           text: msg.text,
         });
         broadcast({ type: 'comment-added', comment } as any);
+        void forkImageLivePush(activeProjectId);
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -372,6 +400,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
         deleteComment(activeProjectId, msg.commentId);
+        void forkImageLivePush(activeProjectId);
         const project = loadProject(activeProjectId);
         const comments = loadComments(activeProjectId);
         reply({ type: 'project-loaded', projectId: activeProjectId, project, comments });
@@ -526,6 +555,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         };
         const curation = addCuration(activeProjectId, msg.commentIds, msg.action, origTexts, msg.remixedText || '', msg.dismissReason || '');
         applyCurationToComments(activeProjectId, msg.commentIds, statusMap[msg.action]);
+        void forkImageLivePush(activeProjectId);
         const updatedComments = loadComments(activeProjectId);
         reply({ type: 'curation-done', curation });
         broadcast({ type: 'project-loaded', projectId: activeProjectId, project: loadProject(activeProjectId), comments: updatedComments } as any);
@@ -776,7 +806,10 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
               project.activeShare.live.paused = true;
               saveProject(projectId, project);
             }
-            if (project?.activeShare) clearSendState(project.activeShare.id);
+            if (project?.activeShare) {
+              clearSendState(project.activeShare.id);
+              clearImageSendState(project.activeShare.id);
+            }
           } catch { /* best-effort */ }
           reply({ type: 'live-share-state', projectId, status: 'paused', viewers: 0, revision: ctl?.revision ?? 0, lastError: null });
         } catch (e: any) {
@@ -835,6 +868,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           }
           liveShares.delete(projectId);
           clearSendState(project.activeShare.id);
+          clearImageSendState(project.activeShare.id);
           project.activeShare = null;
           saveProject(projectId, project);
           reply({ type: 'share-revoked', projectId });
@@ -1013,7 +1047,10 @@ process.on('SIGINT', async () => {
   for (const [projectId, ctl] of liveShares.entries()) {
     await ctl.stop();
     const project = loadProject(projectId);
-    if (project?.activeShare?.id) clearSendState(project.activeShare.id);
+    if (project?.activeShare?.id) {
+      clearSendState(project.activeShare.id);
+      clearImageSendState(project.activeShare.id);
+    }
   }
   process.exit(0);
 });
