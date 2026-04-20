@@ -1,7 +1,12 @@
 import { put, list } from '@vercel/blob';
-import crypto from 'crypto';
 
-export const config = { runtime: 'nodejs' };
+export const config = { runtime: 'edge' };
+
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
+}
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
@@ -49,7 +54,7 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Create comment
-    const commentId = 'c-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex');
+    const commentId = 'c-' + Date.now() + '-' + randomHex(3);
     const comment = {
       id: commentId,
       shareId,

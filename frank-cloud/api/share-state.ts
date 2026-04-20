@@ -3,7 +3,7 @@ import { nextRevision, peekRevision } from '../lib/revisions.js';
 import { appendDiff } from '../lib/diff-buffer.js';
 import { publish } from '../lib/pubsub.js';
 
-export const config = { runtime: 'nodejs', maxDuration: 30 };
+export const config = { runtime: 'edge' };
 
 const MAX_PAYLOAD_BYTES = Number(process.env.FRANK_STATE_MAX_BYTES || 1_048_576); // 1 MB
 

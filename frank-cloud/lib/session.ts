@@ -1,7 +1,6 @@
 // Using @upstash/redis directly rather than @vercel/kv — Vercel has moved
 // KV to the Upstash Marketplace integration and @vercel/kv is deprecated.
 import { Redis } from '@upstash/redis';
-import crypto from 'crypto';
 
 const redis = Redis.fromEnv();
 
@@ -17,7 +16,11 @@ export function readOrCreateSessionToken(req: Request): { token: string; setCook
   const cookie = req.headers.get('cookie') || '';
   const m = cookie.match(/frank_session=([a-zA-Z0-9_-]{16,64})/);
   if (m) return { token: m[1], setCookie: null };
-  const token = crypto.randomBytes(16).toString('base64url');
+  const buf = new Uint8Array(16);
+  crypto.getRandomValues(buf);
+  let str = '';
+  for (const b of buf) str += String.fromCharCode(b);
+  const token = btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const setCookie = `frank_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SEC * 10}`;
   return { token, setCookie };
 }

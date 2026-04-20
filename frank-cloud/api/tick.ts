@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 import { publish } from '../lib/pubsub.js';
 
-export const config = { runtime: 'nodejs', maxDuration: 30 };
+export const config = { runtime: 'edge' };
 
 const redis = Redis.fromEnv();
 

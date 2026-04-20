@@ -6,7 +6,7 @@ import { peekRevision } from '../lib/revisions.js';
 import { readOrCreateSessionToken, touchSession, countViewers, removeSession } from '../lib/session.js';
 import { allowConnectFromIp, VIEWER_CAP } from '../lib/limits.js';
 
-export const config = { runtime: 'nodejs', maxDuration: 300 };
+export const config = { runtime: 'edge' };
 
 const redis = Redis.fromEnv();
 

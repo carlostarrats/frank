@@ -2,7 +2,7 @@ import { Redis } from '@upstash/redis';
 import { list } from '@vercel/blob';
 import { tail, publish } from '../lib/pubsub.js';
 
-export const config = { runtime: 'nodejs', maxDuration: 300 };
+export const config = { runtime: 'edge' };
 
 const redis = Redis.fromEnv();
 const GRACE_MS = Number(process.env.FRANK_AUTHOR_GRACE_MS || 15_000);

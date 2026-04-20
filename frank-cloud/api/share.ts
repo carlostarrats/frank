@@ -1,10 +1,13 @@
 import { put, list } from '@vercel/blob';
-import crypto from 'crypto';
 
-export const config = { runtime: 'nodejs', maxDuration: 30 };
+export const config = { runtime: 'edge' };
 
 function generateId(): string {
-  return crypto.randomBytes(9).toString('base64url').slice(0, 12);
+  const bytes = new Uint8Array(9);
+  crypto.getRandomValues(bytes);
+  let str = '';
+  for (const b of bytes) str += String.fromCharCode(b);
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').slice(0, 12);
 }
 
 export default async function handler(req: Request): Promise<Response> {

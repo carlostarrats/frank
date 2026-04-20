@@ -1,7 +1,7 @@
 import { readOrCreateSessionToken, touchSession, countViewers } from '../lib/session.js';
 import { publish } from '../lib/pubsub.js';
 
-export const config = { runtime: 'nodejs', maxDuration: 10 };
+export const config = { runtime: 'edge' };
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
