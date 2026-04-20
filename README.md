@@ -6,11 +6,12 @@
 
 ## v3 — live share (in progress)
 
-Phases 1 and 2 are merged. Phase 1 shipped the transport layer (SSE streams, monotonic revisions, rolling 60-second diff buffer, viewer presence, share revocation, 2-hour session auto-pause). Phase 2 wires the canvas project type onto that transport: edits on the canvas view stream to any viewer in near real time, with daemon-side asset bundling + per-share asset cache (only new assets re-sent), 30-second state-promotion so cold-open viewers always see a fresh snapshot, 3 MB / 1 MB-min bandwidth caps with precise-delay throttling and a sticky `throttled` UI status, graceful handling of oversized-canvas (413) as a distinct paused state, and a "Start live share" control in the share popover. Image and PDF live share land in phases 3 and 4; URL live share is deferred to v3.1.
+Phases 1, 2, and 3 are merged. Phase 1 shipped the transport layer (SSE streams, monotonic revisions, rolling 60-second diff buffer, viewer presence, share revocation, 2-hour session auto-pause). Phase 2 wired canvas projects — edits on the canvas view stream to viewers with daemon-side asset bundling, per-share asset cache, bandwidth caps, and graceful oversized-canvas handling. Phase 3 wires image projects — author-side comments (add, delete, curate/approve/dismiss/remix) sync to viewers in near real time. The image file itself is immutable during a session, so live updates carry only the changed comment list as `diff` events (with full state promoted every 30 seconds to keep cold-open snapshots fresh). PDF live share lands in Phase 4; URL live share is deferred to v3.1.
 
 - Contract: [`CLOUD_API.md`](CLOUD_API.md) v3 section
 - Phase 1 plan: [`docs/superpowers/plans/2026-04-19-v3-phase1-sse-foundation.md`](docs/superpowers/plans/2026-04-19-v3-phase1-sse-foundation.md)
 - Phase 2 plan: [`docs/superpowers/plans/2026-04-19-v3-phase2-canvas-live.md`](docs/superpowers/plans/2026-04-19-v3-phase2-canvas-live.md)
+- Phase 3 plan: [`docs/superpowers/plans/2026-04-20-v3-phase3-image-live.md`](docs/superpowers/plans/2026-04-20-v3-phase3-image-live.md)
 - Reference backend env vars + setup: [`frank-cloud/README.md`](frank-cloud/README.md)
 
 **Frank is a terminal tool.** You start it from the command line, and it opens a browser-based UI at `localhost:42068`. Requires [Node.js](https://nodejs.org/) (v18+).
