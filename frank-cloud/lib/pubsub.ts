@@ -1,4 +1,4 @@
-// Vercel KV's Redis backend supports PUBLISH but not long-lived SUBSCRIBE
+// Upstash Redis supports PUBLISH but not long-lived SUBSCRIBE
 // from inside a serverless function. For broadcast we use a "polling" tail:
 // listeners long-poll a list + its last-id offset. This is simpler and
 // avoids needing a Redis connection kept open outside the function lifetime.
@@ -6,7 +6,14 @@
 // Producers call `publish(shareId, event)`. Listeners call `tail(shareId, lastId)`
 // which returns any events newer than lastId and blocks up to `timeoutMs` for
 // at least one new event.
-import { kv } from '@vercel/kv';
+//
+// Using @upstash/redis directly rather than @vercel/kv — Vercel has moved
+// KV to the Upstash Marketplace integration and @vercel/kv is deprecated.
+// Same reasoning as the VIEWER_CAP comment in lib/limits.ts: anchor the
+// choice in-code so nobody later "helpfully" swaps the wrapper back.
+import { Redis } from '@upstash/redis';
+
+const redis = Redis.fromEnv();
 
 export interface ChannelEvent {
   id: number;
@@ -29,14 +36,14 @@ const EVENT_TTL_SEC = 120; // events are transient; we only care about recent on
 const EVENT_LIST_MAX = Number(process.env.FRANK_EVENT_LIST_MAX || 2000);
 
 export async function publish(shareId: string, kind: ChannelEvent['kind'], data: unknown): Promise<number> {
-  const id = (await kv.incr(counterKey(shareId))) as number;
+  const id = (await redis.incr(counterKey(shareId))) as number;
   const ev: ChannelEvent = { id, kind, data };
-  await kv.rpush(listKey(shareId), JSON.stringify(ev));
+  await redis.rpush(listKey(shareId), JSON.stringify(ev));
   // Keep only the trailing EVENT_LIST_MAX entries. LTRIM is O(N) but N is
   // bounded by the cap itself, so this is cheap in steady state.
-  await kv.ltrim(listKey(shareId), -EVENT_LIST_MAX, -1);
-  await kv.expire(listKey(shareId), EVENT_TTL_SEC);
-  await kv.expire(counterKey(shareId), EVENT_TTL_SEC);
+  await redis.ltrim(listKey(shareId), -EVENT_LIST_MAX, -1);
+  await redis.expire(listKey(shareId), EVENT_TTL_SEC);
+  await redis.expire(counterKey(shareId), EVENT_TTL_SEC);
   return id;
 }
 
@@ -49,7 +56,7 @@ export async function tail(
 ): Promise<ChannelEvent[]> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const raw = (await kv.lrange<string>(listKey(shareId), 0, -1)) as string[];
+    const raw = (await redis.lrange<string>(listKey(shareId), 0, -1)) as string[];
     const parsed: ChannelEvent[] = [];
     for (const s of raw) {
       try {
@@ -67,6 +74,6 @@ export async function tail(
 }
 
 export async function deleteChannel(shareId: string): Promise<void> {
-  await kv.del(listKey(shareId));
-  await kv.del(counterKey(shareId));
+  await redis.del(listKey(shareId));
+  await redis.del(counterKey(shareId));
 }

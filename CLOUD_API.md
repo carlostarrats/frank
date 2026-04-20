@@ -313,7 +313,7 @@ Every `state` and `diff` payload is opaque to the backend. Canvas, image, and PD
 
 ### Implementation flexibility (non-normative)
 
-The contract does not mandate any specific storage or fanout technology. The Vercel reference implementation uses `@vercel/kv` (Upstash Redis) for revisions, diff buffers, and pub/sub fanout because serverless functions can't hold a Redis `SUBSCRIBE` across requests. Other hosts can use what fits their runtime:
+The contract does not mandate any specific storage or fanout technology. The Vercel reference implementation uses Upstash Redis (via the Vercel Marketplace integration) for revisions, diff buffers, and pub/sub fanout because serverless functions can't hold a Redis `SUBSCRIBE` across requests. Other hosts can use what fits their runtime:
 
 - **Cloudflare Workers:** a Durable Object per share (naturally single-threaded, owns the snapshot + subscriber set).
 - **Deno Deploy / Fly.io / long-lived Node:** in-memory pub/sub, a disk-backed snapshot, and an in-process ring buffer.
