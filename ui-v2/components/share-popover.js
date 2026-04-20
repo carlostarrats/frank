@@ -2,6 +2,16 @@
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 
+// Tracks the current "Capturing snapshot..." state. `captureInProgress` is
+// a flag (not a string comparison on textContent — that would break if any
+// other code path changes the status text's whitespace, adds a spinner
+// character, or localizes the string). `captureTimeoutId` is the pending
+// defensive timeout. Both are cleared by updateSharePopover when a real
+// response arrives. Only one share-create flow runs at a time; a Map would
+// be overkill.
+let captureInProgress = false;
+let captureTimeoutId = null;
+
 // v3 Phase 2: live-share state per project. Updated by daemon broadcasts
 // re-emitted as DOM events by core/sync.js.
 const liveShareState = new Map(); // projectId → { status, viewers, lastError }
@@ -135,6 +145,23 @@ export function showSharePopover(anchorEl, { onClose }) {
     const statusEl = modal.querySelector('#share-status');
     const coverNote = modal.querySelector('#share-note').value.trim();
     statusEl.textContent = 'Capturing snapshot...';
+    statusEl.style.color = '';  // reset any previous error color
+
+    // Defensive timeout. If no snapshot result arrives within 15 seconds,
+    // flip to a visible error so the user knows something went wrong instead
+    // of staring at a spinner indefinitely. Uses a boolean flag — NOT a string
+    // comparison on textContent — so future status-text changes (spinners,
+    // whitespace, localization) don't silently break the check.
+    if (captureTimeoutId) clearTimeout(captureTimeoutId);
+    captureInProgress = true;
+    captureTimeoutId = setTimeout(() => {
+      captureTimeoutId = null;
+      if (captureInProgress) {
+        captureInProgress = false;
+        statusEl.textContent = 'Snapshot capture failed — please report this';
+        statusEl.style.color = '#ff4a4a';
+      }
+    }, 15_000);
 
     const event = new CustomEvent('frank:capture-snapshot', { detail: { coverNote } });
     window.dispatchEvent(event);
@@ -153,6 +180,9 @@ export function showSharePopover(anchorEl, { onClose }) {
 
 // Called after snapshot is captured and uploaded
 export function updateSharePopover(result) {
+  // We have a real response — cancel the defensive timeout and clear the flag.
+  captureInProgress = false;
+  if (captureTimeoutId) { clearTimeout(captureTimeoutId); captureTimeoutId = null; }
   const modal = document.querySelector('.share-modal');
   if (!modal) return;
 
