@@ -40,6 +40,10 @@ function connect() {
         resolve(msg);
         return;
       }
+      if (msg.type === 'live-share-state' || msg.type === 'live-share-comment' || msg.type === 'share-revoked') {
+        window.dispatchEvent(new CustomEvent(`frank:${msg.type}`, { detail: msg }));
+        return;
+      }
       for (const handler of messageHandlers) handler(msg);
     } catch (e) {
       console.warn('[sync] parse error:', e);

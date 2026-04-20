@@ -2,6 +2,71 @@
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 
+// v3 Phase 2: live-share state per project. Updated by daemon broadcasts
+// re-emitted as DOM events by core/sync.js.
+const liveShareState = new Map(); // projectId → { status, viewers, lastError }
+
+window.addEventListener('frank:live-share-state', (e) => {
+  const { projectId, status, viewers, lastError } = e.detail;
+  liveShareState.set(projectId, { status, viewers, lastError });
+  const open = document.querySelector('.share-modal[data-project-id="' + projectId + '"]');
+  if (open) rerenderLiveBlock(open, projectId);
+});
+
+window.addEventListener('frank:share-revoked', (e) => {
+  liveShareState.delete(e.detail.projectId);
+  const open = document.querySelector('.share-modal[data-project-id="' + e.detail.projectId + '"]');
+  if (open) rerenderLiveBlock(open, e.detail.projectId);
+});
+
+function getLiveState(projectId) {
+  return liveShareState.get(projectId) || { status: 'idle', viewers: 0, lastError: null };
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = String(s);
+  return div.innerHTML;
+}
+
+function renderLiveBlock(projectId) {
+  const { status, viewers, lastError } = getLiveState(projectId);
+  let html = '<div class="share-live-block">';
+  if (status === 'idle') {
+    html += `<button type="button" class="share-live-btn" data-action="start">Start live share</button>`;
+  } else if (status === 'connecting') {
+    html += `<button type="button" class="share-live-btn" disabled>Starting…</button>`;
+  } else if (status === 'live') {
+    html += `<button type="button" class="share-live-btn" data-action="pause">Pause live share</button>`;
+    const count = viewers === 1 ? '1 watching' : `${viewers} watching`;
+    html += `<div class="share-live-presence">Live · ${count}</div>`;
+  } else if (status === 'throttled') {
+    html += `<button type="button" class="share-live-btn" data-action="pause">Pause live share</button>`;
+    html += `<div class="share-live-banner">Live updates throttled — catching up.</div>`;
+  } else if (status === 'paused') {
+    html += `<button type="button" class="share-live-btn" data-action="resume">Resume live share</button>`;
+    if (lastError === 'session-timeout-2h') {
+      html += `<div class="share-live-banner">Live share paused — sessions auto-pause after 2 hours to prevent accidental long-running sessions. Click Resume to continue.</div>`;
+    } else if (lastError === 'payload-too-large') {
+      html += `<div class="share-live-banner error">Canvas too heavy for live share — reduce inline assets, then click Resume.</div>`;
+    }
+  } else if (status === 'offline') {
+    html += `<div class="share-live-status">Author offline · Reconnecting…</div>`;
+  } else if (status === 'error') {
+    html += `<button type="button" class="share-live-btn" data-action="start">Retry live share</button>`;
+    if (lastError) html += `<div class="share-live-banner error">${escapeHtml(lastError)}</div>`;
+  } else if (status === 'unsupported') {
+    html += `<div class="share-live-banner error">Live updates unavailable — your backend needs updating.</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function rerenderLiveBlock(popoverEl, projectId) {
+  const existing = popoverEl.querySelector('.share-live-block');
+  if (existing) existing.outerHTML = renderLiveBlock(projectId);
+}
+
 export function showSharePopover(anchorEl, { onClose }) {
   // Remove existing
   document.querySelector('.share-overlay')?.remove();
@@ -13,7 +78,7 @@ export function showSharePopover(anchorEl, { onClose }) {
   overlay.className = 'share-overlay';
 
   overlay.innerHTML = `
-    <div class="share-modal">
+    <div class="share-modal" data-project-id="${esc(project?.id || '')}">
       <div class="share-modal-header">
         <h3>
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:6px">
@@ -38,6 +103,7 @@ export function showSharePopover(anchorEl, { onClose }) {
           <button class="v-btn v-btn-primary" id="share-create">${activeShare ? 'Update Link' : 'Create Link'}</button>
         </div>
         <div class="share-popover-status" id="share-status"></div>
+        ${renderLiveBlock(project?.id || '')}
       </div>
     </div>
   `;
@@ -45,6 +111,16 @@ export function showSharePopover(anchorEl, { onClose }) {
   document.body.appendChild(overlay);
 
   const modal = overlay.querySelector('.share-modal');
+
+  // Wire live-share button clicks
+  modal.addEventListener('click', (e) => {
+    const btn = e.target.closest('.share-live-btn[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === 'start') sync.send({ type: 'start-live-share', projectId: project.id });
+    else if (action === 'pause') sync.send({ type: 'stop-live-share', projectId: project.id });
+    else if (action === 'resume') sync.send({ type: 'resume-live-share', projectId: project.id });
+  });
 
   // Copy link
   modal.querySelector('#share-copy')?.addEventListener('click', () => {

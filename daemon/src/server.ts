@@ -36,6 +36,8 @@ import {
 } from './ai-conversations.js';
 import { buildContext, streamChat } from './ai-providers/claude.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { buildCanvasLivePayload } from './canvas-live.js';
+import { decideCanvasSend, clearSendState } from './canvas-send-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,8 +49,9 @@ let activeProjectId: string | null = null;
 // Active proxy targets: maps a slug to a target URL
 const proxyTargets = new Map<string, string>();
 
-// One LiveShareController per projectId. Cleaned up on stop-live-share /
-// project close / SIGINT.
+// One LiveShareController per projectId. Paused on stop-live-share (entry
+// stays in the map so resume-live-share can reuse the same controller);
+// removed on revoke-share / SIGINT.
 const liveShares = new Map<string, LiveShareController>();
 
 function liveShareRate(contentType: 'canvas' | 'image' | 'pdf' | 'url'): number {
@@ -600,6 +603,25 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
         saveCanvasState(activeProjectId, msg.state);
+
+        // v3 Phase 2: fork the live-share push off the save path.
+        // buildCanvasLivePayload reads the just-persisted canvas JSON + assets;
+        // decideCanvasSend determines state-vs-diff based on the per-share cache.
+        const ctl = liveShares.get(activeProjectId);
+        const project = loadProject(activeProjectId);
+        const shareId = project?.activeShare?.id;
+        if (ctl && shareId) {
+          (async () => {
+            try {
+              const payload = await buildCanvasLivePayload(activeProjectId!);
+              if (!payload) return;
+              const decision = decideCanvasSend(shareId, payload);
+              if (decision.kind === 'state') ctl.pushState(decision.payload);
+              else ctl.pushDiff(decision.payload);
+            } catch { /* best-effort; persistence already succeeded */ }
+          })();
+        }
+
         reply({ type: 'canvas-state-saved' });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
@@ -712,6 +734,9 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             onError: (err) => {
               ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'error', viewers: ctl.viewers, revision: ctl.revision, lastError: err }));
             },
+            onBandwidthStatus: (throttled) => {
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: throttled ? 'throttled' : 'live', viewers: ctl.viewers, revision: ctl.revision, lastError: null }));
+            },
             onSessionTimeout: () => {
               // UI banner copy (Phase 5 renders it verbatim from this lastError):
               //   "Live share paused — sessions auto-pause after 2 hours to prevent
@@ -751,6 +776,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
               project.activeShare.live.paused = true;
               saveProject(projectId, project);
             }
+            if (project?.activeShare) clearSendState(project.activeShare.id);
           } catch { /* best-effort */ }
           reply({ type: 'live-share-state', projectId, status: 'paused', viewers: 0, revision: ctl?.revision ?? 0, lastError: null });
         } catch (e: any) {
@@ -808,6 +834,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             await revokeShare(project.activeShare.id, project.activeShare.revokeToken);
           }
           liveShares.delete(projectId);
+          clearSendState(project.activeShare.id);
           project.activeShare = null;
           saveProject(projectId, project);
           reply({ type: 'share-revoked', projectId });
@@ -983,6 +1010,10 @@ function broadcast(message: DaemonMessage): void {
 }
 
 process.on('SIGINT', async () => {
-  for (const ctl of liveShares.values()) await ctl.stop();
+  for (const [projectId, ctl] of liveShares.entries()) {
+    await ctl.stop();
+    const project = loadProject(projectId);
+    if (project?.activeShare?.id) clearSendState(project.activeShare.id);
+  }
   process.exit(0);
 });

@@ -67,6 +67,7 @@ function renderViewer(app, data) {
   const contentEl = document.getElementById('v-content');
   if (snapshot?.canvasState) {
     renderCanvasSnapshot(contentEl, snapshot);
+    window.__frankInitialRevision = snapshot.revision ?? 0;
   } else if (snapshot?.html) {
     const iframe = document.createElement('iframe');
     iframe.className = 'v-iframe';
@@ -156,31 +157,78 @@ function saveAuthor(name) { localStorage.setItem('frank-author', name); }
 
 // ─── Canvas snapshot rendering ──────────────────────────────────────────────
 
-async function renderCanvasSnapshot(host, snapshot) {
-  host.innerHTML = '<div class="viewer-loading">Loading canvas…</div>';
+// Module-level state: preserved across live-share events so updates render
+// in place rather than stacking new stages.
+let __canvasStage = null;
+const __assetCache = {}; // url → dataUrl, merged across state + diff events
+
+async function renderCanvas(payload) {
+  // payload shape: { canvasState: string, assets: Record<url, dataUrl> }
+  if (!payload || !payload.canvasState) return;
+
+  // Merge assets from this payload into the long-lived cache. Diff events
+  // may arrive with assets: {} — that's fine, the cache retains prior entries.
+  Object.assign(__assetCache, payload.assets || {});
+
   try {
     await loadKonvaOnce();
   } catch {
-    host.innerHTML = '<div class="v-error"><p>Could not load canvas renderer.</p></div>';
+    const host = document.getElementById('v-content');
+    if (host) host.innerHTML = '<div class="v-error"><p>Could not load canvas renderer.</p></div>';
     return;
   }
 
-  host.innerHTML = '<div class="v-canvas-wrapper" id="v-canvas-wrapper"></div>';
-  const wrapper = host.querySelector('#v-canvas-wrapper');
-  const width = wrapper.clientWidth || 900;
-  const height = wrapper.clientHeight || 600;
-
   const Konva = window.Konva;
-  const stage = new Konva.Stage({ container: wrapper, width, height });
-  const contentLayer = new Konva.Layer();
-  stage.add(contentLayer);
+
+  // On first render, build the wrapper + stage. On subsequent renders
+  // (live-share updates), reuse the existing stage by clearing its layers.
+  let contentLayer;
+  if (!__canvasStage) {
+    const host = document.getElementById('v-content');
+    if (!host) return;
+    host.innerHTML = '<div class="v-canvas-wrapper" id="v-canvas-wrapper"></div>';
+    const wrapper = host.querySelector('#v-canvas-wrapper');
+    const width = wrapper.clientWidth || 900;
+    const height = wrapper.clientHeight || 600;
+
+    __canvasStage = new Konva.Stage({ container: wrapper, width, height });
+    contentLayer = new Konva.Layer();
+    __canvasStage.add(contentLayer);
+
+    // Wheel zoom for reviewers — wired once on stage creation.
+    __canvasStage.on('wheel', (e) => {
+      e.evt.preventDefault();
+      const oldScale = __canvasStage.scaleX();
+      const pointer = __canvasStage.getPointerPosition();
+      const mousePt = {
+        x: (pointer.x - __canvasStage.x()) / oldScale,
+        y: (pointer.y - __canvasStage.y()) / oldScale,
+      };
+      const step = 1.08;
+      const newScale = e.evt.deltaY > 0 ? oldScale / step : oldScale * step;
+      const clamped = Math.max(0.1, Math.min(8, newScale));
+      __canvasStage.scale({ x: clamped, y: clamped });
+      __canvasStage.position({
+        x: pointer.x - mousePt.x * clamped,
+        y: pointer.y - mousePt.y * clamped,
+      });
+    });
+  } else {
+    // Reuse existing stage: destroy existing layer children and replace layer.
+    __canvasStage.destroyChildren();
+    contentLayer = new Konva.Layer();
+    __canvasStage.add(contentLayer);
+  }
+
+  const width = __canvasStage.width();
+  const height = __canvasStage.height();
 
   // Deserialize the canvas content. Image nodes reference assetUrl; swap each
-  // one for the inline data URL bundled in snapshot.assets.
-  const parsed = typeof snapshot.canvasState === 'string'
-    ? JSON.parse(snapshot.canvasState)
-    : snapshot.canvasState;
-  const assets = snapshot.assets || {};
+  // one for the inline data URL from __assetCache (populated by state events
+  // and the initial snapshot; diff events rely on the cached entries).
+  const parsed = typeof payload.canvasState === 'string'
+    ? JSON.parse(payload.canvasState)
+    : payload.canvasState;
 
   for (const def of (parsed.children || [])) {
     try {
@@ -197,7 +245,7 @@ async function renderCanvasSnapshot(host, snapshot) {
   const images = contentLayer.find('Image');
   for (const node of images) {
     const url = node.getAttr('assetUrl');
-    const dataUrl = assets[url];
+    const dataUrl = __assetCache[url];
     if (!dataUrl) continue;
     await new Promise((resolve) => {
       const img = new Image();
@@ -211,33 +259,22 @@ async function renderCanvasSnapshot(host, snapshot) {
   const bounds = contentLayer.getClientRect();
   if (bounds && bounds.width > 0 && bounds.height > 0) {
     const scale = Math.min((width - 40) / bounds.width, (height - 40) / bounds.height, 1);
-    stage.scale({ x: scale, y: scale });
-    stage.position({
+    __canvasStage.scale({ x: scale, y: scale });
+    __canvasStage.position({
       x: (width - bounds.width * scale) / 2 - bounds.x * scale,
       y: (height - bounds.height * scale) / 2 - bounds.y * scale,
     });
   }
 
-  // Wheel zoom for reviewers.
-  stage.on('wheel', (e) => {
-    e.evt.preventDefault();
-    const oldScale = stage.scaleX();
-    const pointer = stage.getPointerPosition();
-    const mousePt = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale,
-    };
-    const step = 1.08;
-    const newScale = e.evt.deltaY > 0 ? oldScale / step : oldScale * step;
-    const clamped = Math.max(0.1, Math.min(8, newScale));
-    stage.scale({ x: clamped, y: clamped });
-    stage.position({
-      x: pointer.x - mousePt.x * clamped,
-      y: pointer.y - mousePt.y * clamped,
-    });
-  });
-
   contentLayer.draw();
+}
+
+// Called by renderViewer for the initial snapshot render. `host` is always
+// document.getElementById('v-content'), which renderCanvas also looks up
+// internally — so they refer to the same element.
+async function renderCanvasSnapshot(host, snapshot) {
+  host.innerHTML = '<div class="viewer-loading">Loading canvas…</div>';
+  await renderCanvas(snapshot);
 }
 
 let konvaPromise = null;
@@ -383,3 +420,23 @@ init();
   openStream();
   startHeartbeat();
 })();
+
+// ─── v3 Phase 2: canvas live-render ─────────────────────────────────────────
+// Wire canvas re-renders to live-share events dispatched by initLiveShare.
+// `state` events carry the full asset bundle; `diff` events carry just the
+// canvas JSON (assets are already in __assetCache from the most recent state
+// event or the initial snapshot).
+
+window.addEventListener('frank:state', async (e) => {
+  const { contentType, payload } = e.detail || {};
+  if (contentType === 'canvas' || (payload && payload.canvasState)) {
+    await renderCanvas(payload);
+  }
+});
+
+window.addEventListener('frank:diff', async (e) => {
+  const { payload } = e.detail || {};
+  if (payload && payload.canvasState) {
+    await renderCanvas(payload);
+  }
+});
