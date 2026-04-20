@@ -40,6 +40,8 @@ import { buildCanvasLivePayload } from './canvas-live.js';
 import { decideCanvasSend, clearSendState } from './canvas-send-state.js';
 import { buildImageLivePayload } from './image-live.js';
 import { decideImageSend, clearImageSendState } from './image-send-state.js';
+import { buildPdfLivePayload } from './pdf-live.js';
+import { decidePdfSend, clearPdfSendState } from './pdf-send-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,6 +85,24 @@ async function forkImageLivePush(projectId: string): Promise<void> {
     const payload = await buildImageLivePayload(projectId);
     if (!payload) return;
     const decision = decideImageSend(project.activeShare.id, payload);
+    if (decision.kind === 'state') ctl.pushState(decision.payload);
+    else ctl.pushDiff(decision.payload);
+  } catch { /* best-effort; persistence already succeeded */ }
+}
+
+// Phase 4a: PDF projects fork a live push off each comment change. Same
+// pattern as Phase 3's forkImageLivePush — the PDF file is immutable during
+// a session, so comment changes drive live updates. Page/scroll sync is
+// NOT implemented here (deferred to Phase 4b post-PDF.js-migration).
+async function forkPdfLivePush(projectId: string): Promise<void> {
+  const ctl = liveShares.get(projectId);
+  if (!ctl) return;
+  const project = loadProject(projectId);
+  if (!project || project.contentType !== 'pdf' || !project.activeShare?.id) return;
+  try {
+    const payload = await buildPdfLivePayload(projectId);
+    if (!payload) return;
+    const decision = decidePdfSend(project.activeShare.id, payload);
     if (decision.kind === 'state') ctl.pushState(decision.payload);
     else ctl.pushDiff(decision.payload);
   } catch { /* best-effort; persistence already succeeded */ }
@@ -390,6 +410,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         });
         broadcast({ type: 'comment-added', comment } as any);
         void forkImageLivePush(activeProjectId);
+        void forkPdfLivePush(activeProjectId);
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -401,6 +422,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       try {
         deleteComment(activeProjectId, msg.commentId);
         void forkImageLivePush(activeProjectId);
+        void forkPdfLivePush(activeProjectId);
         const project = loadProject(activeProjectId);
         const comments = loadComments(activeProjectId);
         reply({ type: 'project-loaded', projectId: activeProjectId, project, comments });
@@ -556,6 +578,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         const curation = addCuration(activeProjectId, msg.commentIds, msg.action, origTexts, msg.remixedText || '', msg.dismissReason || '');
         applyCurationToComments(activeProjectId, msg.commentIds, statusMap[msg.action]);
         void forkImageLivePush(activeProjectId);
+        void forkPdfLivePush(activeProjectId);
         const updatedComments = loadComments(activeProjectId);
         reply({ type: 'curation-done', curation });
         broadcast({ type: 'project-loaded', projectId: activeProjectId, project: loadProject(activeProjectId), comments: updatedComments } as any);
@@ -809,6 +832,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             if (project?.activeShare) {
               clearSendState(project.activeShare.id);
               clearImageSendState(project.activeShare.id);
+              clearPdfSendState(project.activeShare.id);
             }
           } catch { /* best-effort */ }
           reply({ type: 'live-share-state', projectId, status: 'paused', viewers: 0, revision: ctl?.revision ?? 0, lastError: null });
@@ -869,6 +893,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           liveShares.delete(projectId);
           clearSendState(project.activeShare.id);
           clearImageSendState(project.activeShare.id);
+          clearPdfSendState(project.activeShare.id);
           project.activeShare = null;
           saveProject(projectId, project);
           reply({ type: 'share-revoked', projectId });
@@ -1050,6 +1075,7 @@ process.on('SIGINT', async () => {
     if (project?.activeShare?.id) {
       clearSendState(project.activeShare.id);
       clearImageSendState(project.activeShare.id);
+      clearPdfSendState(project.activeShare.id);
     }
   }
   process.exit(0);

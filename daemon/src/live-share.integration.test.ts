@@ -188,6 +188,64 @@ describe('live share — integration with fake cloud', () => {
     await ctl.stop();
   });
 
+  it('PDF payload flows through decide-send to the fake cloud as a state event', async () => {
+    clearV2OnlyMarker();
+    const liveFile = path.join(tmp, 'p1', 'live.json');
+    if (fs.existsSync(liveFile)) fs.unlinkSync(liveFile);
+
+    // Seed a project.json + source file + comments.json for p1.
+    fs.writeFileSync(
+      path.join(tmp, 'p1', 'project.json'),
+      JSON.stringify({
+        frank_version: '2',
+        name: 'test',
+        contentType: 'pdf',
+        file: 'projects/p1/source/doc.pdf',
+        screens: {},
+        screenOrder: [],
+        capture: false,
+        activeShare: null,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      }),
+      'utf8',
+    );
+    fs.mkdirSync(path.join(tmp, 'p1', 'source'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'p1', 'source', 'doc.pdf'),
+      Buffer.from('%PDF-1.4\n'),
+    );
+    fs.writeFileSync(path.join(tmp, 'p1', 'comments.json'), JSON.stringify([]), 'utf8');
+
+    const { buildPdfLivePayload } = await import('./pdf-live.js');
+    const { decidePdfSend, __resetForTests } = await import('./pdf-send-state.js');
+    __resetForTests();
+
+    const payload = await buildPdfLivePayload('p1');
+    expect(payload).not.toBeNull();
+    expect(payload!.mimeType).toBe('application/pdf');
+
+    const ctl = new LiveShareController({
+      projectId: 'p1',
+      shareId: 'share-pdf',
+      contentType: 'pdf',
+      ratePerSecond: 30,
+    });
+    const decision = decidePdfSend('share-pdf', payload!);
+    expect(decision.kind).toBe('state');
+    ctl.pushState(decision.payload);
+    await new Promise((r) => setTimeout(r, 250));
+
+    const posts = fake.getPosts().filter((p) => p.shareId === 'share-pdf');
+    expect(posts.length).toBe(1);
+    expect(posts[0].type).toBe('state');
+    const body = posts[0].payload as { fileDataUrl: string; mimeType: string; comments: unknown[] };
+    expect(body.fileDataUrl).toMatch(/^data:application\/pdf;base64,/);
+    expect(body.mimeType).toBe('application/pdf');
+    expect(body.comments).toEqual([]);
+    await ctl.stop();
+  });
+
   it('pushState after resume delivers to backend (not dropped by paused state)', async () => {
     clearV2OnlyMarker();
     const liveFile = path.join(tmp, 'p1', 'live.json');
