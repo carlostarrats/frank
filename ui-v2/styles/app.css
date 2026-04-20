@@ -1243,3 +1243,45 @@
 .ai-routing-anchor { font-family: monospace; font-size: 10px; color: var(--text-muted); background: var(--bg-elevated); padding: 1px 4px; border-radius: 3px; margin-left: 4px; }
 .ai-routing-textarea { width: 100%; resize: vertical; min-height: 100px; margin-bottom: 12px; }
 .ai-routing-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* v3 Phase 2: live-share controls in share popover */
+.share-live-block {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+.share-live-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--button-primary-bg, #3b82f6);
+  color: var(--button-primary-text, #fff);
+  border: none;
+  border-radius: 6px;
+  font: 13px/1 -apple-system, system-ui, sans-serif;
+  cursor: pointer;
+}
+.share-live-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.share-live-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.share-live-presence {
+  margin-top: 6px;
+  font: 12px/1.3 -apple-system, system-ui, sans-serif;
+  color: var(--text-muted, rgba(255, 255, 255, 0.7));
+}
+.share-live-banner {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 200, 0, 0.08);
+  border: 1px solid rgba(255, 200, 0, 0.25);
+  border-radius: 4px;
+  font: 12px/1.35 -apple-system, system-ui, sans-serif;
+  color: var(--text-muted, rgba(255, 255, 255, 0.8));
+}
+.share-live-banner.error {
+  background: rgba(255, 100, 80, 0.08);
+  border-color: rgba(255, 100, 80, 0.3);
+}
+.share-live-status {
+  padding: 8px 10px;
+  font: 12px/1.35 -apple-system, system-ui, sans-serif;
+  color: var(--text-muted, rgba(255, 255, 255, 0.7));
+}
