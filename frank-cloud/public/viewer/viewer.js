@@ -77,6 +77,7 @@ function renderViewer(app, data) {
   } else if (snapshot?.fileDataUrl) {
     if (metadata.contentType === 'image') {
       contentEl.innerHTML = `<img src="${esc(snapshot.fileDataUrl)}" class="v-image" alt="Shared content">`;
+      __imageCache = { fileDataUrl: snapshot.fileDataUrl, mimeType: snapshot.mimeType };
     } else if (metadata.contentType === 'pdf') {
       contentEl.innerHTML = `<iframe src="${esc(snapshot.fileDataUrl)}" class="v-iframe"></iframe>`;
     } else {
@@ -429,10 +430,45 @@ init();
 // canvas JSON (assets are already in __assetCache from the most recent state
 // event or the initial snapshot).
 
+// v3 Phase 3 — image live share.
+// Cache the image data URL across events. Purpose: the cold-open initial
+// render writes the <img>'s src once; subsequent state events compare their
+// payload.fileDataUrl against __imageCache to skip redundant `img.src =`
+// assignments when the image hasn't changed (which is the 30s-promotion
+// case — same image, new comments). Without the cache we'd re-assign src
+// to an identical data URL on every state event, which is a no-op in
+// practice but an unnecessary DOM write.
+//
+// If a future feature ever swaps the source image mid-session (re-upload
+// through a UI that doesn't exist yet), the cache comparison correctly
+// triggers a visible img.src update.
+let __imageCache = null; // { fileDataUrl, mimeType } or null
+
+function renderImageLive(payload) {
+  // payload is either:
+  //   state: { fileDataUrl, mimeType, comments }
+  //   diff:  { comments }
+  // The <img> element in #v-content stays put across events. We update the
+  // src only when fileDataUrl actually changed, and re-render the comment
+  // list on every event that carries comments.
+  if (payload?.fileDataUrl) {
+    if (__imageCache?.fileDataUrl !== payload.fileDataUrl) {
+      __imageCache = { fileDataUrl: payload.fileDataUrl, mimeType: payload.mimeType };
+      const img = document.querySelector('#v-content .v-image');
+      if (img) img.src = payload.fileDataUrl;
+    }
+  }
+  if (Array.isArray(payload?.comments)) {
+    renderCommentList(payload.comments);
+  }
+}
+
 window.addEventListener('frank:state', async (e) => {
   const { contentType, payload } = e.detail || {};
   if (contentType === 'canvas' || (payload && payload.canvasState)) {
     await renderCanvas(payload);
+  } else if (contentType === 'image' || (payload && payload.fileDataUrl && Array.isArray(payload.comments))) {
+    renderImageLive(payload);
   }
 });
 
@@ -440,5 +476,8 @@ window.addEventListener('frank:diff', async (e) => {
   const { payload } = e.detail || {};
   if (payload && payload.canvasState) {
     await renderCanvas(payload);
+  } else if (payload && Array.isArray(payload.comments) && !payload.canvasState) {
+    // Image diff — comments only, image already cached.
+    renderImageLive(payload);
   }
 });
