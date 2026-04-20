@@ -75,7 +75,7 @@ export default async function handler(req: Request): Promise<Response> {
     await put(
       `shares/${shareId}/snapshot.json`,
       JSON.stringify({ revision: assigned, contentType: meta.contentType, payload }),
-      { access: 'public', contentType: 'application/json', addRandomSuffix: false },
+      { access: 'public', contentType: 'application/json', addRandomSuffix: false, allowOverwrite: true },
     );
   }
 

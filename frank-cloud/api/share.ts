@@ -59,7 +59,7 @@ export default async function handler(req: Request): Promise<Response> {
       await put(`shares/${shareId}/meta.json`, JSON.stringify(meta), {
         access: 'public',
         contentType: 'application/json',
-        addRandomSuffix: false,
+        addRandomSuffix: false, allowOverwrite: true,
       });
 
       return Response.json({
@@ -104,7 +104,7 @@ export default async function handler(req: Request): Promise<Response> {
               await put(`shares/${oldShareId}/meta.json`, JSON.stringify(oldMeta), {
                 access: 'public',
                 contentType: 'application/json',
-                addRandomSuffix: false,
+                addRandomSuffix: false, allowOverwrite: true,
               });
             }
           }
@@ -130,14 +130,14 @@ export default async function handler(req: Request): Promise<Response> {
       await put(`shares/${shareId}/meta.json`, JSON.stringify(meta), {
         access: 'public',
         contentType: 'application/json',
-        addRandomSuffix: false,
+        addRandomSuffix: false, allowOverwrite: true,
       });
 
       // Upload snapshot
       await put(`shares/${shareId}/snapshot.json`, JSON.stringify(snapshot), {
         access: 'public',
         contentType: 'application/json',
-        addRandomSuffix: false,
+        addRandomSuffix: false, allowOverwrite: true,
       });
 
       return Response.json({
@@ -177,7 +177,7 @@ export default async function handler(req: Request): Promise<Response> {
       await put(`shares/${shareId}/meta.json`, JSON.stringify(meta), {
         access: 'public',
         contentType: 'application/json',
-        addRandomSuffix: false,
+        addRandomSuffix: false, allowOverwrite: true,
       });
 
       // 2. Close streams via broadcast.

@@ -68,7 +68,7 @@ export default async function handler(req: Request): Promise<Response> {
     await put(`shares/${shareId}/comments/${commentId}.json`, JSON.stringify(comment), {
       access: 'public',
       contentType: 'application/json',
-      addRandomSuffix: false,
+      addRandomSuffix: false, allowOverwrite: true,
     });
 
     // v3: also broadcast to all open streams for this share.
