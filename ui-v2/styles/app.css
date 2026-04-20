@@ -98,6 +98,33 @@
 .settings-status-ok { color: var(--success); }
 .settings-status-error { color: var(--danger); }
 
+/* Primary Deploy-to-Vercel CTA on the Vercel tab */
+.settings-deploy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  align-self: flex-start;
+  padding: 10px 18px;
+  background: var(--text);
+  color: var(--bg-app);
+  border: 1px solid var(--text);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.04s;
+}
+.settings-deploy-btn:hover { opacity: 0.9; }
+.settings-deploy-btn:active { transform: translateY(1px); }
+.settings-deploy-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.settings-deploy-btn svg { flex-shrink: 0; }
+
 /* Cloud-mode tabs (Use Vercel / Use your own) */
 .settings-tabs {
   display: flex;
