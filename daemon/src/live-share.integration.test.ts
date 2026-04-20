@@ -90,4 +90,69 @@ describe('live share — integration with fake cloud', () => {
     expect(ended).toBe('revoked');
     await ctl.stop();
   });
+
+  it('canvas payload flows through decide-send to the fake cloud as a state event', async () => {
+    clearV2OnlyMarker();
+    const liveFile = path.join(tmp, 'p1', 'live.json');
+    if (fs.existsSync(liveFile)) fs.unlinkSync(liveFile);
+
+    // Seed a canvas-state.json so buildCanvasLivePayload has something to read.
+    fs.writeFileSync(
+      path.join(tmp, 'p1', 'canvas-state.json'),
+      JSON.stringify({ className: 'Layer', children: [{ className: 'Rect', attrs: { x: 1, y: 2 } }] }),
+      'utf8',
+    );
+
+    const { buildCanvasLivePayload } = await import('./canvas-live.js');
+    const { decideCanvasSend, __resetForTests } = await import('./canvas-send-state.js');
+    __resetForTests();
+
+    const payload = await buildCanvasLivePayload('p1');
+    expect(payload).not.toBeNull();
+
+    const ctl = new LiveShareController({
+      projectId: 'p1',
+      shareId: 'share-canvas',
+      contentType: 'canvas',
+      ratePerSecond: 30,
+    });
+    const decision = decideCanvasSend('share-canvas', payload!);
+    expect(decision.kind).toBe('state'); // first push is always state
+    ctl.pushState(decision.payload);
+    await new Promise((r) => setTimeout(r, 250));
+
+    const posts = fake.getPosts().filter((p) => p.shareId === 'share-canvas');
+    expect(posts.length).toBe(1);
+    expect(posts[0].type).toBe('state');
+    const body = posts[0].payload as { canvasState: string; assets: Record<string, string> };
+    expect(body.canvasState).toContain('"Rect"');
+    expect(body.assets).toEqual({}); // no images in this canvas
+    await ctl.stop();
+  });
+
+  it('pushState after resume delivers to backend (not dropped by paused state)', async () => {
+    clearV2OnlyMarker();
+    const liveFile = path.join(tmp, 'p1', 'live.json');
+    if (fs.existsSync(liveFile)) fs.unlinkSync(liveFile);
+
+    const ctl = new LiveShareController({
+      projectId: 'p1',
+      shareId: 'share-resume',
+      contentType: 'canvas',
+      ratePerSecond: 30,
+    });
+    ctl.pause();
+    ctl.pushState({ step: 'during-pause' });
+    await new Promise((r) => setTimeout(r, 200));
+    const beforeResume = fake.getPosts().filter((p) => p.shareId === 'share-resume').length;
+    expect(beforeResume).toBe(0); // paused drops the push
+
+    ctl.resume();
+    ctl.pushState({ step: 'after-resume' });
+    await new Promise((r) => setTimeout(r, 250));
+    const afterResume = fake.getPosts().filter((p) => p.shareId === 'share-resume');
+    expect(afterResume.length).toBe(1);
+    expect(afterResume[0].payload).toEqual({ step: 'after-resume' });
+    await ctl.stop();
+  });
 });
