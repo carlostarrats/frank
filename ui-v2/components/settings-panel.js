@@ -61,6 +61,21 @@ export function showSettingsPanel() {
             </p>
 
             <details class="settings-cli">
+              <summary>Why would I want a new deployment?</summary>
+              <p class="settings-field-hint">
+                Usually you don't. One backend handles every project you share,
+                forever — each new share gets its own link with a unique ID, all
+                served from this same backend.
+              </p>
+              <p class="settings-field-hint">Redeploy only if you want:</p>
+              <ul class="settings-why-list">
+                <li>A fresh backend with clean storage.</li>
+                <li>To replace one you deleted or lost the key for.</li>
+                <li>To move to a different Vercel account.</li>
+              </ul>
+            </details>
+
+            <details class="settings-cli">
               <summary>Prefer the terminal?</summary>
               <p class="settings-field-hint">Already have the Vercel CLI set up? Run:</p>
               <div class="settings-cmd">
@@ -124,6 +139,8 @@ export function showSettingsPanel() {
 
           <!-- Custom tab -->
           <div class="settings-tab-panel" data-tab="custom" role="tabpanel" hidden>
+            <p class="settings-configured-at" data-configured-at hidden></p>
+
             <details class="settings-cli">
               <summary>Prefer the terminal?</summary>
               <p class="settings-field-hint">Skip this form and save both values from your shell:</p>
@@ -204,7 +221,7 @@ export function showSettingsPanel() {
       if (config.configuredAt) {
         const when = new Date(config.configuredAt);
         if (!Number.isNaN(when.getTime())) {
-          const label = `Already configured on ${when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} at ${when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Redeploying creates a new Vercel project; pick it up again here when it's done.`;
+          const label = `Already configured on ${when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} at ${when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.`;
           overlay.querySelectorAll('[data-configured-at]').forEach((el) => {
             el.textContent = label;
             el.removeAttribute('hidden');

@@ -66,9 +66,23 @@
   text-align: center;
 }
 
-/* Settings modal — reuses help-modal chrome; body styles below. */
-.settings-modal { max-width: 620px; }
-.settings-body { display: flex; flex-direction: column; gap: 24px; }
+/* Settings modal — reuses help-modal chrome; body styles below.
+   Caps the modal height to the viewport and moves scrolling into
+   .settings-body so the header + close button stay pinned. */
+.settings-modal {
+  max-width: 620px;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  min-height: 0;
+}
 .settings-section { display: flex; flex-direction: column; gap: 12px; }
 .settings-section h3 {
   font-size: 15px;
@@ -137,11 +151,26 @@
   border-radius: var(--radius-sm);
 }
 
-/* Visual break between the setup tiers and the URL/key field group. */
+/* Visual break between the setup tiers and the URL/key field group.
+   Flex container already contributes 12px gap on each side, so total
+   breathing room ends up ~28px above and below. */
 .settings-divider {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 4px 0;
+  margin: 16px 0;
+}
+
+/* Bulleted list used inside the "Why would I want a new deployment?"
+   collapsible. Matches the surrounding field-hint typography. */
+.settings-why-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 /* Cloud-mode tabs (Use Vercel / Use your own) */
