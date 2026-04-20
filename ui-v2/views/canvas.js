@@ -401,7 +401,7 @@ export function renderCanvas(container, { onBack }) {
         id: result.shareId,
         revokeToken: result.revokeToken,
         createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+        expiresAt: new Date(Date.now() + (e.detail.expiryDays ?? 7) * 86400000).toISOString(),
         coverNote: e.detail.coverNote,
         lastSyncedNoteId: null,
         unseenNotes: 0,
