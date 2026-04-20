@@ -106,9 +106,9 @@
   gap: 10px;
   align-self: flex-start;
   padding: 10px 18px;
-  background: var(--text);
+  background: var(--text-primary);
   color: var(--bg-app);
-  border: 1px solid var(--text);
+  border: 1px solid var(--text-primary);
   border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 600;
