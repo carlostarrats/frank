@@ -234,3 +234,89 @@ shapes above, Frank's experience is complete.
 we'll bump it. Backends should return the version they implement; the daemon
 will display a mismatch warning in the Settings modal if your backend
 advertises a different major version.
+
+---
+
+## v3 — Live Share (additive)
+
+v3 adds live-share transport on top of the v2 endpoints. v2 clients continue to work against a v3 backend with no change in behavior (static shares). v3 clients use the new endpoints for streaming.
+
+### New endpoints
+
+#### `GET /api/share/:id/stream`
+Viewer SSE stream. Returns `Content-Type: text/event-stream`. No auth — share ID is the capability.
+
+Request headers:
+- `Last-Event-ID` (optional) — the last revision the viewer applied. Backend uses this to decide between diff replay and full-state send.
+- `X-Frank-Session` (optional) — opaque client session token for dedup. If omitted the backend assigns one via `Set-Cookie: frank_session=...; HttpOnly; SameSite=Lax`.
+
+Events (JSON bodies, one `data:` line each). Every event carries a string `id:` equal to its revision number:
+
+| Event | `data` shape |
+|---|---|
+| `state` | `{ revision: number, contentType: "canvas"\|"image"\|"pdf"\|"url", payload: unknown }` |
+| `diff` | `{ revision: number, payload: unknown }` |
+| `comment` | `{ id, author, text, ts, anchor }` (matches `POST /api/comment`'s stored shape) |
+| `presence` | `{ viewers: number }` |
+| `author-status` | `{ status: "online"\|"offline"\|"ended" }` |
+| `share-ended` | `{ reason: "revoked"\|"expired" }` — connection closes after send |
+
+Initial event sequence on connect:
+1. If no `Last-Event-ID` or snapshot behind buffer: one `state` event with current snapshot.
+2. If `Last-Event-ID` matches current revision: one `author-status` event (no redundant state transfer).
+3. If `Last-Event-ID` is within the rolling buffer: replay each buffered `diff` since then, in order.
+4. Then the stream stays open; future events are broadcast in real time.
+
+#### `GET /api/share/:id/author-stream`
+Daemon SSE stream. Requires `Authorization: Bearer <FRANK_API_KEY>`.
+
+Same event frame as viewer stream, but only delivers:
+- `comment` — new comments posted by viewers.
+- `presence` — viewer count changes.
+- `share-ended` — revocation or expiration.
+
+The backend tracks author-online state by whether at least one author-stream connection is open for the share. When the last author-stream closes, a 15-second grace timer starts; if no new author-stream is opened before it fires, the backend broadcasts `author-status: offline` on the viewer stream. A reconnect inside the grace window cancels the timer.
+
+#### `POST /api/share/:id/state`
+Daemon state push. Requires `Authorization: Bearer <FRANK_API_KEY>`.
+
+Body: `{ revision: number, type: "state" | "diff", payload: unknown }`.
+
+Response: `{ acceptedRevision: number }` on success, or `{ error: "revision-behind", currentRevision: number }` if `revision` is lower than what the backend already stored. The daemon fast-forwards its local counter in that case.
+
+Atomicity requirement: the backend MUST treat snapshot update, diff buffer append, revision bump, and broadcast as a single logical operation. On failure the stored snapshot and revision do not change.
+
+#### `DELETE /api/share/:id`
+Revoke. Requires `Authorization: Bearer <FRANK_API_KEY>` and `X-Frank-Revoke-Token: <token>`.
+
+Ordered sequence (strict):
+1. Mark share ID invalid so new stream/state requests return 410.
+2. Broadcast `share-ended: { reason: "revoked" }` on both viewer and author streams.
+3. Delete snapshot, diff buffer, and per-share KV entries.
+
+### Requirements for implementers
+
+1. Support the four new endpoints above.
+2. Maintain a rolling diff buffer (default 60s, host-configurable) keyed by share ID. Entries older than the window drop off on write.
+3. Tag `state` and `diff` events with the revision as both the JSON `revision` field and the SSE `id:` line.
+4. Support `Last-Event-ID`-based resume — replay from buffer when within window, send full `state` otherwise.
+5. Maintain presence: the number of open viewer-stream connections per share, deduplicated by `X-Frank-Session` / `frank_session` cookie. Author streams do not count.
+6. Enforce a per-share viewer cap (host-configurable default — the contract does not prescribe a number, since it depends on the host's cost model). On cap hit, respond 429 with `{ error: "viewer-cap" }`.
+7. Enforce idle-viewer timeout (default 30min, configurable). Idle = no comment POST + no heartbeat ping (see below) for the whole window.
+8. Viewer clients SHOULD emit a heartbeat `POST /api/share/:id/ping` (body empty) every 60s while the tab is foregrounded. Hosts that do not implement `ping` can rely on TCP-level idle detection instead.
+9. Rate-limit connection attempts per IP (host picks specific numbers; contract does not mandate them).
+10. On expiration or revocation: invalidate → close streams → delete snapshot/buffer, **in that order**.
+
+### Data plane note
+
+Every `state` and `diff` payload is opaque to the backend. Canvas, image, and PDF each define their own payload shape in their respective phase plans. The backend never inspects the payload beyond size limits (≤1 MB per update by default).
+
+### Implementation flexibility (non-normative)
+
+The contract does not mandate any specific storage or fanout technology. The Vercel reference implementation uses `@vercel/kv` (Upstash Redis) for revisions, diff buffers, and pub/sub fanout because serverless functions can't hold a Redis `SUBSCRIBE` across requests. Other hosts can use what fits their runtime:
+
+- **Cloudflare Workers:** a Durable Object per share (naturally single-threaded, owns the snapshot + subscriber set).
+- **Deno Deploy / Fly.io / long-lived Node:** in-memory pub/sub, a disk-backed snapshot, and an in-process ring buffer.
+- **Self-hosted Node:** same as above, plus optionally Redis if scaling horizontally.
+
+The only contract requirements are the endpoints, the event shapes, revision monotonicity, and the rolling buffer semantics — not the storage backend. If you're porting to a new host, document that choice in your fork's README so users understand the cost model.
