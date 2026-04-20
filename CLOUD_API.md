@@ -282,7 +282,7 @@ Daemon state push. Requires `Authorization: Bearer <FRANK_API_KEY>`.
 
 Body: `{ revision: number, type: "state" | "diff", payload: unknown }`.
 
-Response: `{ acceptedRevision: number }` on success, or `{ error: "revision-behind", currentRevision: number }` if `revision` is lower than what the backend already stored. The daemon fast-forwards its local counter in that case.
+Response: `{ acceptedRevision: number }` (HTTP 200) on success, or `{ error: "revision-behind", currentRevision: number }` (HTTP 409) if `revision` is lower than what the backend already stored. The daemon fast-forwards its local counter in that case.
 
 Atomicity requirement: the backend MUST treat snapshot update, diff buffer append, revision bump, and broadcast as a single logical operation. On failure the stored snapshot and revision do not change.
 
@@ -298,12 +298,12 @@ Ordered sequence (strict):
 
 1. Support the four new endpoints above.
 2. Maintain a rolling diff buffer (default 60s, host-configurable) keyed by share ID. Entries older than the window drop off on write.
-3. Tag `state` and `diff` events with the revision as both the JSON `revision` field and the SSE `id:` line.
+3. Tag `state` and `diff` events with the revision as both the JSON `revision` field and the SSE `id:` line. Revision numbers must be monotonically increasing per share.
 4. Support `Last-Event-ID`-based resume — replay from buffer when within window, send full `state` otherwise.
 5. Maintain presence: the number of open viewer-stream connections per share, deduplicated by `X-Frank-Session` / `frank_session` cookie. Author streams do not count.
 6. Enforce a per-share viewer cap (host-configurable default — the contract does not prescribe a number, since it depends on the host's cost model). On cap hit, respond 429 with `{ error: "viewer-cap" }`.
 7. Enforce idle-viewer timeout (default 30min, configurable). Idle = no comment POST + no heartbeat ping (see below) for the whole window.
-8. Viewer clients SHOULD emit a heartbeat `POST /api/share/:id/ping` (body empty) every 60s while the tab is foregrounded. Hosts that do not implement `ping` can rely on TCP-level idle detection instead.
+8. Viewer clients SHOULD emit a heartbeat `POST /api/share/:id/ping` (body empty) every 60s while the tab is foregrounded. Hosts that implement `ping` SHOULD return HTTP 200 with body `{ ok: true, viewers: number }` (the body is advisory — viewers already receive `presence` events). Hosts that do not implement `ping` can rely on TCP-level idle detection instead.
 9. Rate-limit connection attempts per IP (host picks specific numbers; contract does not mandate them).
 10. On expiration or revocation: invalidate → close streams → delete snapshot/buffer, **in that order**.
 
