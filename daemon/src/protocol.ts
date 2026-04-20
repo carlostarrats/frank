@@ -34,6 +34,12 @@ export interface ActiveShare {
   coverNote: string;
   lastSyncedNoteId: string | null;
   unseenNotes: number;
+  // v3 additions — absent on v2 shares
+  live?: {
+    revision: number;           // last revision the daemon pushed successfully
+    startedAt: string;          // ISO — when the live session opened
+    paused: boolean;            // true when the author clicked "Stop live share"
+  };
 }
 
 export interface CommentAnchor {
@@ -128,6 +134,19 @@ export interface ExportProjectRequest { type: 'export-project'; requestId?: numb
 export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }
 export interface RevealProjectFolderRequest { type: 'reveal-project-folder'; projectId?: string; requestId?: number; }
 
+// v3 live-share controls (UI → daemon)
+export interface StartLiveShareRequest { type: 'start-live-share'; projectId: string; requestId?: number; }
+export interface StopLiveShareRequest { type: 'stop-live-share'; projectId: string; requestId?: number; }
+export interface ResumeLiveShareRequest { type: 'resume-live-share'; projectId: string; requestId?: number; }
+export interface PushLiveStateRequest {
+  type: 'push-live-state';
+  projectId: string;
+  kind: 'state' | 'diff';
+  payload: unknown;
+  requestId?: number;
+}
+export interface RevokeShareRequest { type: 'revoke-share'; projectId: string; requestId?: number; }
+
 export type AppMessage =
   | ListProjectsRequest
   | LoadProjectRequest
@@ -166,7 +185,12 @@ export type AppMessage =
   | ClearAiApiKeyRequest
   | ListAiConversationsRequest
   | LoadAiConversationRequest
-  | SendAiMessageRequest;
+  | SendAiMessageRequest
+  | StartLiveShareRequest
+  | StopLiveShareRequest
+  | ResumeLiveShareRequest
+  | PushLiveStateRequest
+  | RevokeShareRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -334,6 +358,27 @@ export interface ConversationFullMessage {
 }
 export interface FolderRevealedMessage { type: 'folder-revealed'; requestId?: number; path: string; }
 
+// v3 live-share status broadcasts (daemon → UI)
+export interface LiveShareStateMessage {
+  type: 'live-share-state';
+  projectId: string;
+  // 'unsupported' = backend is v2-only (see Migration Coexistence section).
+  // Distinct from 'error' because the share itself is fine, just no live.
+  status: 'idle' | 'connecting' | 'live' | 'paused' | 'offline' | 'error' | 'unsupported';
+  viewers: number;
+  revision: number;
+  lastError: string | null;
+}
+export interface LiveShareCommentMessage {
+  type: 'live-share-comment';
+  projectId: string;
+  comment: Comment;
+}
+export interface ShareRevokedMessage {
+  type: 'share-revoked';
+  projectId: string;
+}
+
 export type DaemonMessage =
   | ProjectListMessage
   | ProjectLoadedMessage
@@ -361,7 +406,10 @@ export type DaemonMessage =
   | AiStreamEndedMessage
   | AiStreamErrorMessage
   | ConversationFullMessage
-  | FolderRevealedMessage;
+  | FolderRevealedMessage
+  | LiveShareStateMessage
+  | LiveShareCommentMessage
+  | ShareRevokedMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
