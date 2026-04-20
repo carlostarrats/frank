@@ -117,6 +117,7 @@ export async function uploadShare(
   contentType: string,
   oldShareId?: string,
   oldRevokeToken?: string,
+  expiryDays?: number,
 ): Promise<{ shareId: string; revokeToken: string; url: string } | { error: string }> {
   const config = loadConfig();
   if (!config) return { error: 'Not connected to cloud' };
@@ -128,7 +129,7 @@ export async function uploadShare(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify({ snapshot, coverNote, contentType, oldShareId, oldRevokeToken }),
+      body: JSON.stringify({ snapshot, coverNote, contentType, oldShareId, oldRevokeToken, ...(expiryDays !== undefined ? { expiryDays } : {}) }),
     });
     const data = await res.json();
     if (data.error) return { error: data.error };

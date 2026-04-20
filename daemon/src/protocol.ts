@@ -112,7 +112,16 @@ export interface AddScreenRequest { type: 'add-screen'; route: string; label: st
 export interface AddCommentRequest { type: 'add-comment'; screenId: string; anchor: CommentAnchor; text: string; requestId?: number; }
 export interface DeleteCommentRequest { type: 'delete-comment'; commentId: string; requestId?: number; }
 export interface ProxyUrlRequest { type: 'proxy-url'; url: string; requestId?: number; }
-export interface UploadShareRequest { type: 'upload-share'; snapshot: unknown; coverNote: string; contentType: string; oldShareId?: string; oldRevokeToken?: string; requestId?: number; }
+export interface UploadShareRequest {
+  type: 'upload-share';
+  snapshot: unknown;
+  coverNote: string;
+  contentType: string;
+  oldShareId?: string;
+  oldRevokeToken?: string;
+  expiryDays?: number;  // v3 Phase 5: optional. Absent = backend default (7 days).
+  requestId?: number;
+}
 export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; }
 export interface GetCloudConfigRequest { type: 'get-cloud-config'; requestId?: number; }
 export interface SetCloudConfigRequest { type: 'set-cloud-config'; cloudUrl: string; apiKey: string; requestId?: number; }

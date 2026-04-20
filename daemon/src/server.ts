@@ -449,7 +449,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           const project = activeProjectId ? loadProject(activeProjectId) : null;
           const oldShareId = project?.activeShare?.id;
           const oldRevokeToken = project?.activeShare?.revokeToken;
-          const result = await uploadShare(msg.snapshot, msg.coverNote, msg.contentType, oldShareId, oldRevokeToken);
+          const result = await uploadShare(msg.snapshot, msg.coverNote, msg.contentType, oldShareId, oldRevokeToken, msg.expiryDays);
           if ('error' in result) {
             reply({ type: 'error', error: result.error });
           } else {
@@ -459,7 +459,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
                 id: result.shareId,
                 revokeToken: result.revokeToken,
                 createdAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                expiresAt: new Date(Date.now() + (msg.expiryDays ?? 7) * 24 * 60 * 60 * 1000).toISOString(),
                 coverNote: msg.coverNote,
                 lastSyncedNoteId: null,
                 unseenNotes: 0,
