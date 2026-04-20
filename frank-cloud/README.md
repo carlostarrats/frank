@@ -78,3 +78,20 @@ In addition to the v2 endpoints, this deployment exposes the live-share transpor
 - `GET /api/tick` — cron backstop for author-offline detection (scheduled `*/1 * * * *` in `vercel.json`)
 
 The Upstash Redis integration is required for live share; v2-style static shares continue to work against hosts that don't install it, via the graceful-degrade path in the daemon.
+
+## Known issue with pre-fix PDF shares
+
+If you deployed `frank-cloud` before April 2026 and created any PDF shares
+during that window, the snapshots stored in your Vercel Blob contain the
+browser's PDF-viewer chrome HTML rather than the actual PDF bytes. These
+shares will render as empty iframes on the cloud viewer.
+
+To clean up: open the Vercel Blob dashboard, find blobs under the prefix
+`shares/*/snapshot.json` where the share's `meta.json` has
+`contentType: "pdf"`, and delete them. Users with those share URLs will
+see the standard "not found" error; they can ask the author to re-create
+the share.
+
+Image shares created before this fix were never functional — the capture
+flow hung on "Capturing snapshot..." and nothing ever reached your backend,
+so there's nothing to clean up for image shares specifically.

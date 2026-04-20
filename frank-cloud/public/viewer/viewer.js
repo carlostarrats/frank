@@ -74,11 +74,13 @@ function renderViewer(app, data) {
     iframe.sandbox = 'allow-same-origin';
     iframe.srcdoc = snapshot.html;
     contentEl.appendChild(iframe);
-  } else if (snapshot?.fileUrl) {
+  } else if (snapshot?.fileDataUrl) {
     if (metadata.contentType === 'image') {
-      contentEl.innerHTML = `<img src="${esc(snapshot.fileUrl)}" class="v-image" alt="Shared content">`;
+      contentEl.innerHTML = `<img src="${esc(snapshot.fileDataUrl)}" class="v-image" alt="Shared content">`;
+    } else if (metadata.contentType === 'pdf') {
+      contentEl.innerHTML = `<iframe src="${esc(snapshot.fileDataUrl)}" class="v-iframe"></iframe>`;
     } else {
-      contentEl.innerHTML = `<iframe src="${esc(snapshot.fileUrl)}" class="v-iframe"></iframe>`;
+      contentEl.innerHTML = '<div class="v-error"><p>Unsupported content type</p></div>';
     }
   } else {
     contentEl.innerHTML = '<div class="v-error"><p>No content in this share</p></div>';
