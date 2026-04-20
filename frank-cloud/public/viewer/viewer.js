@@ -271,3 +271,115 @@ function timeAgo(iso) {
 }
 
 init();
+
+// ─── v3 live-share client ───────────────────────────────────────────────────
+// Subscribes to /api/share/:id/stream, dispatches events via CustomEvent
+// for project-type-specific renderers (Phases 2–4). For Phase 1 this client
+// routes events but does not itself re-render project content.
+
+(function initLiveShare() {
+  const shareId = new URLSearchParams(location.search).get('id')
+    || location.pathname.match(/\/s\/([^/]+)/)?.[1];
+  if (!shareId) return;
+
+  const presenceEl = document.getElementById('frank-presence');
+  const authorStatusEl = document.getElementById('frank-author-status');
+  const reconnectEl = document.getElementById('frank-reconnect');
+
+  let lastRevision = window.__frankInitialRevision ?? -1;
+  let es = null;
+  let heartbeatTimer = null;
+  let fallbackPollTimer = null;
+
+  function setPresence(n) {
+    if (!presenceEl) return;
+    presenceEl.textContent = n === 1 ? '1 watching' : `${n} watching`;
+    presenceEl.hidden = n === 0;
+  }
+  function setAuthor(status) {
+    if (!authorStatusEl) return;
+    authorStatusEl.dataset.status = status;
+    authorStatusEl.hidden = false;
+    authorStatusEl.textContent = {
+      online: 'Author online',
+      offline: 'Author offline',
+      ended: 'Author ended live share',
+    }[status] || '';
+  }
+  function setReconnecting(on) { if (reconnectEl) reconnectEl.hidden = !on; }
+
+  function openStream() {
+    setReconnecting(false);
+    es = new EventSource(`/api/share/${encodeURIComponent(shareId)}/stream`, { withCredentials: true });
+    es.addEventListener('state', (ev) => {
+      const data = JSON.parse(ev.data);
+      lastRevision = data.revision;
+      window.dispatchEvent(new CustomEvent('frank:state', { detail: data }));
+    });
+    es.addEventListener('diff', (ev) => {
+      const data = JSON.parse(ev.data);
+      lastRevision = data.revision;
+      window.dispatchEvent(new CustomEvent('frank:diff', { detail: data }));
+    });
+    es.addEventListener('comment', (ev) => {
+      window.dispatchEvent(new CustomEvent('frank:comment', { detail: JSON.parse(ev.data) }));
+    });
+    es.addEventListener('presence', (ev) => {
+      const { viewers } = JSON.parse(ev.data);
+      setPresence(viewers);
+    });
+    es.addEventListener('author-status', (ev) => {
+      const { status } = JSON.parse(ev.data);
+      setAuthor(status);
+    });
+    es.addEventListener('share-ended', (ev) => {
+      const { reason } = JSON.parse(ev.data);
+      setAuthor('ended');
+      if (es) { es.close(); es = null; }
+      document.body.classList.add(`frank-ended-${reason}`);
+    });
+    es.onerror = () => {
+      setReconnecting(true);
+      // Browser auto-reconnects via EventSource. If terminal (404/410) the
+      // readyState goes to CLOSED — fall back to polling.
+      if (es && es.readyState === EventSource.CLOSED) {
+        es = null;
+        startPollingFallback();
+      }
+    };
+  }
+
+  function startPollingFallback() {
+    if (fallbackPollTimer) return;
+    const pollEl = document.getElementById('frank-updates-disabled');
+    if (pollEl) pollEl.hidden = false;
+    async function poll() {
+      try {
+        const r = await fetch(`/api/share?id=${encodeURIComponent(shareId)}`);
+        const j = await r.json();
+        if (j.snapshot && j.snapshot.revision && j.snapshot.revision > lastRevision) {
+          lastRevision = j.snapshot.revision;
+          window.dispatchEvent(new CustomEvent('frank:state', { detail: j.snapshot }));
+        }
+      } catch { /* keep trying */ }
+    }
+    fallbackPollTimer = setInterval(poll, 5_000);
+  }
+
+  function startHeartbeat() {
+    heartbeatTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      fetch(`/api/share/${encodeURIComponent(shareId)}/ping`, { method: 'POST', credentials: 'include' })
+        .catch(() => { /* transient */ });
+    }, 60_000);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !es && !fallbackPollTimer) {
+      openStream();
+    }
+  });
+
+  openStream();
+  startHeartbeat();
+})();
