@@ -4,7 +4,7 @@
       "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, DELETE, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
       ]
     },
@@ -18,6 +18,13 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/share/:id/state", "destination": "/api/share-state" },
+    { "source": "/api/share/:id/stream", "destination": "/api/share-stream" },
+    { "source": "/api/share/:id/author-stream", "destination": "/api/share-author-stream" },
+    { "source": "/api/share/:id/ping", "destination": "/api/share-ping" },
     { "source": "/s/:id", "destination": "/viewer/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/tick", "schedule": "*/1 * * * *" }
   ]
 }

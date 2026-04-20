@@ -66,6 +66,12 @@ export default async function handler(req: Request): Promise<Response> {
       addRandomSuffix: false,
     });
 
+    // v3: also broadcast to all open streams for this share.
+    try {
+      const { publish } = await import('../lib/pubsub.js');
+      await publish(shareId, 'comment', comment);
+    } catch { /* broadcast is best-effort; persistence is what matters */ }
+
     return Response.json({ comment });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

@@ -155,3 +155,194 @@ export async function fetchShareComments(shareId: string): Promise<Array<{ id: s
     return [];
   }
 }
+
+// ─── v3 live-share client ───────────────────────────────────────────────────
+
+// Session-scoped "this backend doesn't speak v3" marker. Set on 404 from a
+// v3-only endpoint, cleared on any 2xx from one. The 5-minute TTL makes the
+// system self-healing if the user redeploys mid-session without restarting
+// the daemon.
+const V2_ONLY_TTL_MS = 5 * 60 * 1000;
+let v2OnlyUntil = 0;
+
+export function markBackendV2Only(): void {
+  v2OnlyUntil = Date.now() + V2_ONLY_TTL_MS;
+}
+
+export function clearV2OnlyMarker(): void {
+  v2OnlyUntil = 0;
+}
+
+export function isBackendV2Only(): boolean {
+  return Date.now() < v2OnlyUntil;
+}
+
+export interface AuthorStreamHandlers {
+  onComment?: (comment: unknown) => void;
+  onPresence?: (ev: { viewers: number }) => void;
+  onShareEnded?: (ev: { reason: 'revoked' | 'expired' }) => void;
+  onReconnect?: () => void;
+  onClose?: () => void;
+  onError?: (err: string) => void;
+}
+
+export interface AuthorStreamHandle {
+  close(): void;
+}
+
+export function openAuthorStream(shareId: string, handlers: AuthorStreamHandlers): AuthorStreamHandle {
+  const config = loadConfig();
+  if (!config) {
+    handlers.onError?.('Not connected to cloud');
+    return { close() {} };
+  }
+
+  const cfg: CloudConfig = config;
+  let closed = false;
+  let controller: AbortController | null = null;
+  let backoffMs = 500;
+
+  async function loop() {
+    while (!closed) {
+      controller = new AbortController();
+      try {
+        const res = await fetch(`${cfg.url}/api/share/${shareId}/author-stream`, {
+          headers: {
+            'Authorization': `Bearer ${cfg.apiKey}`,
+            'Accept': 'text/event-stream',
+          },
+          signal: controller.signal,
+        });
+        if (res.status === 404) {
+          markBackendV2Only();
+          handlers.onError?.('v2-only-backend');
+          return; // do not reconnect
+        }
+        if (!res.ok || !res.body) {
+          if (res.status === 410) {
+            handlers.onShareEnded?.({ reason: 'expired' });
+            return;
+          }
+          handlers.onError?.(`author-stream HTTP ${res.status}`);
+          await sleep(backoffMs);
+          backoffMs = Math.min(backoffMs * 2, 10_000);
+          continue;
+        }
+        clearV2OnlyMarker();
+        handlers.onReconnect?.();
+        backoffMs = 500;
+        await readSse(res.body, handlers);
+      } catch (e: any) {
+        if (closed) return;
+        handlers.onError?.(e.message || String(e));
+      }
+      handlers.onClose?.();
+      if (closed) return;
+      await sleep(backoffMs);
+      backoffMs = Math.min(backoffMs * 2, 10_000);
+    }
+  }
+  void loop();
+
+  return {
+    close() {
+      closed = true;
+      controller?.abort();
+    },
+  };
+}
+
+async function readSse(body: ReadableStream<Uint8Array>, handlers: AuthorStreamHandlers): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let event = '';
+  let data = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).replace(/\r$/, '');
+      buf = buf.slice(idx + 1);
+      if (line === '') {
+        // Dispatch.
+        if (event && data) {
+          try {
+            const parsed = JSON.parse(data);
+            if (event === 'comment') handlers.onComment?.(parsed);
+            else if (event === 'presence') handlers.onPresence?.(parsed);
+            else if (event === 'share-ended') handlers.onShareEnded?.(parsed);
+          } catch { /* ignore malformed frame */ }
+        }
+        event = '';
+        data = '';
+        continue;
+      }
+      if (line.startsWith(':')) continue; // keep-alive comment
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data += (data ? '\n' : '') + line.slice(5).trim();
+      // id: lines intentionally ignored — author always reads the live tail.
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+export async function postState(
+  shareId: string,
+  body: { revision: number; type: 'state' | 'diff'; payload: unknown },
+): Promise<{ acceptedRevision: number } | { error: string; currentRevision?: number; httpStatus?: number }> {
+  const config = loadConfig();
+  if (!config) return { error: 'Not connected to cloud' };
+  if (isBackendV2Only()) {
+    return { error: 'v2-only-backend', httpStatus: 404 };
+  }
+  try {
+    const res = await fetch(`${config.url}/api/share/${shareId}/state`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.status === 404) {
+      markBackendV2Only();
+      return { error: 'v2-only-backend', httpStatus: 404 };
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      return { error: data.error || `HTTP ${res.status}`, currentRevision: data.currentRevision, httpStatus: res.status };
+    }
+    clearV2OnlyMarker();
+    return { acceptedRevision: data.acceptedRevision };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function revokeShare(shareId: string, revokeToken: string): Promise<{ ok: boolean; error?: string }> {
+  const config = loadConfig();
+  if (!config) return { ok: false, error: 'Not connected to cloud' };
+  try {
+    const res = await fetch(`${config.url}/api/share?id=${encodeURIComponent(shareId)}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'X-Frank-Revoke-Token': revokeToken,
+      },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: false, error: data.error || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+}

@@ -49,3 +49,32 @@ All data is stored in Vercel Blob on your account. You own it completely.
 - Snapshots: `shares/{id}/snapshot.json`
 - Metadata: `shares/{id}/meta.json`
 - Comments: `shares/{id}/comments/{commentId}.json`
+
+## Environment variables
+
+| Name | Required | Description |
+|---|---|---|
+| `FRANK_API_KEY` | Yes | Bearer token the daemon presents on authenticated requests. Generate with `openssl rand -base64 32`. |
+| `UPSTASH_REDIS_REST_URL`   | Yes | Upstash Redis REST URL. Install the "Redis (by Upstash)" integration from Vercel Marketplace and link it to the project — Vercel sets this env var automatically. |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes | Upstash Redis token. Auto-set by the Vercel Marketplace integration. |
+| `FRANK_DIFF_BUFFER_MS`     | No  | Rolling diff buffer window (ms). Default 60000. |
+| `FRANK_AUTHOR_GRACE_MS`    | No  | Author-offline grace window (ms). Default 15000. |
+| `FRANK_VIEWER_CAP`         | No  | Per-share viewer cap, default 10. Intentionally low to keep Upstash Redis free-tier costs bounded; raise for paid plans or alternative hosts. |
+| `FRANK_IP_RATE_PER_MIN`    | No  | Connection attempts per IP per minute. Default 120. |
+| `FRANK_STATE_MAX_BYTES`    | No  | Max bytes per state-push body. Default 1048576 (1 MB). |
+| `FRANK_EVENT_LIST_MAX`     | No  | Pub/sub event-list cap (LTRIM). Default 2000. |
+| `FRANK_SESSION_MAX_MS`     | No  | Max duration of a live share session before auto-pause (ms). Default 7200000 (2 hours). |
+| `CRON_SECRET`              | No  | If set, `/api/tick` requires `Authorization: Bearer $CRON_SECRET`. |
+
+## v3 live-share endpoints
+
+In addition to the v2 endpoints, this deployment exposes the live-share transport defined in `CLOUD_API.md`:
+
+- `GET /api/share/:id/stream` — viewer-facing SSE with revision-based resume
+- `GET /api/share/:id/author-stream` — daemon-facing SSE (Bearer auth required)
+- `POST /api/share/:id/state` — daemon state-push (Bearer auth required)
+- `POST /api/share/:id/ping` — viewer heartbeat
+- `DELETE /api/share?id=<id>` — revoke (Bearer + `X-Frank-Revoke-Token`)
+- `GET /api/tick` — cron backstop for author-offline detection (scheduled `*/1 * * * *` in `vercel.json`)
+
+The Upstash Redis integration is required for live share; v2-style static shares continue to work against hosts that don't install it, via the graceful-degrade path in the daemon.

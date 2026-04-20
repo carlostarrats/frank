@@ -147,6 +147,62 @@ export default async function handler(req: Request): Promise<Response> {
     }
   }
 
+  // DELETE /api/share?id=xxx — authenticated, revokes + tears down.
+  if (req.method === 'DELETE') {
+    const apiKey = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (apiKey !== process.env.FRANK_API_KEY) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const url = new URL(req.url);
+    const shareId = url.searchParams.get('id');
+    if (!shareId || !/^[a-zA-Z0-9_-]{8,20}$/.test(shareId)) {
+      return Response.json({ error: 'Invalid share ID' }, { status: 400 });
+    }
+    const revokeToken = req.headers.get('x-frank-revoke-token') || '';
+
+    try {
+      const metaBlob = await fetchBlob(`shares/${shareId}/meta.json`);
+      if (!metaBlob) return Response.json({ error: 'not found' }, { status: 404 });
+      const meta = JSON.parse(metaBlob);
+      if (meta.revokeToken !== revokeToken) {
+        return Response.json({ error: 'Invalid revoke token' }, { status: 403 });
+      }
+
+      // 1. Invalidate — flip the meta flag + expire so new requests see 410.
+      meta.revoked = true;
+      meta.expiresAt = new Date(0).toISOString();
+      await put(`shares/${shareId}/meta.json`, JSON.stringify(meta), {
+        access: 'public',
+        contentType: 'application/json',
+        addRandomSuffix: false,
+      });
+
+      // 2. Close streams via broadcast.
+      const { publish, deleteChannel } = await import('../lib/pubsub.js');
+      await publish(shareId, 'share-ended', { reason: 'revoked' });
+      // Give streams a moment to flush.
+      await new Promise((r) => setTimeout(r, 500));
+      await deleteChannel(shareId);
+
+      // 3. Delete stored artifacts.
+      const { deleteRevision } = await import('../lib/revisions.js');
+      const { deleteBuffer } = await import('../lib/diff-buffer.js');
+      await deleteRevision(shareId);
+      await deleteBuffer(shareId);
+      // Blob cleanup: prefix-delete. Best-effort — if it fails, meta is already
+      // flagged revoked so further requests 410.
+      try {
+        const { del } = await import('@vercel/blob');
+        const listed = await list({ prefix: `shares/${shareId}/` });
+        for (const b of listed.blobs) await del(b.url);
+      } catch { /* best effort */ }
+
+      return Response.json({ ok: true });
+    } catch (e: any) {
+      return Response.json({ error: e.message }, { status: 500 });
+    }
+  }
+
   return Response.json({ error: 'Method not allowed' }, { status: 405 });
 }
 
