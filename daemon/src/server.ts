@@ -18,7 +18,8 @@ import { saveAsset, ALLOWED_MIME_TYPES } from './assets.js';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB cap for base64-over-WS uploads
 import { proxyRequest } from './proxy.js';
-import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments, saveCloudConfig, healthCheck, getCloudConfiguredAt } from './cloud.js';
+import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments, saveCloudConfig, healthCheck, getCloudConfiguredAt, revokeShare } from './cloud.js';
+import { LiveShareController } from './live-share.js';
 import { mergeCloudComments } from './projects.js';
 import { saveSnapshot, saveCanvasSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
 import { addCuration, applyCurationToComments } from './curation.js';
@@ -45,6 +46,17 @@ let activeProjectId: string | null = null;
 
 // Active proxy targets: maps a slug to a target URL
 const proxyTargets = new Map<string, string>();
+
+// One LiveShareController per projectId. Cleaned up on stop-live-share /
+// project close / SIGINT.
+const liveShares = new Map<string, LiveShareController>();
+
+function liveShareRate(contentType: 'canvas' | 'image' | 'pdf' | 'url'): number {
+  if (contentType === 'canvas') return 15;
+  if (contentType === 'pdf') return 5;
+  if (contentType === 'image') return 1;
+  return 1;
+}
 
 export function startServer(): void {
   fs.mkdirSync(FRANK_DIR, { recursive: true });
@@ -655,6 +667,156 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       handleSendAiMessage(ws, activeProjectId, msg);
       break;
     }
+
+    case 'start-live-share': {
+      (async () => {
+        try {
+          const { projectId } = msg;
+          const project = loadProject(projectId);
+          if (!project) { reply({ type: 'error', error: 'Project not found' }); return; }
+          if (!project.activeShare) { reply({ type: 'error', error: 'No active share — create a share first' }); return; }
+          if (liveShares.has(projectId)) { reply({ type: 'error', error: 'Live share already running' }); return; }
+
+          const ctype = project.contentType as 'canvas' | 'image' | 'pdf' | 'url';
+          const ctl = new LiveShareController({
+            projectId,
+            shareId: project.activeShare.id,
+            contentType: ctype,
+            ratePerSecond: liveShareRate(ctype),
+            onComment: (comment) => {
+              ws.send(JSON.stringify({ type: 'live-share-comment', projectId, comment }));
+            },
+            onPresence: (viewers) => {
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'live', viewers, revision: ctl.revision, lastError: null }));
+            },
+            onAuthorStatus: (status) => {
+              ws.send(JSON.stringify({
+                type: 'live-share-state',
+                projectId,
+                status: status === 'online' ? 'live' : status === 'offline' ? 'offline' : 'idle',
+                viewers: ctl.viewers,
+                revision: ctl.revision,
+                lastError: null,
+              }));
+            },
+            onShareEnded: (reason) => {
+              liveShares.get(projectId)?.stop();
+              liveShares.delete(projectId);
+              if (reason === 'revoked') {
+                ws.send(JSON.stringify({ type: 'share-revoked', projectId }));
+              } else {
+                // reason === 'expired'
+                ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'idle', viewers: 0, revision: ctl.revision, lastError: null }));
+              }
+            },
+            onError: (err) => {
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'error', viewers: ctl.viewers, revision: ctl.revision, lastError: err }));
+            },
+            onSessionTimeout: () => {
+              // UI banner copy (Phase 5 renders it verbatim from this lastError):
+              //   "Live share paused — sessions auto-pause after 2 hours to prevent
+              //    accidental long-running sessions. Click Resume to continue."
+              try {
+                const p = loadProject(projectId);
+                if (p.activeShare?.live) {
+                  p.activeShare.live.paused = true;
+                  saveProject(projectId, p);
+                }
+              } catch { /* best-effort */ }
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'paused', viewers: ctl.viewers, revision: ctl.revision, lastError: 'session-timeout-2h' }));
+            },
+          });
+
+          liveShares.set(projectId, ctl);
+          project.activeShare.live = { revision: ctl.revision, startedAt: new Date().toISOString(), paused: false };
+          saveProject(projectId, project);
+
+          reply({ type: 'live-share-state', projectId, status: 'connecting', viewers: 0, revision: ctl.revision, lastError: null });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'stop-live-share': {
+      (async () => {
+        try {
+          const { projectId } = msg;
+          const ctl = liveShares.get(projectId);
+          if (ctl) ctl.pause();
+          try {
+            const project = loadProject(projectId);
+            if (project.activeShare?.live) {
+              project.activeShare.live.paused = true;
+              saveProject(projectId, project);
+            }
+          } catch { /* best-effort */ }
+          reply({ type: 'live-share-state', projectId, status: 'paused', viewers: 0, revision: ctl?.revision ?? 0, lastError: null });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'resume-live-share': {
+      (async () => {
+        try {
+          const { projectId } = msg;
+          const ctl = liveShares.get(projectId);
+          if (!ctl) { reply({ type: 'error', error: 'Live share not initialized' }); return; }
+          ctl.resume();
+          try {
+            const project = loadProject(projectId);
+            if (project.activeShare?.live) {
+              project.activeShare.live.paused = false;
+              saveProject(projectId, project);
+            }
+          } catch { /* best-effort */ }
+          reply({ type: 'live-share-state', projectId, status: 'connecting', viewers: ctl.viewers, revision: ctl.revision, lastError: null });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'push-live-state': {
+      const { projectId } = msg;
+      const ctl = liveShares.get(projectId);
+      if (!ctl) { reply({ type: 'error', error: 'Live share not running' }); break; }
+      if (msg.kind === 'state') {
+        ctl.pushState(msg.payload);
+      } else {
+        ctl.pushDiff(msg.payload);
+      }
+      // fire-and-forget: no response
+      break;
+    }
+
+    case 'revoke-share': {
+      (async () => {
+        try {
+          const { projectId } = msg;
+          const project = loadProject(projectId);
+          if (!project.activeShare) { reply({ type: 'error', error: 'No active share' }); return; }
+          const ctl = liveShares.get(projectId);
+          if (ctl) {
+            await ctl.revoke(project.activeShare.revokeToken);
+          } else {
+            await revokeShare(project.activeShare.id, project.activeShare.revokeToken);
+          }
+          liveShares.delete(projectId);
+          project.activeShare = null;
+          saveProject(projectId, project);
+          reply({ type: 'share-revoked', projectId });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
   }
 }
 
@@ -819,3 +981,8 @@ function broadcast(message: DaemonMessage): void {
     }
   }
 }
+
+process.on('SIGINT', async () => {
+  for (const ctl of liveShares.values()) await ctl.stop();
+  process.exit(0);
+});
