@@ -80,6 +80,7 @@ function renderViewer(app, data) {
       __imageCache = { fileDataUrl: snapshot.fileDataUrl, mimeType: snapshot.mimeType };
     } else if (metadata.contentType === 'pdf') {
       contentEl.innerHTML = `<iframe src="${esc(snapshot.fileDataUrl)}" class="v-iframe"></iframe>`;
+      __pdfCache = { fileDataUrl: snapshot.fileDataUrl, mimeType: snapshot.mimeType };
     } else {
       contentEl.innerHTML = '<div class="v-error"><p>Unsupported content type</p></div>';
     }
@@ -172,6 +173,13 @@ const __assetCache = {}; // url → dataUrl, merged across state + diff events
 // If a future feature ever swaps the source image mid-session, the cache
 // comparison triggers a visible img.src update.
 let __imageCache = null; // { fileDataUrl, mimeType } or null
+
+// v3 Phase 4a — PDF live share cache. Same pattern as __imageCache: cold-open
+// render seeds this, and renderPdfLive compares payload.fileDataUrl against
+// it to skip redundant iframe src reassignment. PDF file is immutable during
+// a session so the src rarely changes; state events carry it for snapshot
+// freshness, not because the PDF actually updated.
+let __pdfCache = null; // { fileDataUrl, mimeType } or null
 
 async function renderCanvas(payload) {
   // payload shape: { canvasState: string, assets: Record<url, dataUrl> }
@@ -459,21 +467,46 @@ function renderImageLive(payload) {
   }
 }
 
+// v3 Phase 4a — PDF live share renderer. Declaration of __pdfCache lives
+// alongside __canvasStage / __assetCache / __imageCache above, by convention.
+function renderPdfLive(payload) {
+  // payload is either:
+  //   state: { fileDataUrl, mimeType, comments }
+  //   diff:  { comments }
+  // The <iframe> element in #v-content stays put across events. The iframe
+  // src only changes on true source-file swaps (rare — the PDF is immutable
+  // during a session). We re-render the comment list on every event that
+  // carries comments.
+  if (payload?.fileDataUrl) {
+    if (__pdfCache?.fileDataUrl !== payload.fileDataUrl) {
+      __pdfCache = { fileDataUrl: payload.fileDataUrl, mimeType: payload.mimeType };
+      const iframe = document.querySelector('#v-content .v-iframe');
+      if (iframe) iframe.src = payload.fileDataUrl;
+    }
+  }
+  if (Array.isArray(payload?.comments)) {
+    renderCommentList(payload.comments);
+  }
+}
+
 window.addEventListener('frank:state', async (e) => {
   const { contentType, payload } = e.detail || {};
-  if (contentType === 'canvas' || (payload && payload.canvasState)) {
+  if (contentType === 'canvas') {
     await renderCanvas(payload);
-  } else if (contentType === 'image' || (payload && payload.fileDataUrl && Array.isArray(payload.comments))) {
+  } else if (contentType === 'image') {
     renderImageLive(payload);
+  } else if (contentType === 'pdf') {
+    renderPdfLive(payload);
   }
 });
 
 window.addEventListener('frank:diff', async (e) => {
-  const { payload } = e.detail || {};
-  if (payload && payload.canvasState) {
+  const { contentType, payload } = e.detail || {};
+  if (contentType === 'canvas') {
     await renderCanvas(payload);
-  } else if (payload && Array.isArray(payload.comments) && !payload.canvasState) {
-    // Image diff — comments only, image already cached.
+  } else if (contentType === 'image') {
     renderImageLive(payload);
+  } else if (contentType === 'pdf') {
+    renderPdfLive(payload);
   }
 });
