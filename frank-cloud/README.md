@@ -60,7 +60,6 @@ All data is stored in Vercel Blob on your account. You own it completely.
 | `FRANK_DIFF_BUFFER_MS`     | No  | Rolling diff buffer window (ms). Default 60000. |
 | `FRANK_AUTHOR_GRACE_MS`    | No  | Author-offline grace window (ms). Default 15000. |
 | `FRANK_VIEWER_CAP`         | No  | Per-share viewer cap, default 10. Intentionally low to keep Upstash Redis free-tier costs bounded; raise for paid plans or alternative hosts. |
-| `FRANK_IDLE_TIMEOUT_MS`    | No  | Viewer idle timeout (ms). Default 1800000 (30 min). |
 | `FRANK_IP_RATE_PER_MIN`    | No  | Connection attempts per IP per minute. Default 120. |
 | `FRANK_STATE_MAX_BYTES`    | No  | Max bytes per state-push body. Default 1048576 (1 MB). |
 | `FRANK_EVENT_LIST_MAX`     | No  | Pub/sub event-list cap (LTRIM). Default 2000. |

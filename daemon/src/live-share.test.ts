@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 vi.mock('./protocol.js', async () => {
   const mod = await vi.importActual<typeof import('./protocol.js')>('./protocol.js');
-  return { ...mod, PROJECTS_DIR: '/tmp/frank-ls-test' };
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'frank-ls-'));
+  return { ...mod, PROJECTS_DIR: tmp };
 });
 
 vi.mock('./cloud.js', () => ({
@@ -16,12 +20,13 @@ vi.mock('./cloud.js', () => ({
 
 import { LiveShareController } from './live-share.js';
 import * as cloud from './cloud.js';
-import fs from 'fs';
-import path from 'path';
+import { PROJECTS_DIR } from './protocol.js';
 
 beforeEach(() => {
-  fs.rmSync('/tmp/frank-ls-test', { recursive: true, force: true });
-  fs.mkdirSync('/tmp/frank-ls-test/p1', { recursive: true });
+  for (const d of fs.readdirSync(PROJECTS_DIR)) {
+    fs.rmSync(path.join(PROJECTS_DIR, d), { recursive: true, force: true });
+  }
+  fs.mkdirSync(path.join(PROJECTS_DIR, 'p1'), { recursive: true });
   vi.clearAllMocks();
   vi.useFakeTimers();
 });

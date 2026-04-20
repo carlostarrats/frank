@@ -8,7 +8,6 @@ const redis = Redis.fromEnv();
 // free-tier cost bounded for small users. Env-overridable via FRANK_VIEWER_CAP.
 // Future-you will thank present-you.
 export const VIEWER_CAP = Number(process.env.FRANK_VIEWER_CAP || 10);
-export const IDLE_TIMEOUT_MS = Number(process.env.FRANK_IDLE_TIMEOUT_MS || 30 * 60_000);
 const IP_BUCKET_WINDOW_SEC = 60;
 const IP_BUCKET_MAX = Number(process.env.FRANK_IP_RATE_PER_MIN || 120);
 

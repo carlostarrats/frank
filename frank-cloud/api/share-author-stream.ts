@@ -54,6 +54,9 @@ export default async function handler(req: Request): Promise<Response> {
   if (!metaBlob) return Response.json({ error: 'not found' }, { status: 404 });
   const meta = JSON.parse(metaBlob);
   if (meta.revoked === true) return Response.json({ error: 'revoked' }, { status: 410 });
+  if (new Date(meta.expiresAt) < new Date()) {
+    return Response.json({ error: 'expired' }, { status: 410 });
+  }
 
   await markAuthorOnline(shareId);
 
