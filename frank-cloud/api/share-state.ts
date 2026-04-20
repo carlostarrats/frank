@@ -86,7 +86,7 @@ export default async function handler(req: Request): Promise<Response> {
     ts: Date.now(),
   });
 
-  await publish(shareId, type, { revision: assigned, payload });
+  await publish(shareId, type, { revision: assigned, contentType: meta.contentType, payload });
 
   return Response.json({ acceptedRevision: assigned });
 }
