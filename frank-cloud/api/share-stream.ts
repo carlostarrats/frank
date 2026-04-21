@@ -1,3 +1,4 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { list } from '@vercel/blob';
 import { redisClient } from '../lib/redis.js';
 import { tail, publish } from '../lib/pubsub.js';
@@ -6,7 +7,7 @@ import { peekRevision } from '../lib/revisions.js';
 import { readOrCreateSessionToken, touchSession, countViewers, removeSession } from '../lib/session.js';
 import { allowConnectFromIp, VIEWER_CAP } from '../lib/limits.js';
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs', maxDuration: 300 };
 
 const redis = redisClient();
 
@@ -35,41 +36,70 @@ function sseLine(id: number | string, event: string, data: unknown): string {
   return `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export default async function handler(req: Request): Promise<Response> {
+function headerString(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+async function fetchBlob(key: string): Promise<string | null> {
+  try {
+    const blobs = await list({ prefix: key });
+    if (blobs.blobs.length === 0) return null;
+    const r = await fetch(blobs.blobs[0].url);
+    return await r.text();
+  } catch {
+    return null;
+  }
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
-    return Response.json({ error: 'Method not allowed' }, { status: 405 });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
-  const url = new URL(req.url);
+  const url = new URL(req.url || '', 'http://x');
   const shareId = extractShareId(url.pathname);
-  if (!shareId) return Response.json({ error: 'Invalid share ID' }, { status: 400 });
+  if (!shareId) {
+    res.status(400).json({ error: 'Invalid share ID' });
+    return;
+  }
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+  const ip = headerString(req.headers['x-forwarded-for'])?.split(',')[0].trim() || 'unknown';
   if (!(await allowConnectFromIp(ip))) {
-    return new Response('Rate limit exceeded', { status: 429 });
+    res.status(429).send('Rate limit exceeded');
+    return;
   }
 
   // Session dedup + viewer cap.
-  const { token, setCookie } = readOrCreateSessionToken(req);
+  const { token, setCookie } = readOrCreateSessionToken(
+    headerString(req.headers['x-frank-session']),
+    headerString(req.headers['cookie']),
+  );
   const viewersBefore = await countViewers(shareId);
   if (viewersBefore >= VIEWER_CAP) {
-    return new Response(
-      JSON.stringify({ error: 'viewer-cap', cap: VIEWER_CAP }),
-      { status: 429, headers: { 'Content-Type': 'application/json' } },
-    );
+    res.status(429).json({ error: 'viewer-cap', cap: VIEWER_CAP });
+    return;
   }
 
   // Share must exist and be live.
   const snapshotRaw = await fetchBlob(`shares/${shareId}/snapshot.json`);
   const metaRaw = await fetchBlob(`shares/${shareId}/meta.json`);
-  if (!metaRaw) return Response.json({ error: 'not found' }, { status: 404 });
+  if (!metaRaw) {
+    res.status(404).json({ error: 'not found' });
+    return;
+  }
   const meta = JSON.parse(metaRaw);
-  if (meta.revoked === true) return Response.json({ error: 'revoked' }, { status: 410 });
+  if (meta.revoked === true) {
+    res.status(410).json({ error: 'revoked' });
+    return;
+  }
   if (new Date(meta.expiresAt) < new Date()) {
-    return Response.json({ error: 'expired' }, { status: 410 });
+    res.status(410).json({ error: 'expired' });
+    return;
   }
 
-  const lastEventIdHeader = req.headers.get('last-event-id');
+  const lastEventIdHeader = headerString(req.headers['last-event-id']);
   const lastAppliedRevision = lastEventIdHeader ? Number(lastEventIdHeader) : -1;
 
   // Build the opening event(s) before we start streaming.
@@ -118,50 +148,7 @@ export default async function handler(req: Request): Promise<Response> {
   // offline status within ~15s of the author leaving, not 15s + cron tick.
   await maybeFireAuthorOffline(shareId);
 
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      for (const line of openingEvents) controller.enqueue(encoder.encode(line));
-
-      // Tell the browser to retry after 1s on disconnect.
-      controller.enqueue(encoder.encode('retry: 1000\n\n'));
-
-      let lastEventId = 0;
-      let alive = true;
-
-      req.signal.addEventListener('abort', async () => {
-        alive = false;
-        try {
-          await removeSession(shareId, token);
-          const viewersNow = await countViewers(shareId);
-          await publish(shareId, 'presence', { viewers: viewersNow });
-        } catch { /* best effort */ }
-        try { controller.close(); } catch { /* already closed */ }
-      });
-
-      // Long-poll loop.
-      while (alive) {
-        const events = await tail(shareId, lastEventId, 8_000);
-        if (!alive) break;
-        for (const ev of events) {
-          lastEventId = ev.id;
-          const revision = (ev.data as { revision?: number })?.revision;
-          const idHeader = revision ?? ev.id;
-          controller.enqueue(encoder.encode(sseLine(idHeader, ev.kind, ev.data)));
-          if (ev.kind === 'share-ended') {
-            alive = false;
-          }
-        }
-        if (events.length === 0) controller.enqueue(encoder.encode(': keep-alive\n\n'));
-        // Refresh the session TTL while the connection stays up + sweep
-        // the author-offline deadline opportunistically.
-        await touchSession(shareId, token);
-        await maybeFireAuthorOffline(shareId);
-      }
-      try { controller.close(); } catch { /* already closed */ }
-    },
-  });
-
+  // SSE response headers. Write the opening events + retry hint.
   const headers: Record<string, string> = {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -169,17 +156,47 @@ export default async function handler(req: Request): Promise<Response> {
     'X-Accel-Buffering': 'no',
   };
   if (setCookie) headers['Set-Cookie'] = setCookie;
+  res.writeHead(200, headers);
 
-  return new Response(stream, { status: 200, headers });
-}
+  for (const line of openingEvents) res.write(line);
+  res.write('retry: 1000\n\n');
 
-async function fetchBlob(key: string): Promise<string | null> {
+  let lastEventId = 0;
+  let alive = true;
+
+  // Client disconnect: remove session, broadcast presence decrement.
+  // Fire-and-forget because the request is already finishing.
+  req.on('close', () => {
+    alive = false;
+    (async () => {
+      try {
+        await removeSession(shareId, token);
+        const viewersNow = await countViewers(shareId);
+        await publish(shareId, 'presence', { viewers: viewersNow });
+      } catch { /* best effort */ }
+    })();
+  });
+
   try {
-    const blobs = await list({ prefix: key });
-    if (blobs.blobs.length === 0) return null;
-    const res = await fetch(blobs.blobs[0].url);
-    return await res.text();
-  } catch {
-    return null;
+    while (alive) {
+      const events = await tail(shareId, lastEventId, 8_000);
+      if (!alive) break;
+      for (const ev of events) {
+        lastEventId = ev.id;
+        const revision = (ev.data as { revision?: number })?.revision;
+        const idHeader = revision ?? ev.id;
+        res.write(sseLine(idHeader, ev.kind, ev.data));
+        if (ev.kind === 'share-ended') {
+          alive = false;
+        }
+      }
+      if (events.length === 0) res.write(': keep-alive\n\n');
+      // Refresh the session TTL while the connection stays up + sweep
+      // the author-offline deadline opportunistically.
+      await touchSession(shareId, token);
+      await maybeFireAuthorOffline(shareId);
+    }
+  } finally {
+    try { res.end(); } catch { /* already ended */ }
   }
 }
