@@ -1,9 +1,10 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put, list } from '@vercel/blob';
 import { nextRevision, peekRevision } from '../lib/revisions.js';
 import { appendDiff } from '../lib/diff-buffer.js';
 import { publish } from '../lib/pubsub.js';
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
 const MAX_PAYLOAD_BYTES = Number(process.env.FRANK_STATE_MAX_BYTES || 1_048_576); // 1 MB
 
@@ -13,48 +14,72 @@ function extractShareId(pathname: string): string | null {
   return m ? m[1] : null;
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
+function headerString(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
   if (req.method !== 'POST') {
-    return Response.json({ error: 'Method not allowed' }, { status: 405 });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
-  const apiKey = req.headers.get('Authorization')?.replace('Bearer ', '');
+  const apiKey = headerString(req.headers['authorization'])?.replace('Bearer ', '');
   if (apiKey !== process.env.FRANK_API_KEY) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
   }
 
-  const url = new URL(req.url);
+  const url = new URL(req.url || '', 'http://x');
   const shareId = extractShareId(url.pathname);
-  if (!shareId) return Response.json({ error: 'Invalid share ID' }, { status: 400 });
+  if (!shareId) {
+    res.status(400).json({ error: 'Invalid share ID' });
+    return;
+  }
 
   // Share must exist and not be expired/revoked.
   const metaBlob = await fetchBlob(`shares/${shareId}/meta.json`);
-  if (!metaBlob) return Response.json({ error: 'not found' }, { status: 404 });
+  if (!metaBlob) {
+    res.status(404).json({ error: 'not found' });
+    return;
+  }
   const meta = JSON.parse(metaBlob);
-  if (meta.revoked === true) return Response.json({ error: 'revoked' }, { status: 410 });
+  if (meta.revoked === true) {
+    res.status(410).json({ error: 'revoked' });
+    return;
+  }
   if (new Date(meta.expiresAt) < new Date()) {
-    return Response.json({ error: 'expired' }, { status: 410 });
+    res.status(410).json({ error: 'expired' });
+    return;
   }
 
   let body: { revision?: number; type?: string; payload?: unknown };
   try {
-    body = await req.json();
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
   } catch {
-    return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    res.status(400).json({ error: 'Invalid JSON' });
+    return;
   }
 
   const { revision: clientRevision, type, payload } = body;
   if (type !== 'state' && type !== 'diff') {
-    return Response.json({ error: 'Invalid type' }, { status: 400 });
+    res.status(400).json({ error: 'Invalid type' });
+    return;
   }
   if (typeof clientRevision !== 'number' || !Number.isFinite(clientRevision)) {
-    return Response.json({ error: 'Invalid revision' }, { status: 400 });
+    res.status(400).json({ error: 'Invalid revision' });
+    return;
   }
 
   const encoded = JSON.stringify(payload);
   if (encoded.length > MAX_PAYLOAD_BYTES) {
-    return Response.json({ error: 'payload-too-large', max: MAX_PAYLOAD_BYTES }, { status: 413 });
+    res.status(413).json({ error: 'payload-too-large', max: MAX_PAYLOAD_BYTES });
+    return;
   }
 
   // Backend revision wins per the direction doc. If the client's revision is
@@ -62,7 +87,8 @@ export default async function handler(req: Request): Promise<Response> {
   // fast-forward. Otherwise allocate the next monotonic revision.
   const current = await peekRevision(shareId);
   if (clientRevision <= current) {
-    return Response.json({ error: 'revision-behind', currentRevision: current }, { status: 409 });
+    res.status(409).json({ error: 'revision-behind', currentRevision: current });
+    return;
   }
 
   const assigned = await nextRevision(shareId);
@@ -88,15 +114,15 @@ export default async function handler(req: Request): Promise<Response> {
 
   await publish(shareId, type, { revision: assigned, contentType: meta.contentType, payload });
 
-  return Response.json({ acceptedRevision: assigned });
+  res.status(200).json({ acceptedRevision: assigned });
 }
 
 async function fetchBlob(key: string): Promise<string | null> {
   try {
     const blobs = await list({ prefix: key });
     if (blobs.blobs.length === 0) return null;
-    const res = await fetch(blobs.blobs[0].url);
-    return await res.text();
+    const r = await fetch(blobs.blobs[0].url);
+    return await r.text();
   } catch {
     return null;
   }
