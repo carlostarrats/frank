@@ -891,19 +891,12 @@
 }
 .home-filter-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.home-filter-row .home-filter-chips {
-  flex: 1;
-  min-width: 0;
-  display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
 }
 .home-filter-row .home-sort {
   flex-shrink: 0;
-  margin-left: auto;
 }
 .home-search {
   width: 100%;

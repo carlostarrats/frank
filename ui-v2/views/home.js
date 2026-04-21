@@ -161,7 +161,7 @@ function renderTabs(recentCount, archivedCount, trashedCount) {
   };
   return `
     <div class="home-tabs" role="tablist">
-      ${tab('recent', 'Recent projects', recentCount)}
+      ${tab('recent', 'Recent', recentCount)}
       ${tab('archived', 'Archived', archivedCount)}
       ${tab('trash', 'Deleted', trashedCount)}
     </div>
@@ -200,13 +200,11 @@ function renderToolbar(activeProjects) {
         id="home-search-input"
       >
       <div class="home-filter-row">
-        <div class="home-filter-chips">
-          ${chip('all', 'All')}
-          ${chip('canvas', 'Canvas')}
-          ${chip('url', 'URL')}
-          ${chip('pdf', 'PDF')}
-          ${chip('image', 'Image')}
-        </div>
+        ${chip('all', 'All')}
+        ${chip('canvas', 'Canvas')}
+        ${chip('url', 'URL')}
+        ${chip('pdf', 'PDF')}
+        ${chip('image', 'Image')}
         <select class="input home-sort" id="home-sort-select" title="Sort">
           <option value="recent"${uiState.sort === 'recent' ? ' selected' : ''}>Recent</option>
           <option value="oldest"${uiState.sort === 'oldest' ? ' selected' : ''}>Oldest</option>
