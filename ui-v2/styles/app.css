@@ -431,7 +431,6 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
   }
   .home-col-right .home-tabs {
     margin: calc(var(--space-4) * -1) calc(var(--space-2) * -1) var(--space-5);
