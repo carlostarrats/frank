@@ -8,7 +8,7 @@
 import sync from '../core/sync.js';
 import { toastInfo, toastError } from './toast.js';
 
-export function showSettingsPanel() {
+export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
   const overlay = document.createElement('div');
   overlay.className = 'help-overlay settings-overlay';
   overlay.setAttribute('role', 'dialog');
@@ -22,8 +22,16 @@ export function showSettingsPanel() {
         <button class="help-modal-close" id="settings-close" aria-label="Close">✕</button>
       </div>
       <div class="settings-body">
+        <!-- Top-level tabs: Cloud Backend vs MCP Setup. Rendered as
+             bordered buttons (not underlined) so they read as a higher layer
+             of navigation than the Vercel / custom sub-tabs inside Cloud. -->
+        <div class="settings-toptabs" role="tablist" aria-label="Settings sections">
+          <button class="settings-toptab active" role="tab" data-toptab="cloud" aria-selected="true">Cloud Backend</button>
+          <button class="settings-toptab" role="tab" data-toptab="mcp" aria-selected="false">MCP Setup</button>
+        </div>
+
+        <div class="settings-toptab-panel" data-toptab="cloud" role="tabpanel">
         <section class="settings-section">
-          <h3>Cloud backend</h3>
           <p class="settings-hint">
             Required only if you want to share projects with a link. Pick how
             you'd like to host it.
@@ -276,6 +284,86 @@ export function showSettingsPanel() {
             <div class="settings-status" data-status aria-live="polite"></div>
           </div>
         </section>
+        </div>
+
+        <div class="settings-toptab-panel" data-toptab="mcp" role="tabpanel" hidden>
+          <section class="settings-section">
+            <p class="settings-hint">
+              Connect Claude, Cursor, or any MCP-capable AI to Frank. The AI gets a read of your projects (comments, canvas state, snapshots, timeline) and — on canvas projects — can draft shapes, text, connectors, and comments directly, plus mint new share links.
+            </p>
+
+            <div class="settings-field">
+              <span class="settings-label">1. Add Frank to your AI client's MCP config</span>
+              <div class="settings-cmd settings-cmd-multiline">
+                <code>{
+  "mcpServers": {
+    "frank": { "command": "frank", "args": ["mcp"] }
+  }
+}</code>
+                <button class="settings-cmd-copy" data-copy='{
+  "mcpServers": {
+    "frank": { "command": "frank", "args": ["mcp"] }
+  }
+}'>Copy</button>
+              </div>
+              <span class="settings-field-hint">
+                Paste into the MCP-servers block. Existing entries in the same config stay unaffected.
+              </span>
+            </div>
+
+            <div class="settings-field">
+              <span class="settings-label">2. Find the config file for your client</span>
+              <ul class="settings-why-list">
+                <li><strong>Claude Desktop</strong> — <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS). Restart the app after editing.</li>
+                <li><strong>Claude Code</strong> — settings → MCP servers, or <code>.claude.json</code> in the project root.</li>
+                <li><strong>Cursor</strong> — Settings → Features → Model Context Protocol.</li>
+                <li><strong>Other MCP clients</strong> — check their docs for where MCP servers are declared. The JSON above is the standard shape.</li>
+              </ul>
+            </div>
+
+            <div class="settings-field">
+              <span class="settings-label">3. Keep Frank's daemon running</span>
+              <div class="settings-cmd">
+                <code>frank start</code>
+                <button class="settings-cmd-copy" data-copy="frank start">Copy</button>
+              </div>
+              <span class="settings-field-hint">
+                Tool calls bridge to the daemon on <code>localhost:42069</code>. If it's not running, calls return a clear error so the AI can tell you.
+              </span>
+            </div>
+
+            <hr class="settings-divider">
+
+            <details class="settings-cli" open>
+              <summary>What the AI can do</summary>
+              <ul class="settings-why-list">
+                <li><strong>Read</strong> — <code>list_projects</code>, <code>load_project</code>, <code>get_intent</code>, <code>get_comments</code>, <code>get_canvas_state</code>, <code>list_snapshots</code>, <code>get_timeline</code>, <code>export_bundle</code>.</li>
+                <li><strong>Write (canvas)</strong> — <code>add_shape</code> (13 kinds), <code>add_text</code>, <code>add_path</code>, <code>add_connector</code>, <code>add_comment</code>.</li>
+                <li><strong>Share</strong> — <code>create_share</code> (canvas projects only; URL / PDF / image shares stay in the Frank UI because their snapshot runs in the browser).</li>
+              </ul>
+            </details>
+
+            <details class="settings-cli">
+              <summary>What the AI can't do (by design)</summary>
+              <ul class="settings-why-list">
+                <li>Revoking a share link</li>
+                <li>Starting, pausing, or resuming live share</li>
+                <li>Deleting or purging projects</li>
+                <li>Approving or dismissing comments (curation stays a human decision)</li>
+              </ul>
+              <p class="settings-field-hint">
+                If the user asks the AI for any of the above, it will tell them to use the Frank UI. Keeps destructive / stream-control / judgment actions human-driven.
+              </p>
+            </details>
+
+            <details class="settings-cli">
+              <summary>Security notes</summary>
+              <p class="settings-field-hint">
+                The MCP server runs on stdio — no new network listener. It's spawned as a subprocess of the AI client and exits with it. Writes are additive only (shapes, text, comments) and land in the timeline, so every AI-authored change is recoverable. If your AI client is trusted to see your other files and chats, it's already trusted to see Frank's local data.
+              </p>
+            </details>
+          </section>
+        </div>
       </div>
     </div>
   `;
@@ -290,7 +378,24 @@ export function showSettingsPanel() {
   overlay.querySelector('#settings-close').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
-  // ── Tab switching ────────────────────────────────────────────────────────
+  // ── Top-level tab switching (Cloud Backend vs MCP Setup) ─────────────────
+  const topTabs = overlay.querySelectorAll('.settings-toptab');
+  const topPanels = overlay.querySelectorAll('.settings-toptab-panel');
+  function activateTopTab(id) {
+    topTabs.forEach((t) => {
+      const on = t.dataset.toptab === id;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    topPanels.forEach((p) => {
+      if (p.dataset.toptab === id) p.removeAttribute('hidden');
+      else p.setAttribute('hidden', '');
+    });
+  }
+  topTabs.forEach((t) => t.addEventListener('click', () => activateTopTab(t.dataset.toptab)));
+  if (initialTopTab && initialTopTab !== 'cloud') activateTopTab(initialTopTab);
+
+  // ── Sub-tab switching inside Cloud Backend (Vercel vs custom) ───────────
   const tabs = overlay.querySelectorAll('.settings-tab');
   const panels = overlay.querySelectorAll('.settings-tab-panel');
   function activateTab(id) {
@@ -305,6 +410,19 @@ export function showSettingsPanel() {
     });
   }
   tabs.forEach((t) => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+
+  // ── Copy buttons (shared by Cloud sub-tabs + MCP Setup snippets) ────────
+  overlay.querySelectorAll('.settings-cmd-copy[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const text = btn.getAttribute('data-copy') || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        const original = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = original; }, 1200);
+      } catch { /* best-effort */ }
+    });
+  });
 
   // ── Per-panel form wiring ────────────────────────────────────────────────
   panels.forEach(wirePanel);

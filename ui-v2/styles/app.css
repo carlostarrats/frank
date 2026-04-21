@@ -78,9 +78,14 @@
 .settings-body {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   overflow-y: auto;
   min-height: 0;
+}
+/* Settings context overrides the default help-modal header spacing: more
+ * breathing room between the "Settings" title and the top-level tabs below. */
+.settings-modal .help-modal-header {
+  margin-bottom: 16px;
 }
 .settings-section { display: flex; flex-direction: column; gap: 12px; }
 .settings-section h3 {
@@ -180,6 +185,38 @@
   margin-top: 4px;
   margin-bottom: 14px;
 }
+/* Top-level settings tabs — "Cloud Backend" / "MCP Setup". Rendered as
+ * bordered buttons (not underlined like the sub-tabs) so they read as a
+ * higher navigation layer. */
+.settings-toptabs {
+  display: flex;
+  gap: 8px;
+}
+.settings-toptab {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.settings-toptab:hover {
+  color: var(--text);
+  background: var(--accent);
+}
+.settings-toptab.active {
+  color: var(--text);
+  background: var(--accent);
+  border-color: var(--ring);
+}
+.settings-toptab-panel[hidden] { display: none; }
+
 .settings-tab {
   padding: 8px 14px;
   margin-bottom: -1px;
@@ -255,6 +292,15 @@
   color: var(--text);
   overflow-x: auto;
   white-space: nowrap;
+}
+/* Multi-line JSON / config snippets opt in via .settings-cmd-multiline so the
+ * existing single-line terminal commands keep their tight layout. */
+.settings-cmd-multiline {
+  align-items: flex-start;
+}
+.settings-cmd-multiline code {
+  white-space: pre;
+  overflow-x: auto;
 }
 .settings-cmd-copy {
   flex-shrink: 0;
@@ -492,6 +538,27 @@
   position: relative;
   border: 1px solid var(--border);
   padding: var(--space-5);
+}
+
+/* MCP nudge under the Canvas panel. Plain text outside the terminal-frame
+ * panels so it doesn't compete with the framed actions above. Clicking the
+ * link opens the Settings modal on its MCP Setup top-level tab so the long-
+ * form content can scroll freely inside the modal. */
+.home-mcp {
+  padding: 0 var(--space-5);
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+.home-mcp-link {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.home-mcp-link:hover {
+  text-decoration: none;
 }
 .home-panel::before {
   content: attr(data-title);
