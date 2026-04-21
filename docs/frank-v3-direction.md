@@ -44,15 +44,19 @@ Images barely change. The only "live" element is annotations and comments appear
 
 **v3.0 (Phase 4a): annotations only.** Comments sync live between author and viewers — add, delete, and curate actions all stream in near real time. The PDF file itself is delivered at share time and doesn't stream. This is the subset buildable on Frank's current PDF rendering stack (browser-native iframe embedding).
 
-**v3.x (Phase 4b, post-v3.0 / pre-v3.1): page + scroll sync after PDF.js migration.** The original direction for this section assumed Frank controlled the PDF render pipeline. It doesn't — PDFs currently render in each browser's native viewer, which doesn't expose page or scroll events to the embedding page. Adding page/scroll sync requires replacing the iframe-native-viewer path with a PDF.js render, which is a meaningful rendering-infrastructure improvement on its own (consistent cross-browser rendering, programmable scrolling, better pin anchoring). Phase 4b is framed as that migration; page/scroll live sync becomes a natural follow-on once Frank controls the render.
+**Phase 4b — status pending re-evaluation.** Originally framed as "PDF.js migration enables page/scroll live sync." With URL live-share dropped (see below) and the broader conclusion that live share is a canvas-only user-facing feature, the page/scroll live-sync motivation for Phase 4b no longer carries weight on its own. PDF.js might still be worth doing as pure rendering-infrastructure work (cross-browser consistency, better pin anchoring, programmable scrolling for non-live use cases), but that's a different and weaker argument. Phase 4b's merits need a separate decision — don't inherit the old justification.
 
-### URL shares — a different problem, deferred to v3.1
+### URL shares — explored, deprioritized
 
-URL live-share is harder than the other three combined. Making Frank's URL viewer "live" requires either periodic re-snapshotting, streamed DOM mutations across cross-origin iframes, or a cloud-side shared proxy with streamed scroll and navigation events. Frank's current proxy lives in the daemon — reviewers cannot reach it. The architecture has to change for URL specifically.
+URL live-share was scoped as v3.1 in earlier drafts of this doc. After v3.0 shipped, a further scoping pass concluded the feature doesn't belong on the roadmap.
 
-URL live-share gets its own sub-spec as v3.1. v3.0 ships without it — URL shares continue to work as they do in v2 (static) until v3.1 is built.
+**The argument:** screen-sharing (Google Meet, Zoom, Tuple, etc.) already handles the real-time URL review case well, and v2's static share with commenting covers the async case. URL live-share in Frank would fight the architecture at every fork — cross-origin observability, auth leakage through a server-side proxy, reviewer network-context divergence — to solve a problem users have better tools for. Every option explored (proxy-only, proxy+direct hybrid, daemon-observed + cloud-served) wrestled with the same constraints, which is the signature of a feature the design doesn't want.
 
-Worth naming now so v3.1 scoping isn't surprised by it: URL live-share will require **server-visible rendering context** (either a cloud-side proxy or some equivalent), not just daemon-side rendering. That's a new architectural class compared to the canvas/image/PDF cases, where the daemon is the sole renderer. v3.1 will need to reconcile this shift with Frank's "daemon as source of truth" principle.
+**Conclusion:** URL live-share is not a planned release. URL projects stay on v2's static-share path indefinitely. Reviewers open a share link, see the captured snapshot, and comment. If the real-time case matters for a URL review, the author screen-shares.
+
+The broader frame: **live share is meaningfully user-facing only for canvas.** Image, PDF, and URL projects pick up the transport infrastructure incidentally because it's shared across project types, but they don't surface live-share as a first-class feature. v2's static share + commenting is the UX for those surfaces; v3's canvas live share is the feature addition.
+
+The "server-visible rendering context" note that lived here in earlier drafts was aspirational scope that didn't survive the scoping pass.
 
 ---
 
@@ -148,7 +152,7 @@ The word "snapshot" carries different payloads depending on the project:
 - **Canvas:** serialized Konva JSON plus any referenced assets as inline data URLs (matches v2's existing canvas share payload).
 - **Image:** the image file plus annotation overlay state.
 - **PDF:** the PDF file plus current page, scroll position, and annotation overlay state.
-- **URL (v3.0 static only; v3.1 adds live):** the v2 DOM snapshot HTML.
+- **URL (static only — no live path planned):** the v2 DOM snapshot HTML.
 
 State updates (`diff` events) change only the mutable parts — annotations, canvas shapes, current page, etc. — never the underlying asset (image bytes, PDF bytes, DOM HTML).
 
@@ -379,7 +383,7 @@ The tradeoffs of SSE on Vercel Hobby (periodic reconnects) are real but are acce
 
 1. **v3.0 ships** with: SSE transport on the updated contract, canvas live state, image live state, PDF live state, viewer-count presence, share revocation, optional expiration, live session kill switch.
 2. **Phase 6 — cloud stabilization + deployment verification.** Addresses the gap between per-phase daemon testing and end-to-end deployment testing that surfaced during the v3.0 smoke test. Tracked in `docs/superpowers/plans/2026-04-20-v3-phase6-cloud-stabilization.md`. Shipped alongside v3.0.
-3. **v3.1 ships** with URL live-share as its own scoped release.
+3. **No named v3.1 target.** URL live-share was the previous v3.1 scope and is no longer on the roadmap (see the URL-shares section above). Phase 4b (PDF.js migration) was previously justified by PDF live-share — with that gone, Phase 4b stands or falls on its own merits as a rendering-infrastructure change and needs a separate decision. `dev-v3.x` branches can hold fragile-list cleanup work from the Phase 6 handler audit, bug fixes from real v3.0 usage, or sit idle until a real milestone shows up. Forcing a milestone when none is warranted is worse than shipping slowly.
 
 ---
 
