@@ -1,6 +1,7 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put, list } from '@vercel/blob';
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
 function randomHex(bytes: number): string {
   const buf = new Uint8Array(bytes);
@@ -8,37 +9,45 @@ function randomHex(bytes: number): string {
   return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204 });
+    res.status(204).end();
+    return;
   }
 
   if (req.method !== 'POST') {
-    return Response.json({ error: 'Method not allowed' }, { status: 405 });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   try {
-    const body = await req.json();
+    // Vercel auto-parses application/json bodies; fall back to raw text if needed.
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const { shareId, screenId, anchor, author, text } = body;
 
     // Validate inputs
     if (!shareId || !/^[a-zA-Z0-9_-]{8,20}$/.test(shareId)) {
-      return Response.json({ error: 'Invalid share ID' }, { status: 400 });
+      res.status(400).json({ error: 'Invalid share ID' });
+      return;
     }
     if (!text || typeof text !== 'string') {
-      return Response.json({ error: 'Missing comment text' }, { status: 400 });
+      res.status(400).json({ error: 'Missing comment text' });
+      return;
     }
     if (text.length > 2000) {
-      return Response.json({ error: 'Comment too long (max 2000 chars)' }, { status: 400 });
+      res.status(400).json({ error: 'Comment too long (max 2000 chars)' });
+      return;
     }
     if (!author || typeof author !== 'string' || author.length > 100) {
-      return Response.json({ error: 'Invalid author' }, { status: 400 });
+      res.status(400).json({ error: 'Invalid author' });
+      return;
     }
 
     // Verify share exists and isn't expired
     const metaBlobs = await list({ prefix: `shares/${shareId}/meta.json` });
     if (metaBlobs.blobs.length === 0) {
-      return Response.json({ error: 'Share not found' }, { status: 404 });
+      res.status(404).json({ error: 'Share not found' });
+      return;
     }
     const metaRes = await fetch(metaBlobs.blobs[0].url);
     const meta = JSON.parse(await metaRes.text());
@@ -46,17 +55,20 @@ export default async function handler(req: Request): Promise<Response> {
     // Check revocation first — parity with GET /api/share's ordering,
     // so callers get the accurate error code when a share was revoked.
     if (meta.revoked === true) {
-      return Response.json({ error: 'revoked' }, { status: 410 });
+      res.status(410).json({ error: 'revoked' });
+      return;
     }
 
     if (new Date(meta.expiresAt) < new Date()) {
-      return Response.json({ error: 'Share expired' }, { status: 410 });
+      res.status(410).json({ error: 'Share expired' });
+      return;
     }
 
     // Check comment count (max 100)
     const existingComments = await list({ prefix: `shares/${shareId}/comments/` });
     if (existingComments.blobs.length >= 100) {
-      return Response.json({ error: 'Max comments reached (100)' }, { status: 429 });
+      res.status(429).json({ error: 'Max comments reached (100)' });
+      return;
     }
 
     // Create comment
@@ -83,8 +95,8 @@ export default async function handler(req: Request): Promise<Response> {
       await publish(shareId, 'comment', comment);
     } catch { /* broadcast is best-effort; persistence is what matters */ }
 
-    return Response.json({ comment });
+    res.status(200).json({ comment });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    res.status(500).json({ error: e.message });
   }
 }
