@@ -313,6 +313,32 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
   });
 
   tools.push({
+    name: 'create_share',
+    description: 'Create a new share link for a canvas project. Uploads a snapshot of the current canvas to the user\'s configured Frank cloud and returns the public URL, revoke token, and expiry. v1 is canvas-only — URL / PDF / image projects need the share modal in the Frank UI because their snapshot builder runs in the browser. Optional coverNote shows on the reviewer\'s landing page. expiryDays defaults to 7.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        coverNote: { type: 'string' },
+        expiryDays: { type: 'number', enum: [1, 7, 30, 90, 365] },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+    async handler(args) {
+      const reply = await bridge.send({
+        type: 'mcp-create-share',
+        projectId: String(args.projectId),
+        coverNote: args.coverNote != null ? String(args.coverNote) : undefined,
+        expiryDays: args.expiryDays != null ? Number(args.expiryDays) : undefined,
+      });
+      const err = asError(reply); if (err) throw new Error(err);
+      const r = reply as { shareId: string; url: string; revokeToken: string; expiresAt: string };
+      return { shareId: r.shareId, url: r.url, revokeToken: r.revokeToken, expiresAt: r.expiresAt };
+    },
+  });
+
+  tools.push({
     name: 'export_bundle',
     description: 'Produce a complete project archive (a zip file) containing project.json, report.md, report.pdf, canvas-state.json, every snapshot folder, the source file (if any), and canvas assets. Returns the bundle as base64-encoded zip bytes plus the suggested filename. Use this when the user asks to "hand off everything" to an AI or stakeholder.',
     inputSchema: {

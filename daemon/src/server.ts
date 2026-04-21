@@ -1012,6 +1012,55 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       reply({ type: 'error', error: 'insert_template is not yet supported on the daemon; compose the template from add_shape + add_connector for now.' });
       break;
     }
+    case 'mcp-create-share': {
+      (async () => {
+        try {
+          const project = loadProject(msg.projectId);
+          if (!project) { reply({ type: 'error', error: 'Project not found' }); return; }
+          if (project.contentType !== 'canvas') {
+            // URL / PDF / image shares need a DOM snapshot that only the
+            // browser can produce. Tell the AI to hand off to the user.
+            reply({ type: 'error', error: `create_share is canvas-only in v1 (this project is ${project.contentType}). Ask the user to open the share modal in Frank to share this ${project.contentType} project.` });
+            return;
+          }
+          const payload = await buildCanvasLivePayload(msg.projectId);
+          if (!payload) { reply({ type: 'error', error: 'Canvas is empty; add content before sharing.' }); return; }
+          // Static share payload shape mirrors the browser's buildCanvasSnapshot,
+          // minus the `preview` PNG (browser-only — the cover image slot on
+          // the share page will fall back).
+          const snapshot = { canvasState: payload.canvasState, assets: payload.assets, preview: null };
+          const oldShareId = project.activeShare?.id;
+          const oldRevokeToken = project.activeShare?.revokeToken;
+          const result = await uploadShare(snapshot, msg.coverNote || '', 'canvas', oldShareId, oldRevokeToken, msg.expiryDays);
+          if ('error' in result) {
+            reply({ type: 'error', error: result.error });
+            return;
+          }
+          const expiryDays = msg.expiryDays ?? 7;
+          project.activeShare = {
+            id: result.shareId,
+            revokeToken: result.revokeToken,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + expiryDays * 86400000).toISOString(),
+            coverNote: msg.coverNote || '',
+            lastSyncedNoteId: null,
+            unseenNotes: 0,
+          };
+          saveProject(msg.projectId, project);
+          // Broadcast updated project so open tabs reflect the new activeShare.
+          broadcast({ type: 'project-loaded', projectId: msg.projectId, project, comments: loadComments(msg.projectId) } as any);
+          reply({
+            type: 'mcp-share-created',
+            shareId: result.shareId,
+            url: result.url,
+            revokeToken: result.revokeToken,
+            expiresAt: project.activeShare.expiresAt,
+          });
+        } catch (e: any) { reply({ type: 'error', error: e.message }); }
+      })();
+      break;
+    }
+
     case 'mcp-add-comment': {
       try {
         const anchor = msg.shapeId

@@ -210,6 +210,21 @@ export interface McpAddCommentRequest {
   author?: string;
   requestId?: number;
 }
+export interface McpCreateShareRequest {
+  type: 'mcp-create-share';
+  projectId: string;
+  coverNote?: string;
+  expiryDays?: number;
+  requestId?: number;
+}
+export interface McpShareCreatedMessage {
+  type: 'mcp-share-created';
+  requestId?: number;
+  shareId: string;
+  url: string;
+  revokeToken: string;
+  expiresAt: string;
+}
 
 // v3 live-share controls (UI → daemon)
 export interface StartLiveShareRequest { type: 'start-live-share'; projectId: string; requestId?: number; }
@@ -275,7 +290,8 @@ export type AppMessage =
   | McpAddPathRequest
   | McpAddConnectorRequest
   | McpInsertTemplateRequest
-  | McpAddCommentRequest;
+  | McpAddCommentRequest
+  | McpCreateShareRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -519,7 +535,8 @@ export type DaemonMessage =
   | LiveShareCommentMessage
   | ShareRevokedMessage
   | CanvasStateChangedMessage
-  | McpWriteAckMessage;
+  | McpWriteAckMessage
+  | McpShareCreatedMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
