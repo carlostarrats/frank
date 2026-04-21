@@ -10,10 +10,13 @@ const redis = redisClient();
 // TTL expires the viewer is considered gone.
 const SESSION_TTL_SEC = Number(process.env.FRANK_SESSION_TTL || 90);
 
-export function readOrCreateSessionToken(req: Request): { token: string; setCookie: string | null } {
-  const hdr = req.headers.get('x-frank-session');
+export function readOrCreateSessionToken(
+  xFrankSessionHeader: string | undefined,
+  cookieHeader: string | undefined,
+): { token: string; setCookie: string | null } {
+  const hdr = xFrankSessionHeader;
   if (hdr && /^[a-zA-Z0-9_-]{16,64}$/.test(hdr)) return { token: hdr, setCookie: null };
-  const cookie = req.headers.get('cookie') || '';
+  const cookie = cookieHeader || '';
   const m = cookie.match(/frank_session=([a-zA-Z0-9_-]{16,64})/);
   if (m) return { token: m[1], setCookie: null };
   const buf = new Uint8Array(16);

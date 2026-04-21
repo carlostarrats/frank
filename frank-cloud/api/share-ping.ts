@@ -1,8 +1,9 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { list } from '@vercel/blob';
 import { readOrCreateSessionToken, touchSession, countViewers } from '../lib/session.js';
 import { publish } from '../lib/pubsub.js';
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
 async function fetchMeta(shareId: string): Promise<{ revoked?: boolean; expiresAt: string } | null> {
   const blobs = await list({ prefix: `shares/${shareId}/meta.json` });
@@ -11,31 +12,50 @@ async function fetchMeta(shareId: string): Promise<{ revoked?: boolean; expiresA
   return JSON.parse(await res.text());
 }
 
-export default async function handler(req: Request): Promise<Response> {
+function headerString(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return Response.json({ error: 'Method not allowed' }, { status: 405 });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
-  const url = new URL(req.url);
+  // req.url is a path + query on Vercel's Node runtime; anchor it so URL parses.
+  const url = new URL(req.url || '', 'http://x');
   const m = url.pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,20})\/ping\/?$/);
-  if (!m) return Response.json({ error: 'Invalid share ID' }, { status: 400 });
+  if (!m) {
+    res.status(400).json({ error: 'Invalid share ID' });
+    return;
+  }
   const shareId = m[1];
 
   // Reject pings for non-existent or revoked shares so Redis doesn't
   // track sessions for garbage ids. Mirrors share-stream.ts guards.
   const meta = await fetchMeta(shareId);
-  if (!meta) return Response.json({ error: 'not found' }, { status: 404 });
-  if (meta.revoked === true) return Response.json({ error: 'revoked' }, { status: 410 });
+  if (!meta) {
+    res.status(404).json({ error: 'not found' });
+    return;
+  }
+  if (meta.revoked === true) {
+    res.status(410).json({ error: 'revoked' });
+    return;
+  }
   if (new Date(meta.expiresAt) < new Date()) {
-    return Response.json({ error: 'expired' }, { status: 410 });
+    res.status(410).json({ error: 'expired' });
+    return;
   }
 
-  const { token, setCookie } = readOrCreateSessionToken(req);
+  const { token, setCookie } = readOrCreateSessionToken(
+    headerString(req.headers['x-frank-session']),
+    headerString(req.headers['cookie']),
+  );
   const before = await countViewers(shareId);
   await touchSession(shareId, token);
   const after = await countViewers(shareId);
   if (after !== before) await publish(shareId, 'presence', { viewers: after });
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (setCookie) headers['Set-Cookie'] = setCookie;
-  return new Response(JSON.stringify({ ok: true, viewers: after }), { status: 200, headers });
+  if (setCookie) res.setHeader('Set-Cookie', setCookie);
+  res.status(200).json({ ok: true, viewers: after });
 }
