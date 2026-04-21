@@ -1463,13 +1463,39 @@
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-standard);
 }
-.share-live-btn:disabled { opacity: 0.5; pointer-events: none; }
+.share-live-btn:disabled { opacity: 0.6; pointer-events: none; }
 .share-live-btn:hover:not(:disabled) {
   background: color-mix(in oklch, var(--primary), black 10%);
 }
 .share-live-btn:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+/* Pause button — distinct from start/resume so the action reads as "stop"
+ * rather than "go." Stays within the design system via the muted surface. */
+.share-live-btn-stop {
+  background: transparent;
+  color: var(--foreground);
+  border-color: var(--border);
+}
+.share-live-btn-stop:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+/* Spinner inlined into live-share buttons during start/pause/resume. */
+.share-live-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: share-live-spin 0.7s linear infinite;
+  vertical-align: -1px;
+}
+@keyframes share-live-spin {
+  to { transform: rotate(360deg); }
 }
 .share-live-presence {
   margin-top: var(--space-2);
@@ -1511,11 +1537,22 @@
   color: var(--muted-foreground);
   margin-bottom: var(--space-1);
 }
-.share-expiry-select {
+/* Custom expiry dropdown — mirrors the home-page Kind / Sort pattern so the
+ * share modal stays on the design system instead of the OS-rendered
+ * <select>. Popover uses fixed positioning; JS keeps the selection state on
+ * the trigger's data-value attribute. */
+.share-expiry-wrapper {
+  position: relative;
+  margin: 0 0 var(--space-3);
+}
+.share-expiry-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   width: 100%;
   height: 2.25rem;
   padding: 0 var(--space-3);
-  margin: 0 0 var(--space-3);
   background: transparent;
   color: var(--foreground);
   border: 1px solid var(--input);
@@ -1523,20 +1560,58 @@
   font-family: inherit;
   font-size: var(--text-sm);
   line-height: 1;
-  outline: none;
-  /* Replace the native down-arrow with a monochrome chevron so the menu
-     control reads as part of the design system, not a browser default. */
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right var(--space-3) center;
-  padding-right: calc(var(--space-3) + 16px);
   cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
 }
-.share-expiry-select:focus {
+.share-expiry-btn:hover { border-color: var(--ring); }
+.share-expiry-btn:focus-visible {
+  outline: none;
   border-color: var(--ring);
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
+}
+.share-expiry-btn[aria-expanded="true"] { border-color: var(--ring); }
+.share-expiry-caret { color: var(--muted-foreground); flex-shrink: 0; }
+.share-expiry-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 210;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.share-expiry-menu[hidden] { display: none; }
+.share-expiry-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+.share-expiry-item:hover { background: var(--accent); color: var(--accent-foreground); }
+.share-expiry-item.active {
+  background: color-mix(in oklch, var(--primary), transparent 88%);
+  color: var(--foreground);
+}
+.share-expiry-item.active::after {
+  content: "✓";
+  color: var(--primary);
+  font-size: var(--text-xs);
 }
 .share-revoke-row {
   margin-top: var(--space-3);

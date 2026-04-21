@@ -49,19 +49,30 @@ function payloadTooLargeCopy(contentType) {
   return 'File too large for live share — reduce size, then click Resume.';
 }
 
+// Spinner + pending label shown while a start/pause/resume action is in
+// flight. Swapped back to the real state when the daemon broadcasts
+// live-share-state (listener at the top of this file). Without this, the
+// Resume click appears dead for ~500ms — users click multiple times and
+// the second click races with the state broadcast.
+const PENDING_SPINNER = `<span class="share-live-spinner" aria-hidden="true"></span>`;
+
+// Pause is visually distinct from the other actions — it's a stop, not a
+// go — so it uses the ghost variant while start / resume / retry stay
+// primary. Using a variant class rather than inline styles so existing
+// tokens and hover states apply.
 function renderLiveBlock(projectId) {
   const { status, viewers, lastError } = getLiveState(projectId);
   let html = '<div class="share-live-block">';
   if (status === 'idle') {
     html += `<button type="button" class="share-live-btn" data-action="start">Start live share</button>`;
   } else if (status === 'connecting') {
-    html += `<button type="button" class="share-live-btn" disabled>Starting…</button>`;
+    html += `<button type="button" class="share-live-btn" disabled>${PENDING_SPINNER}Starting…</button>`;
   } else if (status === 'live') {
-    html += `<button type="button" class="share-live-btn" data-action="pause">Pause live share</button>`;
+    html += `<button type="button" class="share-live-btn share-live-btn-stop" data-action="pause">Pause live share</button>`;
     const count = viewers === 1 ? '1 watching' : `${viewers} watching`;
     html += `<div class="share-live-presence">Live · ${count}</div>`;
   } else if (status === 'throttled') {
-    html += `<button type="button" class="share-live-btn" data-action="pause">Pause live share</button>`;
+    html += `<button type="button" class="share-live-btn share-live-btn-stop" data-action="pause">Pause live share</button>`;
     html += `<div class="share-live-banner">Live updates throttled — catching up.</div>`;
   } else if (status === 'paused') {
     html += `<button type="button" class="share-live-btn" data-action="resume">Resume live share</button>`;
@@ -124,14 +135,26 @@ export function showSharePopover(anchorEl, { onClose }) {
         ` : ''}
         <textarea class="v-input v-textarea" id="share-note" placeholder="Cover note (optional)... e.g. 'Focus on the signup flow'"
           rows="2">${esc(activeShare?.coverNote || '')}</textarea>
-        <label for="share-expiry" class="share-expiry-label">Expires after</label>
-        <select id="share-expiry" class="share-expiry-select">
-          <option value="1">1 day</option>
-          <option value="7" selected>7 days (default)</option>
-          <option value="30">30 days</option>
-          <option value="90">90 days</option>
-          <option value="365">1 year</option>
-        </select>
+        <label class="share-expiry-label">Expires after</label>
+        <div class="share-expiry-wrapper">
+          <button type="button" class="share-expiry-btn" id="share-expiry-btn"
+            aria-haspopup="menu" aria-expanded="false"
+            data-value="7">
+            <span class="share-expiry-btn-label">7 days (default)</span>
+            <svg class="share-expiry-caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="share-expiry-menu" id="share-expiry-menu" role="menu" hidden>
+            ${[
+              { v: '1',   l: '1 day' },
+              { v: '7',   l: '7 days (default)' },
+              { v: '30',  l: '30 days' },
+              { v: '90',  l: '90 days' },
+              { v: '365', l: '1 year' },
+            ].map(o => `<button type="button" role="menuitemradio" class="share-expiry-item${o.v === '7' ? ' active' : ''}" data-value="${o.v}" aria-checked="${o.v === '7'}">${o.l}</button>`).join('')}
+          </div>
+        </div>
         <div class="share-popover-actions">
           <button class="v-btn v-btn-ghost" id="share-cancel">Cancel</button>
           <button class="v-btn v-btn-primary" id="share-create">${activeShare ? 'Update Link' : 'Create Link'}</button>
@@ -146,11 +169,20 @@ export function showSharePopover(anchorEl, { onClose }) {
 
   const modal = overlay.querySelector('.share-modal');
 
-  // Wire live-share button clicks
+  // Wire live-share button clicks. Optimistically swap the button into a
+  // disabled pending state (spinner + "…ing" label) so the user sees
+  // something happen inside the same frame — the daemon broadcast that
+  // finishes the state transition can take 300–800ms, and without this
+  // the click felt dead and people double-clicked.
   modal.addEventListener('click', (e) => {
     const btn = e.target.closest('.share-live-btn[data-action]');
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
     const action = btn.dataset.action;
+    const pendingLabel = action === 'pause' ? 'Pausing…'
+      : action === 'resume' ? 'Resuming…'
+      : 'Starting…';
+    btn.disabled = true;
+    btn.innerHTML = `${PENDING_SPINNER}${pendingLabel}`;
     if (action === 'start') sync.send({ type: 'start-live-share', projectId });
     else if (action === 'pause') sync.send({ type: 'stop-live-share', projectId });
     else if (action === 'resume') sync.send({ type: 'resume-live-share', projectId });
@@ -180,11 +212,51 @@ export function showSharePopover(anchorEl, { onClose }) {
     // re-render the modal with a null activeShare, resetting to create state.
   });
 
+  // Custom expiry dropdown — mirrors the home-page Kind / Sort pattern so
+  // the share modal stays on-system instead of the OS-rendered <select>.
+  const expiryBtn = modal.querySelector('#share-expiry-btn');
+  const expiryMenu = modal.querySelector('#share-expiry-menu');
+  const expiryLabelEl = modal.querySelector('.share-expiry-btn-label');
+  const closeExpiryMenu = () => {
+    expiryMenu.setAttribute('hidden', '');
+    expiryBtn.setAttribute('aria-expanded', 'false');
+  };
+  expiryBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!expiryMenu.hasAttribute('hidden')) { closeExpiryMenu(); return; }
+    expiryMenu.removeAttribute('hidden');
+    expiryBtn.setAttribute('aria-expanded', 'true');
+  });
+  expiryMenu.querySelectorAll('.share-expiry-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const value = item.dataset.value;
+      expiryBtn.dataset.value = value;
+      expiryLabelEl.textContent = item.textContent.trim();
+      expiryMenu.querySelectorAll('.share-expiry-item').forEach(i => {
+        const active = i === item;
+        i.classList.toggle('active', active);
+        i.setAttribute('aria-checked', String(active));
+      });
+      closeExpiryMenu();
+    });
+  });
+  const onExpiryClickOutside = (e) => {
+    if (expiryMenu.hasAttribute('hidden')) return;
+    if (e.target.closest('.share-expiry-wrapper')) return;
+    closeExpiryMenu();
+  };
+  document.addEventListener('click', onExpiryClickOutside);
+  const onExpiryKeydown = (e) => {
+    if (e.key === 'Escape' && !expiryMenu.hasAttribute('hidden')) closeExpiryMenu();
+  };
+  document.addEventListener('keydown', onExpiryKeydown);
+
   // Create/Update share
   modal.querySelector('#share-create').addEventListener('click', async () => {
     const statusEl = modal.querySelector('#share-status');
     const coverNote = modal.querySelector('#share-note').value.trim();
-    const expiryDays = Number(modal.querySelector('#share-expiry').value) || 7;
+    const expiryDays = Number(expiryBtn.dataset.value) || 7;
     statusEl.textContent = 'Capturing snapshot...';
     statusEl.style.color = '';  // reset any previous error color
 
@@ -209,7 +281,12 @@ export function showSharePopover(anchorEl, { onClose }) {
   });
 
   // Cancel / Close
-  const closeModal = () => { overlay.remove(); onClose(); };
+  const closeModal = () => {
+    document.removeEventListener('click', onExpiryClickOutside);
+    document.removeEventListener('keydown', onExpiryKeydown);
+    overlay.remove();
+    onClose();
+  };
   modal.querySelector('#share-cancel').addEventListener('click', closeModal);
   modal.querySelector('#share-close').addEventListener('click', closeModal);
   overlay.addEventListener('click', (e) => {
