@@ -6,6 +6,39 @@
 
 ---
 
+## How we got here — runtime migration journey
+
+The handlers shipped through three runtime configurations during Phase 6. The final shape isn't obvious from the code alone; this note explains why the handlers look the way they do so future readers don't reconstruct the decision from git logs.
+
+**Phase 1 original.** Handlers declared `runtime: 'nodejs'` but were written to the Fetch API (`req: Request`, `req.headers.get(...)`, `Response.json(...)`). This was inconsistent — Vercel's pure-API Node runtime serves `IncomingMessage`-style `req`, not a Fetch Request. `vercel dev` crashed immediately on every request with `TypeError: req.headers.get is not a function`.
+
+**Phase 6 attempt 1 (edge).** To match the code's Fetch-API signatures, every handler was flipped to `runtime: 'edge'` (commit `0294a68`). Crypto was swapped from Node's `crypto.randomBytes` to WebCrypto. Local `vercel dev` started working. The v3.0 smoke-test run proceeded and drove Tasks 2–5. Harness passed against `vercel dev` end to end.
+
+**Phase 6 attempt 2 (preview deploy).** The first production-targeted deploy failed at build time:
+
+```
+The Edge Function "api/comment" is referencing unsupported modules:
+  - @fastify: node:stream
+  - @vercel: stream
+  - undici: stream, net, http, tls, ...
+```
+
+`@vercel/blob` transitively depends on `undici`, `node:stream`, and other Node-only modules that Vercel's Edge runtime explicitly rejects at build time. `vercel dev` does not enforce this — it runs code on a relaxed Node-backed simulation. Every Phase 2–5 cloud change had shipped against infrastructure that didn't match production semantics.
+
+**Phase 6 attempt 3 (flip back to nodejs, keep Fetch API).** Reverted the runtime annotation to `'nodejs'` while keeping the Fetch-API-style code, hoping Vercel's Node runtime had learned to accept Fetch handlers. Added `"type": "module"` to `frank-cloud/package.json` so compiled `.js` loaded as ESM. Build succeeded; runtime failed with the same `TypeError: req.headers.get is not a function` — confirming that on Vercel's pure-API (non-Next.js) Node runtime, **every handler receives an `IncomingMessage`-style `req`, regardless of TypeScript signature or module type.**
+
+**Phase 6 final (Option B — classic Node signatures).** Every handler that touches `@vercel/blob` is rewritten to the classic Node `(req: VercelRequest, res: VercelResponse)` style: `req.headers['x']` for headers, `req.body` for the parsed JSON body, `req.query` for search params, `res.status(x).json(...)` for responses. SSE handlers use `res.writeHead(200, {...})` + `res.write(...)` instead of returning a `ReadableStream`-backed `Response`. This is the officially supported shape of the Vercel Node runtime.
+
+Handlers that don't touch `@vercel/blob` stay on `runtime: 'edge'` with Fetch-API signatures — `health.ts` and `tick.ts`. They benefit from the edge runtime's lower cold-start and regional distribution; they can stay there because none of their dependencies are Node-only.
+
+### The architectural constraint, for future reference
+
+> **Vercel's pure-API Node runtime serves `IncomingMessage`-style `req`, not a Fetch `Request`, regardless of TypeScript signature or module type. `@vercel/blob` requires the Node runtime because it transitively depends on Node-only modules (undici, node:stream, etc.) that Edge runtime rejects at build time. Therefore: blob-touching handlers must use the Node runtime with classic `(req, res)` signatures. Edge runtime is only usable for handlers that don't touch Blob. `vercel dev` does NOT enforce either constraint and should not be trusted as a production proxy.**
+
+If this constraint loosens in the future (Vercel ships Fetch-API Node handlers for pure-API projects, or Blob becomes edge-compatible), this audit entry should be updated — and the classic signatures can be collapsed back to Fetch style with mechanical find-and-replace. Until then, the shape is pinned.
+
+---
+
 ## Handlers
 
 ### api/health.ts

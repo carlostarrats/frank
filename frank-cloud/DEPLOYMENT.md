@@ -119,6 +119,54 @@ See [INTEGRATION_TESTING.md](INTEGRATION_TESTING.md) for details.
 
 These cost us hours during the v3.0 smoke test; writing them down so future-you doesn't re-discover them.
 
+### Deployment Protection must be disabled
+
+Vercel projects default to "Deployment Protection" enabled, which gates preview URLs (and in some plans production too) behind Vercel SSO. Frank's share URLs are **public by design** — anonymous reviewers need to open them without signing into anything. Protection gates break that flow and also block automated smoke tests.
+
+Before any deploy (preview or production):
+
+**Vercel dashboard → your `frank-cloud` project → Settings → Deployment Protection → Disabled.**
+
+Not "Only Production Deployments" — that still gates previews, which means the integration harness and smoke tests can't reach preview URLs. Full disable is correct; Frank's threat model is the same for previews and production.
+
+### `vercel dev` does not enforce Edge-runtime module restrictions
+
+A handler with `runtime: 'edge'` that imports Node-only packages (e.g. `@vercel/blob` → `undici` → `node:stream`) will run fine under `vercel dev` locally but fail at **production build** with errors like:
+
+```
+The Edge Function "api/comment" is referencing unsupported modules:
+  - undici: stream, net, http, tls, ...
+```
+
+Always verify Edge-runtime handlers with a real preview deployment — local `vercel dev` is not a substitute.
+
+### Vercel's pure-API Node runtime requires classic `(req, res)` signatures
+
+This is the most important and least-documented Vercel constraint. Running an otherwise-correct Fetch-API handler on Node runtime gives you this at runtime, regardless of TypeScript types or `"type": "module"` in package.json:
+
+```
+TypeError: req.headers.get is not a function
+```
+
+On pure-API Vercel projects (i.e., not Next.js App Router), **`runtime: 'nodejs'` always receives an `IncomingMessage`-style `req`**, not a Fetch `Request`. There's no opt-in. The only way to use Fetch-API handlers on Vercel is the Edge runtime — but Edge cannot use `@vercel/blob` (previous gotcha). Therefore: **handlers that touch `@vercel/blob` must use classic Node signatures**:
+
+```ts
+import { VercelRequest, VercelResponse } from '@vercel/node';
+
+export const config = { runtime: 'nodejs' };
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const key = req.headers['authorization']?.replace('Bearer ', '');
+  const body = req.body;  // auto-parsed from JSON
+  // ... side effects on res ...
+  res.status(200).json({ ok: true });
+}
+```
+
+NOT `handler(req: Request): Promise<Response>` with `req.headers.get(...)` and `return Response.json(...)`. That compiles but fails at runtime.
+
+Edge runtime (for handlers that don't touch `@vercel/blob`) keeps the Fetch-API pattern.
+
 ### Blob store "connected" vs "linked"
 
 When you **create** a Blob store from Vercel Storage, Vercel shows it in the store list — but it's not automatically linked to any project. "Creating" and "linking" are two steps. Linking is what propagates `BLOB_READ_WRITE_TOKEN` into the project env.
