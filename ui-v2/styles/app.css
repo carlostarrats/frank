@@ -422,7 +422,6 @@
   .home-col-right {
     border: 1px solid var(--border);
     min-height: 0;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     padding: 0 var(--space-5);
