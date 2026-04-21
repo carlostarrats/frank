@@ -402,7 +402,7 @@
 }
 @media (min-width: 1024px) {
   .home-grid {
-    grid-template-columns: minmax(0, 7fr) minmax(260px, 3fr);
+    grid-template-columns: minmax(0, 6fr) minmax(260px, 4fr);
     gap: var(--space-12);
   }
 }
