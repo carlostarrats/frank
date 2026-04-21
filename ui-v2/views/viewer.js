@@ -359,11 +359,75 @@ function loadImageContent(container, filePath, mountPins) {
       <div class="overlay" id="overlay"></div>
     </div>
   `;
+  const wrapper = container.querySelector('.image-wrapper');
   const img = container.querySelector('#content-image');
   const overlayEl = container.querySelector('#overlay');
-  // Wait for image load so the host's getBoundingClientRect has final size.
-  img.addEventListener('load', () => mountPins?.(img, overlayEl), { once: true });
-  if (img.complete) mountPins?.(img, overlayEl);
+  // The zoom pill lives in the shared toolbar (mirrors the canvas topbar
+  // placement) instead of floating over the image.
+  const zoomEl = document.querySelector('#toolbar-zoom-host');
+
+  // Same UX as canvas: wheel to zoom, click "N%" pill to reset. 100% is the
+  // natural fit size — object-fit:contain inside the wrapper — and we scale
+  // the <img> element up or down from there via explicit width/height.
+  const MIN_ZOOM = 0.1;
+  const MAX_ZOOM = 8;
+  const ZOOM_STEP = 1.08;
+  let zoom = 1;
+  let fitW = 0;
+  let fitH = 0;
+
+  const renderZoomBadge = () => {
+    if (!zoomEl) return;
+    zoomEl.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-ghost canvas-zoom-reset';
+    btn.title = 'Reset view';
+    btn.textContent = `${Math.round(zoom * 100)}%`;
+    btn.addEventListener('click', resetZoom);
+    zoomEl.appendChild(btn);
+  };
+
+  const applyZoom = () => {
+    if (zoom === 1 || fitW === 0 || fitH === 0) {
+      img.style.removeProperty('width');
+      img.style.removeProperty('height');
+      img.style.removeProperty('max-width');
+      img.style.removeProperty('max-height');
+    } else {
+      img.style.maxWidth = 'none';
+      img.style.maxHeight = 'none';
+      img.style.width = `${fitW * zoom}px`;
+      img.style.height = `${fitH * zoom}px`;
+    }
+    renderZoomBadge();
+    // Poke the pin renderer (listens for window resize) so pins reposition
+    // to the new image bounds.
+    window.dispatchEvent(new Event('resize'));
+  };
+
+  function resetZoom() { zoom = 1; applyZoom(); }
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    const direction = e.deltaY > 0 ? -1 : 1;
+    const next = direction > 0 ? zoom * ZOOM_STEP : zoom / ZOOM_STEP;
+    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next));
+    if (clamped === zoom) return;
+    zoom = clamped;
+    applyZoom();
+  };
+  wrapper.addEventListener('wheel', onWheel, { passive: false });
+
+  const onLoad = () => {
+    fitW = img.clientWidth;
+    fitH = img.clientHeight;
+    mountPins?.(img, overlayEl);
+  };
+  img.addEventListener('load', onLoad, { once: true });
+  if (img.complete) onLoad();
+
+  renderZoomBadge();
 }
 
 function autoAddScreen(newUrl) {

@@ -1155,6 +1155,13 @@
   max-height: 100%;
   object-fit: contain;
 }
+.toolbar-zoom {
+  display: flex;
+  align-items: center;
+}
+.toolbar-zoom:empty {
+  display: none;
+}
 
 /* Overlay */
 .overlay {

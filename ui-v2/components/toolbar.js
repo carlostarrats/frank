@@ -80,6 +80,7 @@ export function renderToolbar(container, { projectName, url, onBack, projectId }
           ${iconLink()}
         </button>
       </div>
+      <div class="toolbar-zoom" id="toolbar-zoom-host"></div>
     </div>
   `;
 

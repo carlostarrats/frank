@@ -488,11 +488,31 @@ function openCardMenu(anchorBtn, project, variant, refresh) {
     </button>
   `).join('');
 
-  const rect = anchorBtn.getBoundingClientRect();
-  menu.style.top = `${rect.bottom + 4}px`;
-  menu.style.left = `${Math.max(8, rect.right - 180)}px`;
+  // Place off-screen first so we can measure the real menu size, then clamp
+  // it into the viewport (flip above the button if it would fall off the
+  // bottom). Fixes the case where a card near the bottom of the list hides
+  // the menu below the fold.
+  menu.style.top = '-9999px';
+  menu.style.left = '-9999px';
   document.body.appendChild(menu);
   openMenu = menu;
+
+  const rect = anchorBtn.getBoundingClientRect();
+  const gap = 4;
+  const pad = 8;
+  const mw = menu.offsetWidth;
+  const mh = menu.offsetHeight;
+
+  const wouldOverflowBottom = rect.bottom + gap + mh > window.innerHeight - pad;
+  const top = wouldOverflowBottom
+    ? Math.max(pad, rect.top - gap - mh)
+    : rect.bottom + gap;
+
+  const desiredLeft = rect.right - mw;
+  const left = Math.max(pad, Math.min(desiredLeft, window.innerWidth - mw - pad));
+
+  menu.style.top = `${top}px`;
+  menu.style.left = `${left}px`;
 
   menu.querySelectorAll('.project-menu-item').forEach(btn => {
     btn.addEventListener('click', (e) => {
