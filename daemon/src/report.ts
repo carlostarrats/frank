@@ -66,6 +66,7 @@ export function buildReportData(projectId: string): ReportData {
       contentType: project.contentType,
       created: project.created,
       screens,
+      ...(project.intent ? { intent: project.intent } : {}),
     },
     exportedAt: new Date().toISOString(),
     summary,
@@ -91,6 +92,13 @@ export function renderReportMarkdown(data: ReportData): string {
   lines.push(`**Created:** ${fmtDate(data.project.created)}`);
   lines.push(`**Report generated:** ${fmtDate(data.exportedAt)}`);
   lines.push('');
+
+  if (data.project.intent) {
+    lines.push('## Project brief');
+    lines.push('');
+    lines.push(data.project.intent);
+    lines.push('');
+  }
 
   lines.push('## Summary');
   lines.push('');
@@ -207,6 +215,11 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
   metaLines.push(`Created: ${fmtDate(data.project.created)}`);
   metaLines.push(`Report generated: ${fmtDate(data.exportedAt)}`);
   content.push({ text: metaLines.join('\n'), style: 'meta', margin: [0, 0, 0, 16] });
+
+  if (data.project.intent) {
+    content.push({ text: 'Project brief', style: 'h2' });
+    content.push({ text: data.project.intent, margin: [0, 0, 0, 16] });
+  }
 
   content.push({ text: 'Summary', style: 'h2' });
   content.push({

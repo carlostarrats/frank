@@ -14,6 +14,10 @@ export interface FrankExport {
     contentType: string;
     created: string;
     screens: Array<{ id: string; route: string; label: string }>;
+    // v3.2: optional project brief. Carries the user's "what I'm building /
+    // what success looks like" so every consumer (AI handoff, shared report)
+    // reads the rest of the payload against the actual goal.
+    intent?: string;
   };
   snapshots: Array<{
     id: string;
@@ -96,6 +100,7 @@ export function exportProject(projectId: string): FrankExport {
       contentType: project.contentType,
       created: project.created,
       screens,
+      ...(project.intent ? { intent: project.intent } : {}),
     },
     snapshots: snapshots.map(s => ({
       id: s.id,

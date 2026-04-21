@@ -1,4 +1,8 @@
-// ai-routing.js — Format curated feedback as AI instruction, copy to clipboard
+// ai-routing.js — Format curated feedback as AI instruction, copy to clipboard.
+//
+// If a project intent (brief) is set, it's prepended to every prompt so the
+// downstream AI reads the feedback against the user's actual goal instead of
+// in a vacuum. See components/intent-button.js for where intent is captured.
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 
@@ -67,10 +71,18 @@ function showAiRoutingModal(commentIds, comments, combined) {
 }
 
 function formatAiPrompt(comments, instruction) {
-  const lines = [
-    '## Feedback from reviewers',
-    '',
-  ];
+  const lines = [];
+
+  const project = projectManager.get();
+  if (project && project.intent && project.intent.trim()) {
+    lines.push('## Project brief');
+    lines.push('');
+    lines.push(project.intent.trim());
+    lines.push('');
+  }
+
+  lines.push('## Feedback from reviewers');
+  lines.push('');
 
   for (const c of comments) {
     lines.push(`**${c.author}** ${c.anchor?.cssSelector ? `(on \`${c.anchor.cssSelector}\`)` : ''}:`);
