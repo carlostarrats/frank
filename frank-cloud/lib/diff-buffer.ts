@@ -2,9 +2,9 @@
 // KV to the Upstash Marketplace integration and @vercel/kv is deprecated.
 // Same reasoning as the VIEWER_CAP comment in lib/limits.ts: anchor the
 // choice in-code so nobody later "helpfully" swaps the wrapper back.
-import { Redis } from '@upstash/redis';
+import { redisClient } from './redis.js';
 
-const redis = Redis.fromEnv();
+const redis = redisClient();
 
 export interface BufferedDiff {
   revision: number;

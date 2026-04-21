@@ -1,5 +1,5 @@
 import { list } from '@vercel/blob';
-import { Redis } from '@upstash/redis';
+import { redisClient } from '../lib/redis.js';
 import { tail, publish } from '../lib/pubsub.js';
 import { diffsSince } from '../lib/diff-buffer.js';
 import { peekRevision } from '../lib/revisions.js';
@@ -8,7 +8,7 @@ import { allowConnectFromIp, VIEWER_CAP } from '../lib/limits.js';
 
 export const config = { runtime: 'edge' };
 
-const redis = Redis.fromEnv();
+const redis = redisClient();
 
 // Inline check: has the author's grace window elapsed without a reconnect?
 // When a viewer connects or the long-poll loop ticks, we sweep the single

@@ -1,10 +1,10 @@
-import { Redis } from '@upstash/redis';
+import { redisClient } from '../lib/redis.js';
 import { list } from '@vercel/blob';
 import { tail, publish } from '../lib/pubsub.js';
 
 export const config = { runtime: 'edge' };
 
-const redis = Redis.fromEnv();
+const redis = redisClient();
 const GRACE_MS = Number(process.env.FRANK_AUTHOR_GRACE_MS || 15_000);
 
 function extractShareId(pathname: string): string | null {

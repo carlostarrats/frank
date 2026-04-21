@@ -1,9 +1,9 @@
-import { Redis } from '@upstash/redis';
+import { redisClient } from '../lib/redis.js';
 import { publish } from '../lib/pubsub.js';
 
 export const config = { runtime: 'edge' };
 
-const redis = Redis.fromEnv();
+const redis = redisClient();
 
 export default async function handler(req: Request): Promise<Response> {
   // Vercel Cron sends a specific user-agent + bearer; in open-deployment setups

@@ -1,8 +1,8 @@
 // Using @upstash/redis directly rather than @vercel/kv — Vercel has moved
 // KV to the Upstash Marketplace integration and @vercel/kv is deprecated.
-import { Redis } from '@upstash/redis';
+import { redisClient } from './redis.js';
 
-const redis = Redis.fromEnv();
+const redis = redisClient();
 
 // A viewer session is counted once, even across tabs. We track it by an
 // opaque token placed in a cookie (or supplied as X-Frank-Session). Each

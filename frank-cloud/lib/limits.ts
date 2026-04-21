@@ -1,8 +1,8 @@
 // Using @upstash/redis directly rather than @vercel/kv — Vercel has moved
 // KV to the Upstash Marketplace integration and @vercel/kv is deprecated.
-import { Redis } from '@upstash/redis';
+import { redisClient } from './redis.js';
 
-const redis = Redis.fromEnv();
+const redis = redisClient();
 
 // Intentional override of v3 direction doc's 50-default to keep Upstash Redis
 // free-tier cost bounded for small users. Env-overridable via FRANK_VIEWER_CAP.
