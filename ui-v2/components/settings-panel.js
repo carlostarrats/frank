@@ -78,42 +78,6 @@ export function showSettingsPanel() {
               back here after the build finishes.
             </p>
 
-            <details class="settings-cli" open>
-              <summary>After deploy — 3 manual steps in the Vercel dashboard</summary>
-              <ol class="settings-guide-steps">
-                <li>
-                  <strong>Open your project → Storage tab → "Connect Store" → Upstash Redis.</strong>
-                  <span class="settings-field-hint">Pick the free-tier plan, click Install, then link it to this project. Vercel auto-adds the env vars <code>KV_REST_API_URL</code> + <code>KV_REST_API_TOKEN</code>.</span>
-                </li>
-                <li>
-                  <strong>Same tab → "Connect Store" → Blob.</strong>
-                  <span class="settings-field-hint">Pick <strong>Public</strong> access (share links need to load without auth), link to this project. Auto-adds <code>BLOB_READ_WRITE_TOKEN</code>. Creating a store is not the same as linking — confirm in the store's Projects tab that this project shows up.</span>
-                </li>
-                <li>
-                  <strong>Settings → Deployment Protection → set Vercel Authentication to Disabled.</strong>
-                  <span class="settings-field-hint">Frank share URLs are public by design — anonymous reviewers open them without a Vercel account. The default protection gate blocks that. Full Disable (not "Only Production Deployments").</span>
-                </li>
-                <li>
-                  <strong>Redeploy once</strong> so the new env vars take effect. (Deployments tab → latest deploy → ⋯ → Redeploy.)
-                </li>
-              </ol>
-            </details>
-
-            <details class="settings-cli">
-              <summary>Why would I want a new deployment?</summary>
-              <p class="settings-field-hint">
-                Usually you don't. One backend handles every project you share,
-                forever — each new share gets its own link with a unique ID, all
-                served from this same backend.
-              </p>
-              <p class="settings-field-hint">Redeploy only if you want:</p>
-              <ul class="settings-why-list">
-                <li>A fresh backend with clean storage.</li>
-                <li>To replace one you deleted or lost the key for.</li>
-                <li>To move to a different Vercel account.</li>
-              </ul>
-            </details>
-
             <details class="settings-cli">
               <summary>Prefer the terminal?</summary>
               <p class="settings-field-hint">Already have the Vercel CLI set up? Run:</p>
@@ -126,10 +90,9 @@ export function showSettingsPanel() {
                 <button class="settings-cmd-copy" data-copy="vercel env add FRANK_API_KEY production">Copy</button>
               </div>
               <p class="settings-field-hint">
-                Then finish the dashboard-only steps: Storage → link
-                Upstash Redis + Blob, Settings → Deployment Protection →
-                Disabled. Redeploy (<code>vercel --prod</code>) so the
-                env vars take effect. Paste URL + key below.
+                Then finish the dashboard-only steps (see the "After deploy"
+                checklist below). Redeploy (<code>vercel --prod</code>) so
+                the env vars take effect. Paste URL + key below.
               </p>
             </details>
 
@@ -182,6 +145,42 @@ export function showSettingsPanel() {
                 hit during v3.0 setup:
                 <a href="https://github.com/carlostarrats/frank/blob/main/frank-cloud/DEPLOYMENT.md" target="_blank" rel="noopener">DEPLOYMENT.md</a>.
               </p>
+            </details>
+
+            <details class="settings-cli" open>
+              <summary>After deploy — 3 manual steps in the Vercel dashboard</summary>
+              <ol class="settings-guide-steps">
+                <li>
+                  <strong>Open your project → Storage tab → "Connect Store" → Upstash Redis.</strong>
+                  <span class="settings-field-hint">Pick the free-tier plan, click Install, then link it to this project. Vercel auto-adds the env vars <code>KV_REST_API_URL</code> + <code>KV_REST_API_TOKEN</code>.</span>
+                </li>
+                <li>
+                  <strong>Same tab → "Connect Store" → Blob.</strong>
+                  <span class="settings-field-hint">Pick <strong>Public</strong> access (share links need to load without auth), link to this project. Auto-adds <code>BLOB_READ_WRITE_TOKEN</code>. Creating a store is not the same as linking — confirm in the store's Projects tab that this project shows up.</span>
+                </li>
+                <li>
+                  <strong>Settings → Deployment Protection → set Vercel Authentication to Disabled.</strong>
+                  <span class="settings-field-hint">Frank share URLs are public by design — anonymous reviewers open them without a Vercel account. The default protection gate blocks that. Full Disable (not "Only Production Deployments").</span>
+                </li>
+                <li>
+                  <strong>Redeploy once</strong> so the new env vars take effect. (Deployments tab → latest deploy → ⋯ → Redeploy.)
+                </li>
+              </ol>
+            </details>
+
+            <details class="settings-cli">
+              <summary>Why would I want a new deployment?</summary>
+              <p class="settings-field-hint">
+                Usually you don't. One backend handles every project you share,
+                forever — each new share gets its own link with a unique ID, all
+                served from this same backend.
+              </p>
+              <p class="settings-field-hint">Redeploy only if you want:</p>
+              <ul class="settings-why-list">
+                <li>A fresh backend with clean storage.</li>
+                <li>To replace one you deleted or lost the key for.</li>
+                <li>To move to a different Vercel account.</li>
+              </ul>
             </details>
 
             <hr class="settings-divider">
