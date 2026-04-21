@@ -74,7 +74,7 @@ export interface Comment {
 export interface ListProjectsRequest { type: 'list-projects'; requestId?: number; }
 export interface LoadProjectRequest { type: 'load-project'; projectId: string; requestId?: number; }
 export interface CreateProjectRequest { type: 'create-project'; name: string; contentType: 'url' | 'pdf' | 'image' | 'canvas'; url?: string; file?: string; requestId?: number; }
-export interface LoadCanvasStateRequest { type: 'load-canvas-state'; requestId?: number; }
+export interface LoadCanvasStateRequest { type: 'load-canvas-state'; projectId?: string; requestId?: number; }
 export interface SaveCanvasStateRequest { type: 'save-canvas-state'; state: string; requestId?: number; }
 export interface GetAiConfigRequest { type: 'get-ai-config'; requestId?: number; }
 export interface SetAiApiKeyRequest { type: 'set-ai-api-key'; provider: 'claude'; apiKey: string; requestId?: number; }
@@ -140,13 +140,16 @@ export interface SaveCanvasSnapshotRequest {
   triggeredBy?: string;
   requestId?: number;
 }
-export interface ListSnapshotsRequest { type: 'list-snapshots'; requestId?: number; }
+// projectId is optional: browser clients rely on the daemon's activeProjectId,
+// but MCP clients (which don't "open" a project in a UI) pass it explicitly so
+// they can operate on any project without touching the browser's active one.
+export interface ListSnapshotsRequest { type: 'list-snapshots'; projectId?: string; requestId?: number; }
 export interface StarSnapshotRequest { type: 'star-snapshot'; snapshotId: string; label: string; requestId?: number; }
 export interface CurateCommentRequest { type: 'curate-comment'; commentIds: string[]; action: 'approve' | 'dismiss' | 'remix' | 'batch' | 'reset'; remixedText?: string; dismissReason?: string; requestId?: number; }
 export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackIds: string[]; curationIds: string[]; instruction: string; requestId?: number; }
-export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
-export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }
-export interface ExportBundleRequest { type: 'export-bundle'; requestId?: number; }
+export interface ExportProjectRequest { type: 'export-project'; projectId?: string; requestId?: number; }
+export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; projectId?: string; requestId?: number; }
+export interface ExportBundleRequest { type: 'export-bundle'; projectId?: string; requestId?: number; }
 export interface RevealProjectFolderRequest { type: 'reveal-project-folder'; projectId?: string; requestId?: number; }
 
 // v3 live-share controls (UI → daemon)

@@ -87,6 +87,16 @@ switch (command) {
     process.exit(0);
   }
 
+  case 'mcp': {
+    // Run as an MCP stdio server. Intended to be spawned by an AI client
+    // (Claude Desktop / Claude Code / Cursor / etc.), not run by a human at
+    // the shell. Requires `frank start` to already be running — this
+    // subprocess connects to that daemon over localhost WebSocket.
+    const { runMcpServer } = await import('./mcp/server.js');
+    await runMcpServer();
+    break;
+  }
+
   case 'uninstall':
     await runUninstall();
     break;
@@ -100,6 +110,7 @@ switch (command) {
     console.log('  frank connect     Connect to your Frank Cloud instance');
     console.log('  frank status      Show daemon and connection status');
     console.log('  frank export      Export project data as structured JSON');
+    console.log('  frank mcp         Run as an MCP stdio server (spawned by AI clients)');
     console.log('  frank uninstall   Remove all Frank data and uninstall');
     process.exit(0);
 }

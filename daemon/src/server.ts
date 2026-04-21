@@ -657,9 +657,10 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     }
 
     case 'list-snapshots': {
-      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      const pid = msg.projectId || activeProjectId;
+      if (!pid) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
-        reply({ type: 'snapshot-list', snapshots: listSnapshots(activeProjectId) });
+        reply({ type: 'snapshot-list', snapshots: listSnapshots(pid) });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -710,9 +711,10 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     }
 
     case 'export-project': {
-      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      const pid = msg.projectId || activeProjectId;
+      if (!pid) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
-        const data = exportProject(activeProjectId);
+        const data = exportProject(pid);
         reply({ type: 'export-ready', data });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
@@ -721,11 +723,12 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     }
 
     case 'export-report': {
-      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      const pid = msg.projectId || activeProjectId;
+      if (!pid) { reply({ type: 'error', error: 'No active project' }); break; }
       (async () => {
         try {
           if (msg.format !== 'markdown' && msg.format !== 'pdf') throw new Error(`Unknown format: ${msg.format}`);
-          const result = await exportReport(activeProjectId!, msg.format);
+          const result = await exportReport(pid, msg.format);
           reply({ type: 'report-ready', format: msg.format, mimeType: result.mimeType, data: result.data });
         } catch (e: any) {
           reply({ type: 'error', error: e.message });
@@ -735,10 +738,11 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     }
 
     case 'export-bundle': {
-      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      const pid = msg.projectId || activeProjectId;
+      if (!pid) { reply({ type: 'error', error: 'No active project' }); break; }
       (async () => {
         try {
-          const { buffer, filename } = await buildBundle(activeProjectId!);
+          const { buffer, filename } = await buildBundle(pid);
           reply({
             type: 'bundle-ready',
             mimeType: 'application/zip',
@@ -770,9 +774,10 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     }
 
     case 'load-canvas-state': {
-      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      const pid = msg.projectId || activeProjectId;
+      if (!pid) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
-        const state = loadCanvasState(activeProjectId);
+        const state = loadCanvasState(pid);
         reply({ type: 'canvas-state-loaded', state });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
