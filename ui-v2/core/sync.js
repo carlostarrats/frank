@@ -92,6 +92,10 @@ const sync = {
   connect,
   onMessage(handler) { messageHandlers.push(handler); },
   offMessage(handler) { messageHandlers = messageHandlers.filter(h => h !== handler); },
+  // Generic send for WebSocket messages without a dedicated method — used by
+  // live-share lifecycle events (start/stop/resume/revoke) and any other
+  // fire-and-forget messages that don't need a typed wrapper.
+  send(msg) { return send(msg); },
 
   listProjects() { return send({ type: 'list-projects' }); },
   loadProject(projectId) { return send({ type: 'load-project', projectId }); },
