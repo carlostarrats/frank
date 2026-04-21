@@ -19,35 +19,10 @@
   min-height: 0;
 }
 
-.canvas-topbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: 3rem;
-  padding: 0 var(--space-3);
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.canvas-back {
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  font-size: 1rem;
-}
-
-.canvas-title {
-  font-weight: 500;
-  color: var(--foreground);
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--text-sm);
-}
-
-.canvas-topbar-spacer { flex: 1; }
+/* Canvas uses the unified .toolbar / .toolbar-back / .toolbar-title /
+ * .toolbar-spacer / .toolbar-btn / .toolbar-icon-btn vocabulary from
+ * app.css. Only canvas-specific chrome (zoom, export dropdown, etc.)
+ * is styled below. */
 
 .canvas-zoom {
   margin-left: auto;
@@ -251,21 +226,14 @@
   border-left-color: var(--sidebar-border);
   overflow-y: auto;
 }
-.canvas-icon-btn {
-  width: 32px;
-  height: 28px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.canvas-icon-btn svg { display: block; }
-.canvas-icon-btn:disabled {
+/* Canvas-specific disabled state on the undo button. The unified
+ * .toolbar-icon-btn doesn't carry disabled styling so this stays. */
+.toolbar-icon-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
   pointer-events: none;
 }
-.canvas-comment-toggle.active {
+.toolbar-comment-btn.active {
   color: var(--ring);
   background: color-mix(in oklch, var(--ring), transparent 85%);
 }

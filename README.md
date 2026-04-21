@@ -1,20 +1,21 @@
 # Frank
 
-> A persistent context layer for AI-assisted development. Start from a URL, drop a PDF or image, or open a blank canvas. Comment on any element or shape, share for feedback, iterate with Claude in-app — every decision captured along the way.
+> A persistent context layer for AI-assisted development. Start from a URL, drop a PDF or image, or open a blank canvas. Comment on any element or shape, share for async feedback, collaborate live on canvas, iterate with Claude in-app — every decision captured along the way.
 
-**v2.06** — Builds on v2.02–v2.05: file drop on the home view, drag-and-drop images onto the canvas, shape-anchored comments that follow shapes on drag, canvas snapshots with inline thumbnails, canvas sharing through your own Frank Cloud, vector PDF/SVG export, project reports, undo/redo, tool shortcuts, non-canvas keyboard accessibility, and a project-management surface (rename, archive, soft-delete, search/sort/filter). Latest additions: one-click **Deploy to Vercel** button in Settings (no terminal required), "Already configured on <date>" hint, and a scrollable Settings modal for tall content.
+## v3.0 — canvas live share
 
-## v3 — live share
+Two collaboration modes, one tool:
 
-v3.0 is functionally complete for canvas, image, and PDF projects. Phase 1 shipped the transport layer (SSE streams, monotonic revisions, rolling 60-second diff buffer, viewer presence, share revocation, 2-hour session auto-pause). Phase 2 wired canvas projects. Phase 3 wired image projects. Phase 4a wired PDF projects — comments only; PDF page + scroll sync is deferred to Phase 4b (v3.x) and requires a PDF.js rendering migration. Phase 5 closed the v2 gaps the direction doc named: explicit "Revoke share" button, optional share-expiration picker (1 day / 7 days / 30 days / 90 days / 1 year), content-type-aware "too large for live share" copy, and an ambient LIVE badge on the toolbar share button. URL live share is deferred to v3.1. Tagging v3.0 is gated on a full smoke-test pass across all project types.
+- **Async review** for URL, PDF, and image projects — share a link, reviewers open it, comment in their own time. Author and reviewer pick up comments asynchronously.
+- **Live canvas collaboration** — open a canvas share with live mode on, and every shape edit, drop, move, and comment propagates to open viewers in near real time. Presence indicator, revocation, optional expiration (1 day to 1 year), 2-hour session auto-pause.
 
-- Contract: [`CLOUD_API.md`](CLOUD_API.md) v3 section
-- Phase 1 plan: [`docs/superpowers/plans/2026-04-19-v3-phase1-sse-foundation.md`](docs/superpowers/plans/2026-04-19-v3-phase1-sse-foundation.md)
-- Phase 2 plan: [`docs/superpowers/plans/2026-04-19-v3-phase2-canvas-live.md`](docs/superpowers/plans/2026-04-19-v3-phase2-canvas-live.md)
-- Phase 3 plan: [`docs/superpowers/plans/2026-04-20-v3-phase3-image-live.md`](docs/superpowers/plans/2026-04-20-v3-phase3-image-live.md)
-- Phase 4a plan: [`docs/superpowers/plans/2026-04-20-v3-phase4a-pdf-comments-live.md`](docs/superpowers/plans/2026-04-20-v3-phase4a-pdf-comments-live.md)
-- Phase 5 plan: [`docs/superpowers/plans/2026-04-20-v3-phase5-lifecycle-polish.md`](docs/superpowers/plans/2026-04-20-v3-phase5-lifecycle-polish.md)
-- Reference backend env vars + setup: [`frank-cloud/README.md`](frank-cloud/README.md)
+Live share is a canvas-specific feature. For URL, PDF, and image review, the v2 static share + commenting path is the user-facing UX; they ride the shared transport incidentally. URL live-share was explored and deprioritized — screen-sharing handles the real-time URL case well, static share covers async. PDF.js migration (Phase 4b) was scoped as enabling PDF live sync and is dropped for the same reason; browser-native PDF rendering is adequate for static PDF share.
+
+See [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md) for the scoping pass that led here.
+
+- Cloud contract: [`CLOUD_API.md`](CLOUD_API.md)
+- Self-hosted backend setup: [`frank-cloud/DEPLOYMENT.md`](frank-cloud/DEPLOYMENT.md)
+- Integration-test harness: [`frank-cloud/INTEGRATION_TESTING.md`](frank-cloud/INTEGRATION_TESTING.md)
 
 **Frank is a terminal tool.** You start it from the command line, and it opens a browser-based UI at `localhost:42068`. Requires [Node.js](https://nodejs.org/) (v18+).
 
@@ -84,15 +85,16 @@ Everything is captured: every comment, every AI conversation, every snapshot, ev
 - **Properties inspector** — fill, stroke, opacity, font size, alignment (L/C/R, T/M/B) when multiple shapes selected
 - **Persistent** — canvas state saved to `~/.frank/projects/{id}/canvas-state.json` per project
 
-### In-app AI panel
-- **Claude conversations** — docked sidebar in the viewer, streaming responses via `@anthropic-ai/sdk`
-- **Project context baked in** — every turn includes your curated comments, recent snapshot metadata, and (for canvas projects) the canvas state, within an explicit token budget
-- **Persistent across sessions** — conversations stored per project with size-aware caps and automatic continuation linking
-- **Clipboard fallback** — "Copy as prompt" on any message, so non-Claude AIs still work
+### Route feedback to AI (BYO tool)
+- **Copy as prompt** — on any curated comment. A structured prompt lands on the clipboard with the comment, its context, and the decision chain. Paste into Claude, Cursor, ChatGPT, a local LLM, anywhere.
+- **Export the whole project** — JSON or Markdown/PDF report; captures every comment, curation, snapshot, and timeline entry. Hand off the full context to any AI at once.
+- **No in-app AI chat, no API-key management** — Frank deliberately doesn't bundle a chat panel. That would lock you into one provider and require managing keys. Route feedback to whatever tool you already trust.
 
 ### Collaboration
-- **Self-hosted sharing** — deploy Frank Cloud to your own Vercel account; shared snapshots live in your Blob storage
-- **Canvas sharing** — same flow; payload includes serialized canvas state + inlined asset data URLs; cloud viewer lazy-loads Konva from CDN and renders on page load
+- **Self-hosted sharing** — deploy Frank Cloud to your own Vercel account; shared snapshots live in your Blob storage, live-share presence/events live in your Upstash Redis
+- **Async share** — URL, PDF, and image projects: create a link, reviewer opens it, both sides comment asynchronously. No live component. The v2 path, unchanged.
+- **Live canvas share** — canvas projects: flip a live toggle and every shape edit propagates to open viewers over SSE. Ambient LIVE badge with viewer count, revocation, optional expiration, 2-hour session auto-pause
+- **Canvas payload** — serialized canvas state + inlined asset data URLs; cloud viewer lazy-loads Konva from CDN and renders on page load
 - **Reviewer experience** — reviewers open the link, see the page or canvas, comment with guided prompts
 - **Structured export** — one-click JSON export of the entire project for AI review
 - **Project reports** — Markdown or PDF (via pdfmake) reports from the timeline: summary counts, comments, decisions, snapshots, AI instructions, conversations
@@ -126,24 +128,28 @@ Two packages. One local, one cloud.
 LOCAL (your machine)                         CLOUD (your Vercel account, optional)
 +---------------------------+                +---------------------------+
 | Frank Daemon (Node.js)    |  -- HTTPS -->  | Frank Cloud (Vercel)      |
-| - HTTP server (42068)     |                | - POST /api/share         |
-| - WebSocket (42069)       |  <-- poll --   | - POST /api/comment       |
-| - Content proxy           |                | - GET  /api/share/:id     |
-| - Asset storage (sha256)  |                | - Share viewer page       |
-| - Canvas state I/O        |                |   (URL, PDF, image, OR    |
-| - Snapshot + thumbnail    |                |    canvas via Konva CDN)  |
-| - AI conversation store   |                | - Vercel Blob storage     |
-| - Report builder (MD/PDF) |                +---------------------------+
-| - Claude API client       |     ----->     Claude API (api.anthropic.com)
-| - Project I/O (~/.frank/) |                 (your key, your call)
-+---------------------------+
-        |
-        v
-  Browser UI (localhost:42068)
-  - Home (URL / file / canvas entry, search/sort/filter, help modal)
-  - Viewer (iframe wrapper + overlay + curation + AI panel)
-  - Canvas (Konva + tools + comments + snapshots + share + export + undo)
-  - Timeline (comments, snapshots, AI instructions, MD/PDF report)
+| - HTTP server (42068)     |                | - /api/share (CRUD)       |
+| - WebSocket (42069)       |  <-- SSE ---   | - /api/share/:id/state    |
+| - Content proxy           |                | - /api/share/:id/stream   |
+| - Asset storage (sha256)  |                | - /api/comment            |
+| - Canvas state I/O        |                | - Share viewer page       |
+| - Snapshot + thumbnail    |                |   (URL, PDF, image iframe |
+| - Report builder (MD/PDF) |                |    OR canvas via Konva)   |
+| - Live-share controllers  |                |                           |
+|   (canvas/image/pdf)      |                |      +-----------------+  |
+| - Project I/O (~/.frank/) |                |      | Vercel Blob     |  |
++---------------------------+                |      | (share payloads)|  |
+        |                                    |      +-----------------+  |
+        v                                    |      | Upstash Redis   |  |
+  Browser UI (localhost:42068)               |      | (live presence, |  |
+  - Home (URL / file / canvas entry,         |      |  pubsub, diffs) |  |
+    search/sort/filter, help modal)          |      +-----------------+  |
+  - Viewer (iframe + overlay + curation)     +---------------------------+
+  - Canvas (Konva + tools + live                           ^
+    badge + share + export)                                | share viewers
+  - Timeline (MD/PDF report,                               | (anonymous)
+    "Copy as prompt" routes to                             |
+    external AI)                                         Reviewers
 ```
 
 Everything lives locally in `~/.frank/` unless you explicitly hit Share or connect an AI provider. The cloud is optional; AI is optional; sharing is optional.
@@ -155,8 +161,8 @@ Everything lives locally in `~/.frank/` unless you explicitly hit Share or conne
 | Browser UI | Plain JS ES modules — no framework, no build step |
 | Canvas | [Konva](https://konvajs.org/) 9 (MIT), loaded via `<script>` tag |
 | Daemon | Node.js + TypeScript — HTTP + WebSocket server |
-| AI | [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript), streaming via `messages.stream()` |
-| Cloud sharing | Vercel serverless functions + Blob storage (self-hosted) |
+| AI | BYO — "Copy as prompt" puts a structured prompt on your clipboard; export (JSON / Markdown / PDF) hands off the whole project. Frank does not bundle an in-app AI chat. |
+| Cloud sharing | Vercel serverless functions + Blob storage + Upstash Redis (self-hosted) |
 | Canvas export | Konva→SVG translator → [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) for vector PDF (both loaded from CDN on first use) |
 | Report export | [pdfmake](http://pdfmake.org/) — vector PDF with Roboto, daemon-side |
 | Storage | JSON files in `~/.frank/projects/` + content-addressed assets + `~/.frank/config.json` (0600) |
@@ -214,32 +220,39 @@ Hit the **Help** button in the top-right any time you want a quick tour.
 
 When you're done, hit `Ctrl+C` in the terminal or run `frank stop`.
 
-### Using Claude in the app
+### Route feedback to AI (bring your own tool)
 
-Frank's AI panel talks to Claude directly — no copy-paste required, and the conversation has your project context built in.
+Frank does not bundle an in-app AI chat. That would lock you into one provider and force API-key management. Instead, two paths hand Frank's context off to whatever AI you already use:
 
-1. Open any project in the viewer and click the **AI** button in the toolbar.
-2. The first time, click the gear icon and paste your Claude API key. Get one at <https://console.anthropic.com/>.
-3. The key is written to `~/.frank/config.json` with `0600` permissions (owner read/write only). The daemon never logs it.
+**Copy as prompt** (comment-by-comment). On any curated comment, click the Copy button — a structured prompt lands on your clipboard with the comment, its context, and the decision chain. Paste into Claude, Cursor, ChatGPT, a local LLM, anywhere.
 
-Every conversation is stored per-project at `~/.frank/projects/{id}/ai-conversations/`. The panel includes your curated comments, recent snapshot metadata, and (for canvas projects) the canvas state as context on every turn, within an explicit token budget so you never blow past Claude's context window.
+**Export the whole project** (handoff-all-at-once).
 
-Prefer a different AI? Every user message has a **Copy** button that exports it as a structured prompt you can paste into any other assistant. The old clipboard-routing flow on curated comments still works for the same reason.
+```bash
+frank export --project <id>
+```
+
+Exports structured JSON: every comment, curation decision, snapshot, timeline entry. Or open the Timeline view and hit Export → Markdown / PDF for a human-readable report. The same data, two shapes — pick whichever your AI tool prefers as input.
 
 ### Connect to cloud (for sharing)
 
-Sharing is optional and self-hosted. Frank doesn't talk to any Anthropic-operated cloud — you point it at a backend **you** host, and shared snapshots live in your storage.
+Sharing is optional and self-hosted. Frank doesn't talk to any Anthropic-operated cloud — you point it at a backend **you** host, and shared snapshots + live-share state live in storage you control.
 
-You must set this up before the Share button can generate real links. Two paths, pick one:
+One Vercel deploy hosts every project you ever share. Expect ~10 minutes the first time you set it up. Full walkthrough with screenshots and gotchas is in [`frank-cloud/DEPLOYMENT.md`](frank-cloud/DEPLOYMENT.md); what follows is the high-level flow.
 
-**UI (easy, no terminal):** Open Frank, click the **Settings** cog in the home header, choose a tab:
+**What you're deploying:** `frank-cloud/` to a Vercel project you control. It depends on three integrations, all free-tier eligible:
 
-- **Use Vercel** — click the **Deploy to Vercel** button. A new browser tab opens on Vercel's one-click clone page with the repo, root directory (`frank-cloud/`), project name, and `FRANK_API_KEY` env prompt all pre-filled. Sign into your own Vercel account, set the API key when asked, click Deploy. When it finishes, copy the deployment URL + the key value back into Frank's form and click **Test connection**. If you already have the Vercel CLI set up, two collapsibles below the button give you the condensed (`cd frank-cloud && vercel --prod`) or full walkthrough paths. Once configured, a green "Already configured on <date>" hint appears at the top of the tab so you know the state.
-- **Use your own** — for Cloudflare Workers, Deno Deploy, a Node server, anything that implements the [Cloud API contract](CLOUD_API.md). Paste the URL and bearer token, test.
+| Integration | What it's for | How to attach |
+|---|---|---|
+| **Upstash Redis** | live-share presence, pub/sub, session tracking, diff buffer | Vercel Marketplace → "Upstash for Redis" → Install → Link to project |
+| **Vercel Blob** | durable share payloads, snapshots, comments | Vercel Storage → Create → Blob (public access) → Link to project |
+| **`FRANK_API_KEY`** | daemon ↔ cloud auth | Settings → Environment Variables → Add. Value: `openssl rand -hex 32` |
 
-One Vercel deploy hosts every project you ever share — you do not redeploy per share. The Settings modal has a "Why would I want a new deployment?" expand for when that question comes up.
+**Setup paths, pick one:**
 
-**Terminal (identical effect):**
+**UI (no terminal):** Open Frank, click the **Settings** cog in the home header → **Use Vercel** tab → **Deploy to Vercel** button. A new browser tab opens on Vercel's one-click clone page with the repo, root directory (`frank-cloud/`), project name, and `FRANK_API_KEY` env prompt all pre-filled. Sign in, set the API key, click Deploy. Then attach Upstash Redis + Blob via the Vercel dashboard (see [`DEPLOYMENT.md`](frank-cloud/DEPLOYMENT.md) for screenshots). Finally, disable Vercel Authentication (Settings → Deployment Protection) because Frank share URLs are public by design. Copy the deployment URL + key back into Frank's form and click **Test connection**.
+
+**Terminal (identical effect, once deploy is done):**
 
 ```bash
 frank connect https://your-backend.example.com --key YOUR_API_KEY
@@ -247,7 +260,9 @@ frank connect https://your-backend.example.com --key YOUR_API_KEY
 
 Both paths write to `~/.frank/config.json` (mode 0600). Until one is configured, the Share button warns that cloud isn't set up — everything else in Frank works without it.
 
-The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md) — four JSON-over-HTTPS endpoints (`/api/health`, `GET+POST /api/share`, `POST /api/comment`). `frank-cloud/` is a reference implementation for Vercel + Blob; any host that serves the same shapes works.
+**Bring your own backend:** Cloudflare Workers, Deno Deploy, a Node server, anything that implements the [Cloud API contract](CLOUD_API.md). Settings → **Use your own** tab. Paste URL + bearer token, test.
+
+The backend contract has seven JSON-over-HTTPS endpoints: `/api/health`, `GET+POST+DELETE /api/share`, `POST /api/comment`, `POST /api/share/:id/state`, `GET /api/share/:id/stream`, `GET /api/share/:id/author-stream`, `POST /api/share/:id/ping`. `frank-cloud/` is a reference implementation for Vercel + Blob + Upstash Redis; any host that serves the same shapes works.
 
 ### Canvas keyboard shortcuts
 
@@ -286,7 +301,7 @@ The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md) — four JS
 
 - **Local by default** — all project data, canvas state, uploaded files, image assets, and AI conversations stay in `~/.frank/` on your machine
 - **API keys stay local** — Claude key stored at `~/.frank/config.json` with `0600` permissions; the daemon never logs it
-- **AI calls are your calls** — Frank connects to the Claude API using your key; Anthropic's privacy terms apply; nothing routes through Frank's infrastructure (there isn't any)
+- **No AI calls from Frank** — Frank does not talk to any AI service. Routing feedback to AI happens via clipboard (Copy as prompt) or export (JSON / Markdown / PDF); you paste into whichever AI tool you already use, under whatever terms that tool provides.
 - **No telemetry, no analytics, no accounts**
 - **Sharing is opt-in** — when you share, a snapshot is uploaded to YOUR Vercel Blob storage
 - **Canvas share bundling** — canvas shares inline every referenced image asset as a data URL inside the share payload; nothing else is uploaded beyond what's visible on the canvas
@@ -310,15 +325,22 @@ cd daemon && npm run build
 
 ### Testing
 
-The daemon has a Vitest test suite (**135 tests across 12 files**). Tests use temp directories — they never touch real `~/.frank/`.
+The daemon has a Vitest test suite (**182 passing across 21 files**, plus an opt-in cloud integration harness with 9 more tests). Unit tests use temp directories — they never touch real `~/.frank/`.
 
 ```bash
 cd daemon
-npm test           # run all tests once
+npm test           # run all unit tests once
 npm run test:watch # run in watch mode
+
+# Opt-in cloud integration harness — exercises the real backend contract
+# against vercel dev or a Vercel preview deployment. Skipped on a plain
+# `npm test` run. See frank-cloud/INTEGRATION_TESTING.md for setup.
+FRANK_CLOUD_BASE_URL=http://localhost:3000 \
+  FRANK_CLOUD_API_KEY=<key> \
+  npm test -- cloud-integration
 ```
 
-Covered modules: projects, assets, snapshots, curation, ai-chain, export, report, proxy, cloud, inject, canvas, ai-conversations.
+Covered modules: projects, assets, snapshots, curation, ai-chain, export, report, proxy, cloud, inject, canvas, ai-conversations, live-share transport (canvas/image/pdf), revision-store.
 
 ### Project structure
 
@@ -333,9 +355,10 @@ frank/
 |   +-- canvas/               # Stage, tools, transformer, serialize, shapes, paths, connectors,
 |   |                         #   anchors, templates, properties, comments (pins), image (drop),
 |   |                         #   shortcuts, history (undo/redo), svg-export, export (PNG/SVG/PDF/JSON)
-|   +-- components/           # toolbar, curation, comments, share-popover, ai-routing, ai-panel,
-|   |                         #   url-input (paste/drop/pick), help-panel, toast, error-card
-|   +-- styles/               # tokens, ui, app, overlay, comments, curation, canvas, timeline, ai-panel
+|   +-- components/           # toolbar, curation, comments, share-popover, ai-routing
+|   |                         #   (Copy-as-prompt clipboard flow), url-input, help-panel,
+|   |                         #   toast, error-card
+|   +-- styles/               # tokens, ui, app, overlay, comments, curation, canvas, timeline
 +-- daemon/                   # Node.js daemon (TypeScript)
 |   +-- src/cli.ts            # CLI commands: start/stop/status/connect/export/uninstall
 |   +-- src/server.ts         # HTTP + WebSocket server, all message handlers
@@ -345,9 +368,7 @@ frank/
 |   +-- src/snapshots.ts      # DOM + canvas snapshot storage (with thumbnail)
 |   +-- src/curation.ts       # Curation log
 |   +-- src/canvas.ts         # Canvas state I/O
-|   +-- src/ai-conversations.ts     # Per-project AI conversation storage with caps
-|   +-- src/ai-providers/claude.ts  # Claude API client + context builder
-|   +-- src/ai-chain.ts       # AI instruction chain log
+|   +-- src/ai-chain.ts       # AI-routing chain log (captured for export handoff)
 |   +-- src/proxy.ts          # Content proxy for iframe-restricted URLs
 |   +-- src/cloud.ts          # Self-hosted cloud client + secret-aware config I/O
 |   +-- src/export.ts         # Structured JSON export
@@ -381,7 +402,6 @@ What this means in practice:
 Frank bundles or depends on the following third-party software. All are permissive licenses (MIT, 0BSD, or Apache-2.0). Full copyright notices for each are preserved in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md), which must accompany any redistribution of Frank.
 
 - [Konva](https://konvajs.org/) — MIT (loaded via CDN at runtime)
-- [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript) — MIT (daemon)
 - [ws](https://github.com/websockets/ws) — MIT (daemon)
 - [pdfmake](http://pdfmake.org/) — MIT (daemon — project report PDF)
 - [tslib](https://github.com/microsoft/tslib) — 0BSD (transitive, via pdfmake)
@@ -390,3 +410,5 @@ Frank bundles or depends on the following third-party software. All are permissi
 - [Roboto fonts](https://fonts.google.com/specimen/Roboto) — Apache-2.0 (bundled inside pdfmake)
 - [Vitest](https://vitest.dev/) — MIT (dev-only)
 - [@vercel/blob](https://github.com/vercel/storage) — Apache-2.0 (Frank Cloud only)
+- [@upstash/redis](https://github.com/upstash/upstash-redis) — MIT (Frank Cloud only — live-share transport)
+- [@vercel/node](https://github.com/vercel/vercel/tree/main/packages/node) — Apache-2.0 (Frank Cloud only — handler types)

@@ -1,11 +1,24 @@
 # Frank — Claude Code Context
 
 ## What This Is
-A collaboration layer for any web content. Point it at any URL — localhost, staging, production — or drop a PDF, image, or canvas, and Frank wraps it with commenting, sharing, feedback curation, AI routing, and a complete data trail of how the thing was built.
+A local-first collaboration layer. Point it at any URL — localhost, staging, production — or drop a PDF, image, or canvas, and Frank wraps it with commenting, async review, live multiplayer canvas collaboration, feedback curation, AI routing, and a complete data trail of how the thing was built.
 
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
-Current branch: `dev-v2.07`.
+Latest tagged release: `v3.0` (canvas live share + async share for URL/PDF/image).
+Current branch: `dev-v3.1` (post-v3.0 cleanup / no named milestone).
+
+## v3.0 scope, and what's NOT on the roadmap
+
+**Live share is a canvas-only user-facing feature.** Canvas projects get full live collaboration (shape edits, drops, moves, comments all propagate to open viewers over SSE). Image, PDF, and URL projects pick up the shared transport infrastructure incidentally but surface static share + commenting as their UX — same as v2.
+
+**URL live share was explored and deprioritized.** Screen-sharing (Google Meet, Zoom, Tuple) handles the real-time URL review case; v2's static share covers async. URL live would fight the architecture (cross-origin observability, auth leakage through proxy, reviewer network-context divergence) for use cases already covered by better tools. Not on the roadmap.
+
+**Phase 4b (PDF.js rendering migration) was dropped.** It was scoped as enabling PDF live sync. With PDF live sync not a feature, Phase 4b's justification collapsed. Browser-native PDF rendering is adequate for static PDF share.
+
+**No named post-v3.0 milestone.** `dev-v3.x` branches hold fragile-list cleanup from the Phase 6 handler audit, bug fixes from real v3.0 usage, or sit idle. Forcing a milestone when none is warranted is worse than shipping slowly.
+
+Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 
 ---
 
@@ -29,12 +42,16 @@ Current branch: `dev-v2.07`.
 
 ### Self-Hosted Cloud
 - Sharing talks to a backend **the user hosts**. There is no Anthropic-run cloud.
-- The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md): four JSON-over-HTTPS endpoints (`/api/health`, `POST+GET /api/share`, `POST /api/comment`).
-- `frank-cloud/` is the **reference implementation** for Vercel + Blob. Any host that serves the contract works — Cloudflare Workers, Deno Deploy, self-hosted Node, etc. The Settings modal (home header → cog icon) has a "Use Vercel" tab leading with a one-click **Deploy to Vercel** button (`vercel.com/new/clone?...` with `root-directory=frank-cloud` + `FRANK_API_KEY` env prompt) and a "Use your own" tab for alternative backends. Two collapsibles under the deploy button — "Prefer the terminal?" (condensed two-command path) and "Full setup walkthrough" — cover the CLI routes.
+- The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md). v3 adds live-share endpoints on top of v2's static-share shape: `/api/health`, `GET+POST+DELETE /api/share`, `POST /api/comment`, `POST /api/share/:id/state`, `GET /api/share/:id/stream`, `GET /api/share/:id/author-stream`, `POST /api/share/:id/ping`.
+- `frank-cloud/` is the **reference implementation** — Vercel serverless functions + Vercel Blob (durable share payloads) + Upstash Redis (live presence, pubsub, session tracking, rolling 60s diff buffer). Full deployment walkthrough including required Vercel Marketplace integrations and the Deployment Protection gotcha: [`frank-cloud/DEPLOYMENT.md`](frank-cloud/DEPLOYMENT.md).
+- Any host that serves the contract works — Cloudflare Workers, Deno Deploy, self-hosted Node, etc. The Settings modal (home header → cog icon) has a "Use Vercel" tab with a one-click **Deploy to Vercel** button (`vercel.com/new/clone?...` with `root-directory=frank-cloud` + `FRANK_API_KEY` env prompt) and a "Use your own" tab for alternative backends.
+- Required env vars on the backend: `FRANK_API_KEY`, `KV_REST_API_URL`, `KV_REST_API_TOKEN` (Vercel Marketplace naming) OR `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (direct Upstash naming — `lib/redis.ts` reads either), `BLOB_READ_WRITE_TOKEN`.
+- Handler runtime split: `api/health.ts` and `api/tick.ts` run on Vercel's **edge** runtime (Fetch-API, no Blob deps). All blob-touching handlers run on Vercel's **nodejs** runtime with classic `(req: VercelRequest, res: VercelResponse)` signatures — edge rejects `@vercel/blob` at build time because of its transitive Node-only deps. `DEPLOYMENT.md` covers why.
 - The CLI equivalent is `frank connect <url> --key <key>`, which writes URL + key to `~/.frank/config.json` (mode 0600, secret-aware write). The Settings modal hits the same daemon handlers (`set-cloud-config`, `test-cloud-connection`).
 - `saveCloudConfig()` also writes `cloudConfiguredAt` (ISO timestamp). It flows back through `get/set-cloud-config` so the Settings UI can show a green "Already configured on <date>" hint at the top of both tabs when a config is on file.
 - Cloud is optional — everything except sharing works offline. Until it's configured, the Share button warns that cloud isn't set up.
 - For canvas sharing, the daemon bundles the canvas state + every referenced asset as inline data URLs into the share payload, so the cloud viewer can render without round-tripping back to the daemon.
+- For live share, the daemon opens a long-lived SSE connection to `/api/share/:id/author-stream` per active live share and POSTs state updates to `/api/share/:id/state` with monotonic revisions. Viewers open `/api/share/:id/stream` and receive either a full state (cold open, or 30s stale) or a diff replay from the 60s rolling buffer. All three per-project-type controllers (canvas/image/pdf) share the transport; only canvas surfaces live as a user-facing feature.
 
 ### Plain JS Frontend
 - **No build step.** The `ui-v2/` directory is served directly by the daemon's HTTP server.
@@ -53,7 +70,7 @@ Current branch: `dev-v2.07`.
 | Browser UI | Plain JS ES modules (no framework, no build step) |
 | Canvas | [Konva](https://konvajs.org/) 9, loaded via `<script>` tag |
 | Daemon | Node.js + TypeScript — HTTP server (42068) + WebSocket (42069) |
-| AI | `@anthropic-ai/sdk`, streaming via `messages.stream()` |
+| AI | Bring your own — Frank exports project context (JSON / MD / PDF) or hands off via "Copy as prompt". No in-app AI chat. |
 | Content wrapping | iframe + transparent overlay + content proxy |
 | Cloud sharing | Vercel serverless functions + Blob storage (self-hosted) |
 | Project storage | JSON files in `~/.frank/projects/` |
@@ -76,7 +93,7 @@ frank/
 │   │   └── project.js        # In-memory project state manager
 │   ├── views/
 │   │   ├── home.js           # Project list — tabs (Recent/Archived/Deleted), create, rename, archive, trash, search/sort/filter, Settings + Help buttons
-│   │   ├── viewer.js         # Content viewer — iframe + overlay + comment pins + popover + AI panel + error card on proxy fail
+│   │   ├── viewer.js         # Content viewer — iframe + overlay + comment pins + popover + error card on proxy fail
 │   │   ├── canvas.js         # Konva canvas view — tools, comments, snapshots, share, export, shortcuts, undo (button + Cmd+Z), copy/paste/duplicate, timeline
 │   │   └── timeline.js       # Chronological view + unified Export dropdown (JSON/MD/PDF) + Show-folder button
 │   ├── canvas/
@@ -111,7 +128,6 @@ frank/
 │   │   ├── comments.js       # Comment input (used by overlay callback)
 │   │   ├── share-popover.js  # Share link management (viewer + canvas)
 │   │   ├── ai-routing.js     # Clipboard AI routing (non-Claude fallback)
-│   │   ├── ai-panel.js       # In-app Claude conversation, streaming
 │   │   ├── url-input.js      # URL paste + file picker + drag-drop (PDF / image)
 │   │   ├── help-panel.js     # Getting-started modal (5 feature cards, focus trap)
 │   │   ├── settings-panel.js # Settings modal — tabbed Cloud backend config (Vercel / custom), Deploy-to-Vercel CTA, "Why would I want a new deployment?" help, configured-at green hint, scrollable body with pinned header + Test connection
@@ -126,10 +142,9 @@ frank/
 │       ├── curation.css      # Curation panel styles
 │       ├── timeline.css      # Timeline view + canvas badge + thumbnail
 │       ├── canvas.css        # Canvas topbar, drawer, inspector, curation host, comment popovers, export menu
-│       └── ai-panel.css      # AI panel chrome
 ├── daemon/                   # Node.js daemon (TypeScript, strict)
 │   ├── vitest.config.ts
-│   ├── package.json          # deps: @anthropic-ai/sdk, ws, pdfmake, tslib
+│   ├── package.json          # deps: ws, pdfmake, tslib (@anthropic-ai/sdk is legacy dead code, slated for removal)
 │   ├── src/cli.ts            # frank start / stop / connect / status / export / uninstall
 │   ├── src/server.ts         # HTTP + WebSocket server, all message handlers
 │   ├── src/protocol.ts       # Shared types and constants
@@ -164,7 +179,7 @@ frank/
 
 - **URL-first or canvas-first**: the input is a URL, file (PDF/image), or a blank canvas — not a JSON schema
 - **Daemon is sole file writer**: UI never touches the filesystem
-- **All data local by default**: nothing leaves the machine unless user hits Share (or uses the AI panel, which calls Claude directly with the user's own key)
+- **All data local by default**: nothing leaves the machine unless user hits Share. Frank does not call any AI service itself; routing to AI is clipboard + export only.
 - **Self-hosted cloud**: users deploy their own sharing backend (Vercel reference in `frank-cloud/` or any host implementing `CLOUD_API.md`)
 - **Setup is required for sharing**: Share button warns until cloud is configured via Settings modal or `frank connect`
 - **No build step**: `ui-v2/` must be servable as-is
@@ -193,7 +208,7 @@ frank/
 | View | What it shows |
 |---|---|
 | **Home** | Project list + URL/file entry. **Tabs** (Recent / Archived / Deleted) replace the old collapsible sections. Search / sort / type-filter chips below the tab. Cards support **inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete**. Keyboard: ↑/↓ between cards, Enter to open, Delete to trash, F2 to rename. Header has a **Settings** cog (cloud backend config) and **Help** button. |
-| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar + AI panel sidebar. **Numbered colored pins** render on the overlay for each comment; click → same draggable Close/Edit/Delete popover used by canvas; feedback-row click → pin pulses. Empty-space clicks drop free pins. Proxy failures render an inline **error card with Retry**. |
+| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar. **Numbered colored pins** render on the overlay for each comment; click → same draggable Close/Edit/Delete popover used by canvas; feedback-row click → pin pulses. Empty-space clicks drop free pins. Proxy failures render an inline **error card with Retry**. |
 | **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Shape- and pin-anchored comments** (SVG icon, speech-bubble-plus cursor), **snapshots** (camera icon, thumbnail saved, toast), **share** (link icon, bundled assets), **export dropdown** (PNG / SVG / PDF / JSON), **undo** (button + Cmd+Z, clears selection so no orphan transformer handles), **timeline** (shared event with viewer), **Cmd+C / Cmd+V / Cmd+D** copy/paste/duplicate shapes, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
 | **Timeline** | Chronological view of comments + snapshots + curations + AI instructions. Canvas snapshots show a Canvas badge + inline thumbnail. **Show folder** (reveal in Finder/Explorer) + unified **Export** dropdown (JSON / Markdown / PDF). Close (X) returns to canvas or viewer depending on the project. |
 
@@ -229,17 +244,19 @@ unified on both sides.
   why status changes appeared to do nothing.
 
 Surface-specific features (canvas has undo/export/inspector/shapes; viewer
-has URL proxy/AI panel/multi-page tracking) are intentional — they reflect
+has URL proxy / multi-page tracking) are intentional — they reflect
 different tools, not visual drift.
 
-## AI panel
+## AI routing (BYO tool — no in-app chat)
 
-- Persistent Claude conversation docked as a second right-side sidebar in the viewer. Toggle via the "AI" button in the toolbar.
-- Claude API key lives in `~/.frank/config.json` under `aiProviders.claude.apiKey`. The daemon enforces `0600` permissions on every write and never logs the key.
-- Conversations persist at `~/.frank/projects/{id}/ai-conversations/{conversationId}.json`. Size-first caps: soft warn at 2 MB / 100 messages (banner), hard cap at 5 MB / 200 messages (forces a new conversation with `continuedFrom` linking back).
-- `buildContext()` in `ai-providers/claude.ts` assembles each turn's prompt within a per-section token budget (preamble 500 / canvas 3000 / comments 2000 / snapshots 1000 / remainder for history). Logs per-section char counts without content.
-- Streaming responses flow daemon → WebSocket → UI: `ai-stream-started` → `ai-stream-delta` × N → `ai-stream-ended` (or `ai-stream-error`).
-- Clipboard-based AI routing (`ai-routing.js`) still works as a fallback for users of non-Claude providers — the "Copy as prompt" button on curated comments is unchanged.
+Frank does not bundle an in-app AI chat. That would lock users into one provider and force API-key management inside Frank. Instead, two handoff paths route feedback to whatever AI tool the user already uses:
+
+- **Clipboard — `ai-routing.js`**: the "Copy as prompt" button on curated comments puts a structured prompt on the clipboard. User pastes into Claude, Cursor, ChatGPT, a local LLM, whatever.
+- **Export — `daemon/src/export.ts` (JSON) + `daemon/src/report.ts` (MD/PDF)**: hand off the entire project at once. Every comment, curation, snapshot, and timeline entry is captured.
+
+The `daemon/src/ai-chain.ts` log captures every Copy-as-prompt action so the export includes a decision trail of what was routed to which AI.
+
+Historical note: an earlier v2 version had an in-app Claude panel mounted in the viewer's right sidebar. It was removed pre-v3.0 in favor of the BYO-tool pattern above. The daemon-side `ai-conversations.ts` + `ai-providers/claude.ts` modules still exist but are unreachable from the UI — their removal is a v3.x cleanup item, not urgent.
 
 ---
 
@@ -279,19 +296,25 @@ Wired: viewer proxy failure (error card), canvas save double-failure (toast + re
 
 ## Testing
 
-The daemon has a Vitest test suite (**135 tests across 12 files**). Tests use temp directories — never touch real `~/.frank/`.
+The daemon has a Vitest test suite (**182 passing across 21 files**, plus an opt-in cloud integration harness with 9 more tests). Unit tests use temp directories — never touch real `~/.frank/`.
 
 ```bash
 cd daemon
-npm test           # run all tests once
+npm test           # run all unit tests once
 npm run test:watch # watch mode
+
+# Opt-in integration harness — exercises the real backend contract.
+# Skipped on a plain `npm test` run. See frank-cloud/INTEGRATION_TESTING.md.
+FRANK_CLOUD_BASE_URL=http://localhost:3000 \
+  FRANK_CLOUD_API_KEY=<key> \
+  npm test -- cloud-integration
 ```
 
 Test files live alongside source: `src/*.test.ts`. Each test file mocks `./protocol.js` to redirect `PROJECTS_DIR` to a temp directory. The `inject.test.ts` file additionally mocks `os.homedir()` using `vi.hoisted()`.
 
-**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `ai-conversations.ts`.
+**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `ai-conversations.ts`, `revision-store.ts`, `live-share.ts` (transport + per-project-type controllers for canvas/image/pdf).
 
-After changing any daemon module, run `npm test` to verify nothing broke.
+After changing any daemon module, run `npm test` to verify nothing broke. For changes that touch the daemon ↔ cloud contract, run the integration harness too — see the "Shipping a phase" section below.
 
 ---
 

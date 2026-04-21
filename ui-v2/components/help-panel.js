@@ -12,6 +12,7 @@ const ICONS = {
   comments: `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
   ai: `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.64 5.64l1.42 1.42M16.95 16.95l1.42 1.42M5.64 18.36l1.42-1.42M16.95 7.05l1.42-1.42"/></svg>`,
   share: `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>`,
+  live: `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M17.66 6.34a9 9 0 0 1 0 11.31M6.34 17.66a9 9 0 0 1 0-11.31M19.78 4.22a12 12 0 0 1 0 15.56M4.22 19.78a12 12 0 0 1 0-15.56"/></svg>`,
 };
 
 const CARDS = [
@@ -25,33 +26,41 @@ const CARDS = [
   {
     id: 'canvas',
     title: 'Sketch on a canvas',
-    blurb: 'Whiteboard surface for wireframes, flowcharts, mood boards. Shapes, templates, pen, images — all persist automatically.',
+    blurb: 'Whiteboard surface for wireframes, flowcharts, mood boards. Shapes, templates, pen, images — all persist automatically. Supports live multiplayer editing (see Live collaboration below).',
     cta: 'New canvas',
     action: 'new-canvas',
   },
   {
     id: 'comments',
     title: 'Leave comments on anything',
-    blurb: 'Click any element on a URL or shape on a canvas to anchor feedback. Comments follow the element as it moves.',
+    blurb: 'Click any element on a URL or shape on a canvas to anchor feedback. Comments follow the element as it moves. Reviewer comments sync back to the author automatically.',
     cta: 'Learn more',
     action: 'expand',
-    detail: 'Comments use a triple-anchor strategy (CSS selector + DOM path + visual coordinates) on URL projects so they survive refactors. On canvas, comments anchor to shape IDs and follow the shape as you move it. Every comment is a curation target — approve, dismiss, or remix before routing to AI.',
+    detail: 'Comments use a triple-anchor strategy (CSS selector + DOM path + visual coordinates) on URL / PDF / image projects so they survive refactors. On canvas, comments anchor to shape IDs and follow the shape as you move it. When a reviewer adds a comment from a share link, Frank pulls it back into your project automatically (on canvas shares with live mode on, they appear instantly; on async shares, within a few seconds). Every comment is a curation target — approve, dismiss, or remix before routing to AI.',
   },
   {
     id: 'ai',
     title: 'Route feedback to AI',
-    blurb: 'Pipe curated feedback into your AI with a click. Frank keeps the chain of context so the AI sees what was said and why.',
+    blurb: 'Pipe curated feedback into the AI tool you already use — Claude, Cursor, ChatGPT, whatever. Frank keeps the chain of context so the AI sees what was said and why.',
     cta: 'Learn more',
     action: 'expand',
-    detail: 'Approve the comments that should drive changes, remix the language if needed, then send to Claude or copy as a prompt for any other assistant. Full conversation history persists per project.',
+    detail: 'Approve the comments that should drive changes, remix the language if needed, then click "Copy as prompt" on any comment — a structured prompt lands on your clipboard, ready to paste into any AI. Or export the whole project (JSON or Markdown/PDF report) to hand off everything at once: comments, curation decisions, snapshots, and timeline. Frank does not bundle an in-app AI chat — that would lock you into one provider and force API-key management. Use whichever AI you already trust.',
   },
   {
     id: 'share',
     title: 'Share with reviewers',
-    blurb: 'Generate a link and share a snapshot of a URL, PDF, image, or canvas. Reviewers comment from their browser with zero setup.',
+    blurb: 'Generate a link and send a snapshot of a URL, PDF, image, or canvas. Reviewers open it in any browser with zero setup — no account, no install.',
     cta: 'Learn more',
     action: 'expand',
-    detail: 'Share backend is a Vercel project you deploy to your own account — no Frank-operated servers, no data leaving your infra without you opting in. Run `frank connect <url> --key <key>` to wire it up.',
+    detail: 'Async by default: reviewers see the snapshot of your project as it was when you shared. Comments they add sync back to you. For canvas projects, you can flip the share into live mode — see Live collaboration below. Share backend is a Vercel project you deploy to your own account (or any host implementing Frank\'s Cloud API). Setup: click the ⚙ Settings cog on the home page, pick a tab, follow the steps. Nothing leaves your infrastructure unless you opt in.',
+  },
+  {
+    id: 'live',
+    title: 'Collaborate live (canvas)',
+    blurb: 'Turn any canvas share into a live session. Every shape edit, drop, move, and comment propagates to open viewers in near real time. Presence counter shows how many reviewers are watching.',
+    cta: 'Learn more',
+    action: 'expand',
+    detail: 'Live collaboration is a canvas-specific feature. Create a canvas share, click "Start live share" in the share popover, and the toolbar icon picks up a LIVE · N badge (N = viewers currently watching). Viewers see your edits stream in — no refresh, no reconnect. Sessions auto-pause after 2 hours so you do not accidentally leave one open; click Resume to continue. You can Revoke the link at any time; revoked links go cold immediately. URL, PDF, and image shares stay on the async path — for those, screen-sharing (Google Meet, Zoom, etc.) is the better real-time tool; Frank\'s snapshot + comment flow covers the async case.',
   },
 ];
 

@@ -1,8 +1,7 @@
 /* App chrome styles */
 
-/* Viewer toolbar + canvas topbar share a single visual language. Any change
-   here should be mirrored in .canvas-topbar (canvas.css) — they're intended
-   to look identical. */
+/* Unified toolbar — used by viewer (components/toolbar.js) and canvas
+   (views/canvas.js). Single source of truth for the app chrome. */
 .toolbar {
   display: flex;
   align-items: center;
@@ -299,94 +298,6 @@
 }
 .toolbar-comment-btn svg { display: block; }
 
-.toolbar-info-btn {
-  font-weight: 700;
-  font-size: 12px;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  text-align: center;
-  border-radius: 50%;
-}
-
-.toolbar-info-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.toolbar-info-modal {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 12px);
-  padding: 24px;
-  max-width: 420px;
-  width: 90%;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-}
-
-.toolbar-info-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-.toolbar-info-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-.toolbar-info-close {
-  font-size: 24px;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  padding: 4px 10px;
-  line-height: 1;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.toolbar-info-close:hover {
-  color: var(--text-primary);
-  background: var(--bg-surface);
-}
-
-.toolbar-info-content {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.toolbar-info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.toolbar-info-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: var(--muted-foreground);
-}
-.toolbar-info-icon svg { display: block; }
-.toolbar-info-item strong {
-  font-size: 14px;
-  color: var(--text-primary);
-}
-.toolbar-info-item p {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.5;
-}
-
 /* Legacy button + input classes, re-aligned to shadcn tokens so every view
  * that still uses `.btn-primary` / `.btn-secondary` / `.btn-ghost` / `.input`
  * reads as a shadcn-shaped control until it's migrated to the ui/ primitives. */
@@ -471,44 +382,187 @@
 .input::placeholder { color: var(--muted-foreground); }
 .input:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Home view */
+/* Home view — two-column terminal-grid layout. */
 #view-home { overflow-y: auto; }
 .home {
-  display: flex;
-  flex-direction: column;
   min-height: 100%;
-  padding: 40px;
-  max-width: 720px;
+  padding: var(--space-8) var(--space-10);
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
 
-.home-header {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 32px;
+/* Two columns on desktop (≥ 1024px), stack on tablet/mobile. Left column
+   holds the entry (URL/file/canvas); right column holds the project list.
+   On desktop the right column scrolls independently — the page stays put. */
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-10);
 }
-.home-header-spacer { flex: 1; }
-.home-help-btn {
+@media (min-width: 1024px) {
+  #view-home { overflow: hidden; }
+  .home {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .home-grid {
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: minmax(0, 6fr) minmax(260px, 4fr);
+    gap: var(--space-12);
+  }
+
+  /* Terminal-frame around the projects column — border on all sides with
+     the tab list straddling the top edge like a window title. The tabs
+     mask the border where they sit via their own background, so the line
+     "breaks" around each label. */
+  .home-col-right {
+    border: 1px solid var(--border);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0 var(--space-5);
+  }
+  .home-col-right .home-projects {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .home-col-right .home-tabs {
+    margin: calc(var(--space-4) * -1) calc(var(--space-2) * -1) var(--space-5);
+    align-self: flex-start;
+    border-bottom: none;
+    background: transparent;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .home-col-right .home-tab {
+    background: var(--background);
+    padding: 0 var(--space-3);
+    margin-bottom: 0;
+    border-bottom: 2px solid transparent;
+    height: 1.75rem;
+  }
+  .home-col-right .home-tab.active {
+    border-bottom-color: var(--foreground);
+  }
+  .home-col-right .home-section {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: var(--space-4);
+    margin-right: calc(var(--space-2) * -1);
+    padding-right: var(--space-2);
+  }
+  /* Scrollbar inside the right column — match the terminal vibe. */
+  .home-col-right .home-section::-webkit-scrollbar { width: 8px; }
+  .home-col-right .home-section::-webkit-scrollbar-track { background: transparent; }
+  .home-col-right .home-section::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: var(--radius-round);
+  }
+  .home-col-right .home-section::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+}
+.home-col { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+
+/* About-panel headline + lede. Live inside a .home-panel so the panel
+   owns padding; stacking is handled by .home-panel > * + *. */
+.home-headline {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+.home-lede {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+/* Terminal-frame panel — border on all sides with a title that straddles
+   the top edge (the title's background masks the border line). Same
+   pattern as .home-col-right's frame, applied to the left column's two
+   action blocks (new share / canvas). */
+.home-panel {
+  position: relative;
+  border: 1px solid var(--border);
+  padding: var(--space-5);
+}
+.home-panel::before {
+  content: attr(data-title);
+  position: absolute;
+  top: 0;
+  left: var(--space-4);
+  transform: translateY(-50%);
+  padding: 0 var(--space-2);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.home-panel > * + * { margin-top: var(--space-3); }
+.home-panel-lede {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.home-masthead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-12);
+}
+.home-masthead-spacer { flex: 1; }
+.home-icon-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: var(--space-2);
+  height: 1.75rem;
+  padding: 0 var(--space-3);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  color: var(--text-muted);
-  font-size: 12px;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  transition: color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
 }
-.home-help-btn:hover {
-  color: var(--text);
+.home-icon-btn:hover {
+  color: var(--foreground);
   border-color: var(--ring);
-  background: var(--bg-surface);
+  background: var(--muted);
 }
-.home-help-btn svg { flex-shrink: 0; }
+.home-icon-btn svg { flex-shrink: 0; }
+
+/* Terminal-style section header: uppercase title followed by a horizontal
+   rule that extends to the right edge of the column. Used by the projects
+   pane and future section titles that want the terminal-window framing. */
+.home-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-4);
+}
+.home-section-head::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
 
 /* Help modal */
 .help-overlay {
@@ -711,8 +765,11 @@
 }
 
 .home-logo {
-  height: 36px;
+  height: 56px;
   filter: brightness(0) invert(1);
+}
+@media (min-width: 1024px) {
+  .home-logo { height: 72px; }
 }
 
 .home-version {
@@ -721,48 +778,43 @@
   font-weight: 400;
 }
 
-.home-content {
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-}
-.home-projects { margin-top: 40px; }
+.home-projects { min-width: 0; }
 
 .home-section-title {
-  font-size: 13px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  margin-bottom: var(--space-3);
 }
 
-/* URL input */
+/* URL input — lives inside a .home-panel so the panel owns the padding. */
 .url-input-wrapper {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  margin: -16px;
-  border: 1px dashed transparent;
-  border-radius: var(--radius-md);
-  transition: border-color 0.15s, background 0.15s;
+  gap: var(--space-3);
+  transition: background var(--duration-fast) var(--ease-standard);
 }
 .url-input-wrapper.dragover {
-  border-color: var(--ring);
   background: color-mix(in oklch, var(--ring), transparent 92%);
 }
-.url-input-header h2 { font-size: 18px; font-weight: 600; }
-.url-input-subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
-.url-input-form { display: flex; gap: 8px; }
-.url-input-field { flex: 2; }
-.url-input-name { flex: 1; }
+/* Form: URL field on its own row, then Name + Open share the next row.
+   Wraps cleanly inside the narrower left column on desktop. */
+.url-input-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+}
+.url-input-field { grid-column: 1 / -1; }
+.url-input-name { min-width: 0; }
 .url-input-hint {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  flex-wrap: wrap;
 }
 .url-input-browse {
   margin-left: auto;
@@ -824,6 +876,12 @@
 /* Focused card also needs its action button visible so keyboard users
  * can discover the ⋯ menu without hovering. */
 .project-card:focus-visible .project-card-actions { opacity: 1; }
+.project-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
 .project-card-name {
   font-weight: 500;
   padding: 2px 4px;
@@ -837,7 +895,10 @@
   box-shadow: 0 0 0 2px var(--ring);
   cursor: text;
 }
-.project-card-meta { font-size: 12px; color: var(--text-muted); margin-left: 12px; }
+.project-card-meta {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
 .project-card-actions { opacity: 0; transition: opacity 0.15s; }
 .project-card:hover .project-card-actions { opacity: 1; }
 .project-menu-btn {
@@ -865,9 +926,12 @@
 }
 .home-filter-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.home-filter-row .home-sort-wrapper {
+  flex-shrink: 0;
 }
 .home-search {
   width: 100%;
@@ -875,24 +939,52 @@
   padding: 4px 10px;
   font-size: 13px;
 }
-.home-sort {
-  appearance: none;
-  -webkit-appearance: none;
-  margin-left: 16px;
+
+/* Sort dropdown — custom menu matching the canvas/timeline export dropdowns
+   and the project-card context menu. Replaces the native <select>. */
+.home-sort-wrapper { position: relative; display: inline-flex; }
+.home-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 28px;
-  padding: 0 22px 0 8px;
+  padding: 0 10px;
   font-size: 12px;
-  background-color: transparent;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  background-size: 10px 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  border-radius: 0;
-  color: var(--text-muted);
-  width: auto;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
 }
-.home-sort:hover { color: var(--text); }
+.home-sort-btn:hover { background: var(--muted); color: var(--foreground); }
+.home-sort-btn[aria-expanded="true"] { background: var(--muted); color: var(--foreground); border-color: var(--ring); }
+.home-sort-caret { opacity: 0.7; }
+.home-sort-menu {
+  position: fixed;
+  min-width: 140px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 1000;
+}
+.home-sort-menu[hidden] { display: none; }
+.home-sort-item {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--foreground);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+}
+.home-sort-item:hover { background: color-mix(in oklch, var(--ring), transparent 85%); }
+.home-sort-item.active { color: var(--foreground); background: color-mix(in oklch, var(--ring), transparent 80%); }
 .home-filter-chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chip {
   display: inline-flex;
@@ -908,10 +1000,10 @@
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.chip:hover { background: var(--bg-surface); color: var(--text); }
+.chip:hover { background: var(--muted); color: var(--foreground); }
 .chip.active {
-  background: var(--bg-surface);
-  color: var(--text);
+  background: var(--muted);
+  color: var(--foreground);
   border-color: var(--ring);
 }
 .chip-count {
@@ -1129,14 +1221,16 @@
   justify-content: center;
 }
 .share-modal {
-  background: var(--bg-elevated);
+  background: var(--popover);
+  color: var(--popover-foreground);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 12px);
-  padding: 24px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
   min-width: 400px;
   max-width: 480px;
   width: 90%;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-mono);
 }
 .share-modal-header {
   display: flex;
@@ -1237,115 +1331,174 @@
 .ai-routing-dialog { position: relative; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; width: 560px; max-height: 80vh; overflow-y: auto; }
 .ai-routing-dialog h3 { margin-bottom: 16px; font-size: 16px; }
 .ai-routing-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; }
-.ai-routing-feedback { background: var(--bg-surface); border-radius: 6px; padding: 12px; margin-bottom: 16px; max-height: 200px; overflow-y: auto; }
+.ai-routing-feedback { background: var(--muted); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-4); max-height: 200px; overflow-y: auto; }
 .ai-routing-comment { font-size: 13px; margin-bottom: 8px; line-height: 1.4; }
 .ai-routing-comment:last-child { margin-bottom: 0; }
-.ai-routing-anchor { font-family: monospace; font-size: 10px; color: var(--text-muted); background: var(--bg-elevated); padding: 1px 4px; border-radius: 3px; margin-left: 4px; }
+.ai-routing-anchor { font-family: inherit; font-size: var(--text-xs); color: var(--muted-foreground); background: var(--muted); padding: 1px var(--space-1); border-radius: var(--radius-sm); margin-left: var(--space-1); }
 .ai-routing-textarea { width: 100%; resize: vertical; min-height: 100px; margin-bottom: 12px; }
 .ai-routing-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-/* v3 Phase 2: live-share controls in share popover */
+/* v3 live-share controls in share popover — design-system aligned
+   (Geist Mono everywhere via font-family: inherit, radius 0, tokens only). */
 .share-live-block {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
 }
 .share-live-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  padding: 8px 12px;
-  background: var(--button-primary-bg, #3b82f6);
-  color: var(--button-primary-text, #fff);
-  border: none;
-  border-radius: 6px;
-  font: 13px/1 -apple-system, system-ui, sans-serif;
+  height: 2.25rem;
+  padding: 0 var(--space-4);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
 }
-.share-live-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.share-live-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.share-live-btn:disabled { opacity: 0.5; pointer-events: none; }
+.share-live-btn:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--primary), black 10%);
+}
+.share-live-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 .share-live-presence {
-  margin-top: 6px;
-  font: 12px/1.3 -apple-system, system-ui, sans-serif;
-  color: var(--text-muted, rgba(255, 255, 255, 0.7));
+  margin-top: var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.3;
+  color: var(--muted-foreground);
 }
 .share-live-banner {
-  margin-top: 8px;
-  padding: 8px 10px;
-  background: rgba(255, 200, 0, 0.08);
-  border: 1px solid rgba(255, 200, 0, 0.25);
-  border-radius: 4px;
-  font: 12px/1.35 -apple-system, system-ui, sans-serif;
-  color: var(--text-muted, rgba(255, 255, 255, 0.8));
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in oklch, var(--muted-foreground), transparent 92%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  color: var(--muted-foreground);
 }
 .share-live-banner.error {
-  background: rgba(255, 100, 80, 0.08);
-  border-color: rgba(255, 100, 80, 0.3);
+  background: color-mix(in oklch, var(--destructive), transparent 88%);
+  border-color: color-mix(in oklch, var(--destructive), transparent 60%);
+  color: var(--foreground);
 }
 .share-live-status {
-  padding: 8px 10px;
-  font: 12px/1.35 -apple-system, system-ui, sans-serif;
-  color: var(--text-muted, rgba(255, 255, 255, 0.7));
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  color: var(--muted-foreground);
 }
 
 /* v3 Phase 5: expiration picker + revoke button */
 .share-expiry-label {
   display: block;
-  font: 11px/1.4 -apple-system, system-ui, sans-serif;
-  color: var(--text-muted, rgba(255, 255, 255, 0.6));
-  margin-bottom: 4px;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  margin-bottom: var(--space-1);
 }
 .share-expiry-select {
   width: 100%;
-  padding: 6px 8px;
-  margin: 0 0 12px;
-  background: var(--input-bg, #1e1e1e);
-  color: var(--text-primary, #f0f0f0);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.15));
-  border-radius: 4px;
-  font: 13px/1 -apple-system, system-ui, sans-serif;
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  margin: 0 0 var(--space-3);
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  line-height: 1;
+  outline: none;
+  /* Replace the native down-arrow with a monochrome chevron so the menu
+     control reads as part of the design system, not a browser default. */
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  padding-right: calc(var(--space-3) + 16px);
+  cursor: pointer;
+}
+.share-expiry-select:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
 }
 .share-revoke-row {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .share-revoke-btn {
-  padding: 6px 10px;
+  height: 2.25rem;
+  padding: 0 var(--space-4);
   background: transparent;
-  color: #ff6b6b;
-  border: 1px solid rgba(255, 107, 107, 0.4);
-  border-radius: 4px;
-  font: 12px/1 -apple-system, system-ui, sans-serif;
+  color: var(--destructive);
+  border: 1px solid color-mix(in oklch, var(--destructive), transparent 60%);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
 }
 .share-revoke-btn:hover {
-  background: rgba(255, 107, 107, 0.08);
-  border-color: rgba(255, 107, 107, 0.6);
+  background: color-mix(in oklch, var(--destructive), transparent 88%);
+  border-color: var(--destructive);
+}
+.share-revoke-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 .share-revoke-help {
-  font: 11px/1.3 -apple-system, system-ui, sans-serif;
-  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+  font-family: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.3;
+  color: var(--muted-foreground);
   flex: 1;
 }
 
-/* v3 Phase 5: ambient LIVE badge on toolbar share buttons */
-[data-frank-share-btn] {
-  position: relative;  /* anchor for the absolute-positioned badge */
+/* v3 Phase 5: ambient LIVE badge sits inline next to the project title */
+.toolbar-live-badge-host {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2);
+}
+.toolbar-live-badge-host[hidden] {
+  display: none;
 }
 .toolbar-live-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  padding: 2px 6px;
-  background: #ef4444;
-  color: #fff;
-  font: 600 9px/1.2 -apple-system, system-ui, sans-serif;
-  border-radius: 8px;
-  letter-spacing: 0.02em;
+  padding: 2px var(--space-2);
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-round);
   animation: toolbar-live-pulse 2s ease-in-out infinite;
   pointer-events: none;
+  white-space: nowrap;
 }
 @keyframes toolbar-live-pulse {
   0%, 100% { opacity: 1; }

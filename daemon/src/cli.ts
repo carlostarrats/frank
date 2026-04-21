@@ -92,7 +92,7 @@ switch (command) {
     break;
 
   default:
-    console.log(`Frank v${CURRENT_VERSION} — collaboration layer for any web content`);
+    console.log(`Frank v${CURRENT_VERSION} — a local-first collaboration layer`);
     console.log('');
     console.log('Usage:');
     console.log('  frank start       Start Frank and open the browser');
