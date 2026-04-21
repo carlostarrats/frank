@@ -37,11 +37,19 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
 
       <div class="home-grid">
         <div class="home-col home-col-left">
-          <div class="home-new" id="home-new"></div>
-
-          <div class="home-new-canvas" id="home-new-canvas">
-            <button class="btn-secondary home-canvas-btn" id="new-canvas-btn">+ New canvas</button>
+          <div class="home-intro">
+            <h1 class="home-headline">A local-first collaboration layer.</h1>
+            <p class="home-lede">Runs on your machine. Point Frank at a URL, drop in a file, or start a canvas — then comment, curate, and route feedback to AI. Every decision captured. Nothing leaves your computer unless you share.</p>
           </div>
+
+          <section class="home-panel" data-title="new share">
+            <div class="home-new" id="home-new"></div>
+          </section>
+
+          <section class="home-panel" data-title="canvas">
+            <p class="home-panel-lede">Start with a blank infinite canvas. Sketch, diagram, drop images, or brainstorm — then share it live with reviewers.</p>
+            <button class="btn-secondary home-canvas-btn" id="new-canvas-btn">+ New canvas</button>
+          </section>
         </div>
 
         <div class="home-col home-col-right">

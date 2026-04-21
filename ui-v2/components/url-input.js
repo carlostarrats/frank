@@ -8,10 +8,6 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export function renderUrlInput(container, { onSubmit, onFileSubmit }) {
   container.innerHTML = `
     <div class="url-input-wrapper" id="url-input-wrapper">
-      <div class="url-input-header">
-        <h2>A local-first collaboration layer.</h2>
-        <p class="url-input-subtitle">Runs on your machine. Point Frank at a URL, drop in a file, or start a canvas — then comment, curate, and route feedback to AI. Every decision captured. Nothing leaves your computer unless you share.</p>
-      </div>
       <div class="url-input-form">
         <input
           type="text"

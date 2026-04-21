@@ -468,7 +468,52 @@
   }
   .home-col-right .home-section::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
 }
-.home-col { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
+.home-col { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+
+/* Left-column intro — headline + lede, outside the framed panels. */
+.home-intro { display: flex; flex-direction: column; gap: var(--space-3); }
+.home-headline {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+.home-lede {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--muted-foreground);
+  max-width: 56ch;
+}
+
+/* Terminal-frame panel — border on all sides with a title that straddles
+   the top edge (the title's background masks the border line). Same
+   pattern as .home-col-right's frame, applied to the left column's two
+   action blocks (new share / canvas). */
+.home-panel {
+  position: relative;
+  border: 1px solid var(--border);
+  padding: var(--space-5);
+}
+.home-panel::before {
+  content: attr(data-title);
+  position: absolute;
+  top: 0;
+  left: var(--space-4);
+  transform: translateY(-50%);
+  padding: 0 var(--space-2);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.home-panel > * + * { margin-top: var(--space-3); }
+.home-panel-lede {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
 
 .home-masthead {
   display: flex;
@@ -743,34 +788,16 @@
   margin-bottom: var(--space-3);
 }
 
-/* URL input */
+/* URL input — lives inside a .home-panel so the panel owns the padding. */
 .url-input-wrapper {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  margin: calc(var(--space-4) * -1);
-  border: 1px dashed transparent;
-  border-radius: var(--radius-md);
-  transition: border-color var(--duration-fast) var(--ease-standard),
-              background var(--duration-fast) var(--ease-standard);
+  gap: var(--space-3);
+  transition: background var(--duration-fast) var(--ease-standard);
 }
 .url-input-wrapper.dragover {
-  border-color: var(--ring);
   background: color-mix(in oklch, var(--ring), transparent 92%);
-}
-.url-input-header h2 {
-  font-size: var(--text-2xl);
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--foreground);
-}
-.url-input-subtitle {
-  color: var(--muted-foreground);
-  font-size: var(--text-sm);
-  line-height: 1.6;
-  margin-top: var(--space-3);
 }
 /* Form: URL field on its own row, then Name + Open share the next row.
    Wraps cleanly inside the narrower left column on desktop. */
