@@ -74,6 +74,7 @@ export function renderCuration(container, { screenId }) {
                         <button class="curation-act ${c.status === 'approved' ? 'on' : ''}" data-action="approve" data-id="${c.id}" title="${c.status === 'approved' ? 'Reset to pending' : 'Approve'}">✓</button>
                         <button class="curation-act ${c.status === 'dismissed' ? 'on' : ''}" data-action="dismiss" data-id="${c.id}" title="${c.status === 'dismissed' ? 'Reset to pending' : 'Dismiss'}">✕</button>
                         <button class="curation-act" data-action="edit" data-id="${c.id}" title="Edit / rewrite">✎</button>
+                        <button class="curation-act" data-action="copy-ai" data-id="${c.id}" ${c.status !== 'approved' ? 'disabled' : ''} title="${c.status === 'approved' ? 'Copy this comment for AI' : 'Approve this comment first to copy it for AI'}">↗ AI</button>
                       `}
                   </div>
                 </div>
@@ -81,12 +82,22 @@ export function renderCuration(container, { screenId }) {
               }).join('')
           }
         </div>
-        ${selectedIds.size > 0 ? `
+        ${(() => {
+          // Panel-level actions. "Copy approved for AI" is always visible so
+          // users learn the affordance exists; it's disabled until at least
+          // one comment is approved (pending / dismissed would just be noise
+          // for an AI handoff). Delete only appears when the user has a
+          // selection, mirroring the old batch behavior.
+          const approvedCount = allComments.filter(c => c.status === 'approved').length;
+          return `
           <div class="curation-batch">
-            <button class="btn-primary" id="batch-send">Copy for AI</button>
-            <button class="btn-ghost curation-batch-delete" id="batch-delete">Delete</button>
+            <button class="btn-primary" id="batch-send" ${approvedCount === 0 ? 'disabled' : ''} title="${approvedCount === 0 ? 'Approve at least one comment to copy for AI' : `Copy ${approvedCount} approved comment${approvedCount === 1 ? '' : 's'} + project context for AI`}">Copy approved for AI${approvedCount > 0 ? ` (${approvedCount})` : ''}</button>
+            ${selectedIds.size > 0 ? `
+              <button class="btn-ghost curation-batch-delete" id="batch-delete">Delete ${selectedIds.size}</button>
+            ` : ''}
           </div>
-        ` : ''}
+        `;
+        })()}
         <div class="comment-input-area" id="comment-input-area" style="display:none">
           <textarea class="input comment-textarea" id="comment-text" placeholder="Add a comment..." rows="3"></textarea>
           <div class="comment-input-actions">
@@ -131,8 +142,14 @@ export function renderCuration(container, { screenId }) {
     container.querySelectorAll('.curation-act').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (btn.disabled) return;
         const action = btn.dataset.action;
         const id = btn.dataset.id;
+
+        if (action === 'copy-ai') {
+          copyCommentsForAi([id]);
+          return;
+        }
 
         if (action === 'edit') {
           editingId = id;
@@ -185,10 +202,18 @@ export function renderCuration(container, { screenId }) {
       });
     });
 
-    // Batch actions
-    container.querySelector('#batch-send')?.addEventListener('click', () => {
-      copySelectedForAi([...selectedIds]);
-      render(); // selectedIds cleared — refresh to hide the batch bar
+    // Panel-level: copy every approved comment in the current screen.
+    // Intentionally ignores the selection — the button label is "Copy
+    // approved for AI", not "Copy selected." Single-comment handoff lives
+    // on the per-row ↗ AI button. Uses `allComments` from the render
+    // closure so the scope matches the button's count label.
+    container.querySelector('#batch-send')?.addEventListener('click', (e) => {
+      if (e.currentTarget.disabled) return;
+      const approvedIds = allComments
+        .filter(c => c.status === 'approved')
+        .map(c => c.id);
+      if (approvedIds.length === 0) return;
+      copyCommentsForAi(approvedIds);
     });
     container.querySelector('#batch-delete')?.addEventListener('click', () => {
       const ids = [...selectedIds];
@@ -250,12 +275,15 @@ export function renderCuration(container, { screenId }) {
   };
 }
 
-// Format the selected comments as a self-contained markdown payload and copy
-// to the clipboard. The payload is designed to be pasted into any AI chat
-// that can act on feedback — it bundles enough context (project meta, canvas
-// shape JSON, per-pin anchor info) that the model can reason about what the
-// reviewer actually meant, and return code/markup if asked.
-function copySelectedForAi(commentIds) {
+// Format the given comments as a self-contained markdown payload and copy
+// to the clipboard. Callers are:
+//   • Per-row ↗ AI button  — passes a single comment id
+//   • "Copy approved for AI" panel button — passes every approved id
+// The payload is designed to be pasted into any AI chat that can act on
+// feedback — it bundles project meta, intent, canvas shape JSON, and per-pin
+// anchor info so the model can reason about what the reviewer actually meant
+// and return code/markup if asked.
+function copyCommentsForAi(commentIds) {
   const allComments = projectManager.getComments();
   const comments = allComments.filter(c => commentIds.includes(c.id));
   if (comments.length === 0) return;
@@ -276,6 +304,15 @@ function copySelectedForAi(commentIds) {
   if (project.file) lines.push(`- File: ${project.file}`);
   if (project.modified) lines.push(`- Modified: ${project.modified}`);
   lines.push('');
+
+  // Project brief — the user's stated goal for the work. Placed high up so
+  // the AI reads the reviewer feedback against this frame.
+  if (project.intent && project.intent.trim()) {
+    lines.push('## Project brief');
+    lines.push('');
+    lines.push(project.intent.trim());
+    lines.push('');
+  }
 
   // Canvas state from the eagerly-refreshed cache — keeps this fully sync so
   // the clipboard write still counts as user-gesture-initiated.
@@ -323,7 +360,6 @@ function copySelectedForAi(commentIds) {
   if (copyTextToClipboard(prompt)) {
     sync.logAiInstruction(commentIds, [], prompt).catch(() => {});
     toastInfo(`Copied ${comments.length} comment${comments.length === 1 ? '' : 's'} + project context`);
-    selectedIds.clear();
   } else {
     toastError('Clipboard copy failed — check browser permissions');
   }

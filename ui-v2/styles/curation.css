@@ -163,6 +163,29 @@
   background: color-mix(in oklch, var(--primary), transparent 80%);
   border-color: var(--primary);
 }
+.curation-act:disabled,
+.curation-act[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.curation-act:disabled:hover,
+.curation-act[disabled]:hover {
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+/* Panel-level primary button shares .btn-primary styling from app.css; only
+ * add the disabled affordance here so the "Copy approved for AI" button reads
+ * correctly when no comment is approved yet. */
+.curation-batch .btn-primary:disabled,
+.curation-batch .btn-primary[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.curation-batch .btn-primary:disabled:hover,
+.curation-batch .btn-primary[disabled]:hover {
+  background: var(--primary);
+}
 
 .curation-batch {
   display: flex;
