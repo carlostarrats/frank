@@ -1163,6 +1163,99 @@
   display: none;
 }
 
+/* Intent pill — amber when empty (nudge), green when filled. Shown in both
+ * the viewer toolbar and the canvas topbar, immediately left of the zoom
+ * pill. The parent .toolbar sets gap: var(--space-3), so these hosts don't
+ * add extra margin — otherwise the intent↔zoom gap would look larger than
+ * every other gap in the row. */
+.toolbar-intent,
+.canvas-intent {
+  display: flex;
+  align-items: center;
+}
+
+.intent-pill {
+  height: 2rem;
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  background: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.intent-pill-empty {
+  color: #f59e0b;
+  border: 1px solid #f59e0b;
+}
+.intent-pill-empty:hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+.intent-pill-filled {
+  color: #10b981;
+  border: 1px solid #10b981;
+}
+.intent-pill-filled:hover {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+/* Intent modal */
+.intent-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.intent-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+.intent-modal-dialog {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  max-width: 520px;
+  width: calc(100% - 2rem);
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, 0.4));
+}
+.intent-modal-dialog h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+  color: var(--foreground);
+}
+.intent-modal-body,
+.intent-modal-example {
+  margin: 0 0 var(--space-3);
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.intent-modal-example em {
+  color: var(--foreground);
+  font-style: normal;
+  font-weight: 500;
+}
+.intent-modal-textarea {
+  width: 100%;
+  min-height: 7rem;
+  resize: vertical;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+.intent-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 /* Overlay */
 .overlay {
   position: absolute;

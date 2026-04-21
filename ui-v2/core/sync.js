@@ -110,6 +110,7 @@ const sync = {
   },
   deleteProject(projectId) { return send({ type: 'delete-project', projectId }); },
   renameProject(projectId, name) { return send({ type: 'rename-project', projectId, name }); },
+  setProjectIntent(projectId, intent) { return send({ type: 'set-project-intent', projectId, intent }); },
   archiveProject(projectId) { return send({ type: 'archive-project', projectId }); },
   unarchiveProject(projectId) { return send({ type: 'unarchive-project', projectId }); },
   trashProject(projectId) { return send({ type: 'trash-project', projectId }); },

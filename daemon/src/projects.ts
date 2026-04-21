@@ -154,6 +154,17 @@ export function renameProject(projectId: string, name: string): ProjectV2 {
   return project;
 }
 
+// Empty string clears the intent (field removed). Length capped at 2000 chars
+// to keep the AI-handoff payload bounded.
+export function setProjectIntent(projectId: string, intent: string): ProjectV2 {
+  const trimmed = (intent || '').trim().slice(0, 2000);
+  const project = loadProject(projectId);
+  if (trimmed) project.intent = trimmed;
+  else delete project.intent;
+  saveProject(projectId, project);
+  return project;
+}
+
 export function archiveProject(projectId: string): ProjectV2 {
   const project = loadProject(projectId);
   project.archived = new Date().toISOString();

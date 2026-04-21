@@ -31,6 +31,7 @@ import { createHistory } from '../canvas/history.js';
 import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js';
 import { toastError, toastInfo } from '../components/toast.js';
 import { iconCommentPlus, iconCamera, iconLink, iconDownload, iconUndo, iconTimeline, syncToolbarLiveBadge } from '../components/toolbar.js';
+import { mountIntentButton } from '../components/intent-button.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -112,6 +113,7 @@ export function renderCanvas(container, { onBack }) {
           </div>
         </div>
         </div>
+        <div class="canvas-intent" id="canvas-intent-host"></div>
         <div class="canvas-zoom" id="canvas-zoom"></div>
       </div>
       <div class="canvas-body">
@@ -415,6 +417,8 @@ export function renderCanvas(container, { onBack }) {
     }
   };
   window.addEventListener('frank:capture-snapshot', onCaptureSnapshot);
+
+  mountIntentButton(container.querySelector('#canvas-intent-host'));
 
   const zoomEl = container.querySelector('#canvas-zoom');
   const updateZoom = () => {

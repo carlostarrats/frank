@@ -19,6 +19,10 @@ export interface ProjectV2 {
   // v2.02: lifecycle flags. Absence = active.
   archived?: string;  // ISO timestamp when archived
   trashed?: string;   // ISO timestamp when soft-deleted; auto-purged at 30d
+  // v3.2: optional project "brief" — what the user is building, what success
+  // looks like. Rides along with every AI handoff so feedback is read against
+  // the goal. Absence = not set; UI nudges the user in amber.
+  intent?: string;
 }
 
 export interface ScreenV2 {
@@ -87,6 +91,7 @@ export interface SendAiMessageRequest {
 }
 export interface DeleteProjectRequest { type: 'delete-project'; projectId: string; requestId?: number; }
 export interface RenameProjectRequest { type: 'rename-project'; projectId: string; name: string; requestId?: number; }
+export interface SetProjectIntentRequest { type: 'set-project-intent'; projectId: string; intent: string; requestId?: number; }
 export interface ArchiveProjectRequest { type: 'archive-project'; projectId: string; requestId?: number; }
 export interface UnarchiveProjectRequest { type: 'unarchive-project'; projectId: string; requestId?: number; }
 export interface TrashProjectRequest { type: 'trash-project'; projectId: string; requestId?: number; }
@@ -162,6 +167,7 @@ export type AppMessage =
   | CreateProjectRequest
   | DeleteProjectRequest
   | RenameProjectRequest
+  | SetProjectIntentRequest
   | ArchiveProjectRequest
   | UnarchiveProjectRequest
   | TrashProjectRequest

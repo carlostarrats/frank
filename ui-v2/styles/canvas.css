@@ -24,9 +24,12 @@
  * app.css. Only canvas-specific chrome (zoom, export dropdown, etc.)
  * is styled below. */
 
-.canvas-zoom {
+.canvas-intent {
   margin-left: auto;
 }
+.canvas-intent:empty { display: none; }
+.canvas-intent:empty + .canvas-zoom { margin-left: auto; }
+.canvas-zoom { display: flex; align-items: center; }
 .canvas-zoom-reset {
   min-width: 3.5rem;
   height: 2rem;

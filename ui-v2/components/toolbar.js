@@ -1,5 +1,6 @@
 // toolbar.js — Top toolbar for the viewer
 import { showSharePopover } from './share-popover.js';
+import { mountIntentButton } from './intent-button.js';
 
 // v3 Phase 5: ambient LIVE badge on the toolbar share button. Tracks the
 // frank:live-share-state DOM events emitted by core/sync.js — same source
@@ -80,6 +81,7 @@ export function renderToolbar(container, { projectName, url, onBack, projectId }
           ${iconLink()}
         </button>
       </div>
+      <div class="toolbar-intent" id="toolbar-intent-host"></div>
       <div class="toolbar-zoom" id="toolbar-zoom-host"></div>
     </div>
   `;
@@ -98,6 +100,8 @@ export function renderToolbar(container, { projectName, url, onBack, projectId }
   shareBtn.addEventListener('click', () => {
     showSharePopover(shareBtn, { onClose() {} });
   });
+
+  mountIntentButton(container.querySelector('#toolbar-intent-host'));
 }
 
 function escapeHtml(text) {
