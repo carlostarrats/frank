@@ -93,13 +93,14 @@ export function showSharePopover(anchorEl, { onClose }) {
   document.querySelector('.share-overlay')?.remove();
 
   const project = projectManager.get();
+  const projectId = projectManager.getId();
   const activeShare = project?.activeShare;
 
   const overlay = document.createElement('div');
   overlay.className = 'share-overlay';
 
   overlay.innerHTML = `
-    <div class="share-modal" data-project-id="${esc(project?.id || '')}">
+    <div class="share-modal" data-project-id="${esc(projectId || '')}">
       <div class="share-modal-header">
         <h3>
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:6px">
@@ -136,7 +137,7 @@ export function showSharePopover(anchorEl, { onClose }) {
           <button class="v-btn v-btn-primary" id="share-create">${activeShare ? 'Update Link' : 'Create Link'}</button>
         </div>
         <div class="share-popover-status" id="share-status"></div>
-        ${renderLiveBlock(project?.id || '')}
+        ${renderLiveBlock(projectId || '')}
       </div>
     </div>
   `;
@@ -150,9 +151,9 @@ export function showSharePopover(anchorEl, { onClose }) {
     const btn = e.target.closest('.share-live-btn[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
-    if (action === 'start') sync.send({ type: 'start-live-share', projectId: project.id });
-    else if (action === 'pause') sync.send({ type: 'stop-live-share', projectId: project.id });
-    else if (action === 'resume') sync.send({ type: 'resume-live-share', projectId: project.id });
+    if (action === 'start') sync.send({ type: 'start-live-share', projectId });
+    else if (action === 'pause') sync.send({ type: 'stop-live-share', projectId });
+    else if (action === 'resume') sync.send({ type: 'resume-live-share', projectId });
   });
 
   // Copy link
@@ -173,7 +174,7 @@ export function showSharePopover(anchorEl, { onClose }) {
       'Your project is unchanged — you can create a new share afterward.'
     );
     if (!confirmed) return;
-    sync.send({ type: 'revoke-share', projectId: p.id });
+    sync.send({ type: 'revoke-share', projectId });
     // Daemon broadcasts share-revoked; the frank:share-revoked listener above
     // clears liveShareState for this project. project-loaded broadcasts
     // re-render the modal with a null activeShare, resetting to create state.
