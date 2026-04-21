@@ -382,44 +382,80 @@
 .input::placeholder { color: var(--muted-foreground); }
 .input:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Home view */
+/* Home view — two-column terminal-grid layout. */
 #view-home { overflow-y: auto; }
 .home {
-  display: flex;
-  flex-direction: column;
   min-height: 100%;
-  padding: 40px;
-  max-width: 720px;
+  padding: var(--space-8) var(--space-10);
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
 
-.home-header {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 32px;
+/* Two columns on desktop (≥ 1024px), stack on tablet/mobile. Left column
+   holds the masthead + entry (URL/file/canvas); right column holds the
+   project list. Column gap is meaty so the two feel like separate panes. */
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-10);
 }
-.home-header-spacer { flex: 1; }
-.home-help-btn {
+@media (min-width: 1024px) {
+  .home-grid {
+    grid-template-columns: minmax(380px, 5fr) minmax(0, 7fr);
+    gap: var(--space-12);
+  }
+}
+.home-col { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
+
+.home-masthead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.home-masthead-spacer { flex: 1; }
+.home-icon-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: var(--space-2);
+  height: 1.75rem;
+  padding: 0 var(--space-3);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  color: var(--text-muted);
-  font-size: 12px;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  transition: color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
 }
-.home-help-btn:hover {
-  color: var(--text);
+.home-icon-btn:hover {
+  color: var(--foreground);
   border-color: var(--ring);
-  background: var(--bg-surface);
+  background: var(--muted);
 }
-.home-help-btn svg { flex-shrink: 0; }
+.home-icon-btn svg { flex-shrink: 0; }
+
+/* Terminal-style section header: uppercase title followed by a horizontal
+   rule that extends to the right edge of the column. Used by the projects
+   pane and future section titles that want the terminal-window framing. */
+.home-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-4);
+}
+.home-section-head::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
 
 /* Help modal */
 .help-overlay {
@@ -632,19 +668,14 @@
   font-weight: 400;
 }
 
-.home-content {
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-}
-.home-projects { margin-top: 40px; }
+.home-projects { min-width: 0; }
 
 .home-section-title {
-  font-size: 13px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  margin-bottom: var(--space-3);
 }
 
 /* URL input */
@@ -652,28 +683,46 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  margin: -16px;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  margin: calc(var(--space-4) * -1);
   border: 1px dashed transparent;
   border-radius: var(--radius-md);
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
 }
 .url-input-wrapper.dragover {
   border-color: var(--ring);
   background: color-mix(in oklch, var(--ring), transparent 92%);
 }
-.url-input-header h2 { font-size: 18px; font-weight: 600; }
-.url-input-subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
-.url-input-form { display: flex; gap: 8px; }
-.url-input-field { flex: 2; }
-.url-input-name { flex: 1; }
+.url-input-header h2 {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+.url-input-subtitle {
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  margin-top: var(--space-3);
+}
+/* Form: URL field on its own row, then Name + Open share the next row.
+   Wraps cleanly inside the narrower left column on desktop. */
+.url-input-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+}
+.url-input-field { grid-column: 1 / -1; }
+.url-input-name { min-width: 0; }
 .url-input-hint {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  flex-wrap: wrap;
 }
 .url-input-browse {
   margin-left: auto;
