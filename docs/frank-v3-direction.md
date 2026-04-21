@@ -40,11 +40,11 @@ The canvas is already a serializable data structure (Konva JSON). The daemon str
 
 Images barely change. The only "live" element is annotations and comments appearing. Ships in v3.0.
 
-### PDF shares — medium (split into 4a + 4b)
+### PDF shares — Phase 4a only
 
 **v3.0 (Phase 4a): annotations only.** Comments sync live between author and viewers — add, delete, and curate actions all stream in near real time. The PDF file itself is delivered at share time and doesn't stream. This is the subset buildable on Frank's current PDF rendering stack (browser-native iframe embedding).
 
-**Phase 4b — status pending re-evaluation.** Originally framed as "PDF.js migration enables page/scroll live sync." With URL live-share dropped (see below) and the broader conclusion that live share is a canvas-only user-facing feature, the page/scroll live-sync motivation for Phase 4b no longer carries weight on its own. PDF.js might still be worth doing as pure rendering-infrastructure work (cross-browser consistency, better pin anchoring, programmable scrolling for non-live use cases), but that's a different and weaker argument. Phase 4b's merits need a separate decision — don't inherit the old justification.
+Phase 4b (PDF.js rendering migration) was scoped as enabling PDF live sync. Since PDF live sync isn't a planned feature, Phase 4b is dropped. Browser-native PDF rendering is adequate for Frank's static PDF share use case.
 
 ### URL shares — explored, deprioritized
 
@@ -383,7 +383,7 @@ The tradeoffs of SSE on Vercel Hobby (periodic reconnects) are real but are acce
 
 1. **v3.0 ships** with: SSE transport on the updated contract, canvas live state, image live state, PDF live state, viewer-count presence, share revocation, optional expiration, live session kill switch.
 2. **Phase 6 — cloud stabilization + deployment verification.** Addresses the gap between per-phase daemon testing and end-to-end deployment testing that surfaced during the v3.0 smoke test. Tracked in `docs/superpowers/plans/2026-04-20-v3-phase6-cloud-stabilization.md`. Shipped alongside v3.0.
-3. **No named v3.1 target.** URL live-share was the previous v3.1 scope and is no longer on the roadmap (see the URL-shares section above). Phase 4b (PDF.js migration) was previously justified by PDF live-share — with that gone, Phase 4b stands or falls on its own merits as a rendering-infrastructure change and needs a separate decision. `dev-v3.x` branches can hold fragile-list cleanup work from the Phase 6 handler audit, bug fixes from real v3.0 usage, or sit idle until a real milestone shows up. Forcing a milestone when none is warranted is worse than shipping slowly.
+3. **No named post-v3.0 milestone.** URL live-share (previous v3.1 scope) and Phase 4b (PDF.js migration) were both dropped during post-v3.0 scoping — see the PDF-shares and URL-shares sections above. `dev-v3.x` branches can hold fragile-list cleanup work from the Phase 6 handler audit, bug fixes from real v3.0 usage, or sit idle until a real milestone shows up. Forcing a milestone when none is warranted is worse than shipping slowly.
 
 ---
 
