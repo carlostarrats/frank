@@ -263,6 +263,32 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         const comments = loadComments(msg.projectId);
         activeProjectId = msg.projectId;
         reply({ type: 'project-loaded', projectId: msg.projectId, project, comments });
+        // Re-emit live-share state so the UI can populate ambient badges +
+        // popover status without waiting for the next state tick. Phase 5's
+        // syncToolbarLiveBadge relied on this being available on mount;
+        // before this fix the badge never appeared on a reload of a
+        // live-sharing project.
+        const ctl = liveShares.get(msg.projectId);
+        const diskLive = project.activeShare?.live;
+        if (ctl && diskLive && !diskLive.paused) {
+          reply({
+            type: 'live-share-state',
+            projectId: msg.projectId,
+            status: 'live',
+            viewers: ctl.viewers,
+            revision: ctl.revision,
+            lastError: null,
+          });
+        } else if (diskLive?.paused) {
+          reply({
+            type: 'live-share-state',
+            projectId: msg.projectId,
+            status: 'paused',
+            viewers: ctl?.viewers || 0,
+            revision: ctl?.revision || diskLive.revision || 0,
+            lastError: null,
+          });
+        }
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
