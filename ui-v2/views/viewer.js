@@ -90,12 +90,12 @@ export function renderViewer(container, { onBack }) {
       const snapshot = await captureSnapshot(iframe);
       if (snapshot) {
         await sync.saveSnapshot(snapshot.html, null, 'manual');
-        toastInfo('Snapshot saved');
+        toastInfo('Moment bookmarked');
       } else {
-        toastError('Could not capture snapshot');
+        toastError('Could not capture the moment');
       }
     } catch (err) {
-      toastError(`Snapshot failed: ${err.message || err}`);
+      toastError(`Could not save bookmark: ${err.message || err}`);
     } finally {
       setTimeout(() => snapshotBtn?.classList.remove('flashing'), 300);
     }

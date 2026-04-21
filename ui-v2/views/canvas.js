@@ -101,7 +101,7 @@ export function renderCanvas(container, { onBack }) {
         <button class="toolbar-btn toolbar-icon-btn canvas-undo-btn" id="canvas-undo-btn" title="Undo (⌘Z)" aria-label="Undo" disabled>${iconUndo()}</button>
         <button class="toolbar-btn toolbar-icon-btn toolbar-comment-btn" id="canvas-comment-toggle" title="Comment on shape" aria-label="Toggle comment mode">${iconCommentPlus()}</button>
         <button class="toolbar-btn toolbar-icon-btn" id="canvas-timeline-btn" title="Timeline" aria-label="Timeline">${iconTimeline()}</button>
-        <button class="toolbar-btn toolbar-icon-btn canvas-snapshot-btn" id="canvas-snapshot-btn" title="Take snapshot" aria-label="Take snapshot">${iconCamera()}</button>
+        <button class="toolbar-btn toolbar-icon-btn canvas-snapshot-btn" id="canvas-snapshot-btn" title="Bookmark this moment in the timeline" aria-label="Bookmark moment">${iconCamera()}</button>
         <button class="toolbar-btn toolbar-icon-btn" id="canvas-share-btn" title="Share canvas" aria-label="Share canvas">${iconLink()}</button>
         <div class="canvas-export-wrapper">
           <button class="toolbar-btn toolbar-icon-btn canvas-export-btn" id="canvas-export-btn" title="Export" aria-label="Export">${iconDownload()}</button>
@@ -336,10 +336,10 @@ export function renderCanvas(container, { onBack }) {
       uiLayer.draw();
       const state = serializeContent(contentLayer);
       await sync.saveCanvasSnapshot(state, thumbnail, 'manual', 'user');
-      toastInfo('Snapshot saved');
+      toastInfo('Moment bookmarked');
     } catch (err) {
       console.warn('[canvas] snapshot failed:', err);
-      toastError('Snapshot failed');
+      toastError('Could not save bookmark');
     } finally {
       setTimeout(() => snapshotBtn.classList.remove('flashing'), 300);
     }

@@ -74,7 +74,7 @@ export function renderToolbar(container, { projectName, url, onBack, projectId }
         <button class="toolbar-btn toolbar-icon-btn" id="toolbar-timeline" title="Timeline" aria-label="Timeline">
           ${iconTimeline()}
         </button>
-        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-snapshot" title="Take snapshot" aria-label="Take snapshot">
+        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-snapshot" title="Bookmark this moment in the timeline" aria-label="Bookmark moment">
           ${iconCamera()}
         </button>
         <button class="toolbar-btn toolbar-icon-btn" id="toolbar-share" title="Share" aria-label="Share">
