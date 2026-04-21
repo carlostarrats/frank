@@ -6,17 +6,22 @@ A local-first collaboration layer. Point it at any URL — localhost, staging, p
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
 Latest tagged release: `v3.0` (canvas live share + async share for URL/PDF/image).
-Current branch: `dev-v3.1` (post-v3.0 cleanup / no named milestone).
+Current branch: `dev-v3.2` (post-v3.0 shipping: intent field, bundle-first download, MCP server).
 
-## v3.0 scope, and what's NOT on the roadmap
+## Scope — what ships and what's NOT on the roadmap
 
-**Live share is a canvas-only user-facing feature.** Canvas projects get full live collaboration (shape edits, drops, moves, comments all propagate to open viewers over SSE). Image, PDF, and URL projects pick up the shared transport infrastructure incidentally but surface static share + commenting as their UX — same as v2.
+**Live share is a canvas-only user-facing feature.** Canvas projects get full live collaboration (shape edits, drops, moves, comments all propagate to open viewers over SSE). Image, PDF, and URL projects pick up the shared transport infrastructure incidentally but surface static share + commenting as their UX.
 
-**URL live share was explored and deprioritized.** Screen-sharing (Google Meet, Zoom, Tuple) handles the real-time URL review case; v2's static share covers async. URL live would fight the architecture (cross-origin observability, auth leakage through proxy, reviewer network-context divergence) for use cases already covered by better tools. Not on the roadmap.
+**URL live share was explored and deprioritized.** Screen-sharing (Google Meet, Zoom, Tuple) handles the real-time URL review case; static share covers async. URL live would fight the architecture (cross-origin observability, auth leakage through proxy, reviewer network-context divergence) for use cases already covered by better tools. Not on the roadmap.
 
 **Phase 4b (PDF.js rendering migration) was dropped.** It was scoped as enabling PDF live sync. With PDF live sync not a feature, Phase 4b's justification collapsed. Browser-native PDF rendering is adequate for static PDF share.
 
-**No named post-v3.0 milestone.** `dev-v3.x` branches hold fragile-list cleanup from the Phase 6 handler audit, bug fixes from real v3.0 usage, or sit idle. Forcing a milestone when none is warranted is worse than shipping slowly.
+**Post-v3.0 additions (shipped on `dev-v3.2`):**
+- **Project brief / Intent** — free-text `intent` field on `ProjectV2` (≤ 2000 chars). Amber "Add Intent" / green "Intent set" pill in viewer + canvas toolbars. Prepended to Copy-for-AI prompts and included in JSON / MD / PDF exports.
+- **Bundle-first Download** — one zip (`daemon/src/bundle.ts` via JSZip) containing project.json + report.md + report.pdf + canvas-state.json + snapshots/ + source/ + assets/. Renamed canvas "Snapshot" → "**Bookmark moment**" so its intent doesn't blur with Download.
+- **MCP server** (`daemon/src/mcp/`) — Frank exposes 15 tools over Model Context Protocol (stdio transport). Tools cover reads (list_projects, load_project, get_intent, get_comments, get_canvas_state, list_snapshots, get_timeline, export_bundle) + canvas writes (add_shape, add_text, add_path, add_connector, insert_template placeholder, add_comment) + create_share. AI connects directly to a running daemon via `frank mcp` subprocess. Setup in Settings → MCP Setup tab.
+- **Live-share polish** — Resume after daemon restart (in-memory controller recreated on resume), optimistic spinner on pause/resume, custom expiry dropdown (1d / 1w / 1mo / 1y / custom), state broadcast across all panel clients (fixes cross-browser live-share visibility).
+- **UI polish** — clickable LIVE badge opens share modal; image wheel-zoom with toolbar pill; home card menu clamps inside viewport.
 
 Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 
@@ -70,13 +75,14 @@ Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 | Browser UI | Plain JS ES modules (no framework, no build step) |
 | Canvas | [Konva](https://konvajs.org/) 9, loaded via `<script>` tag |
 | Daemon | Node.js + TypeScript — HTTP server (42068) + WebSocket (42069) |
-| AI | Bring your own — Frank exports project context (JSON / MD / PDF) or hands off via "Copy as prompt". No in-app AI chat. |
+| AI | BYO — MCP server (stdio, `frank mcp`) for direct connection, clipboard "Copy as prompt" for one-off handoffs, JSON / MD / PDF export for whole-project handoffs. No in-app AI chat. |
 | Content wrapping | iframe + transparent overlay + content proxy |
-| Cloud sharing | Vercel serverless functions + Blob storage (self-hosted) |
+| Cloud sharing | Vercel serverless functions + Blob storage + Upstash Redis (self-hosted) |
 | Project storage | JSON files in `~/.frank/projects/` |
 | Comment anchoring | CSS selector + DOM path + visual coordinates (URL/PDF/image); shape ID + last-known world position (canvas) |
 | Canvas export | Raster PNG (Konva) · Vector SVG (in-house Konva→SVG translator) · Vector PDF (jsPDF + svg2pdf.js) |
 | Report export | Markdown (hand-written) · PDF (pdfmake w/ Roboto) |
+| Bundle export | One zip (JSZip) with JSON + reports + snapshots + source + assets |
 
 ---
 
@@ -124,13 +130,14 @@ frank/
 │   │   └── snapshot.js       # DOM snapshot capture for sharing
 │   ├── components/
 │   │   ├── toolbar.js        # Top toolbar (viewer) + exported SVG icons (commentPlus/camera/link/download/timeline/undo) shared with canvas
-│   │   ├── curation.js       # Feedback curation panel — inline edit, approve/dismiss toggles, pin-number color badge, focus-pulse, Copy-for-AI (batch), Delete (batch)
+│   │   ├── curation.js       # Feedback curation panel — inline edit, approve/dismiss toggles, pin-number color badge, focus-pulse, approved-gated "Copy for AI" (batch + per-row), Delete (batch)
+│   │   ├── intent-button.js  # Amber "Add Intent" / green "Intent set" pill + modal (project brief textarea, ≤ 2000 chars)
 │   │   ├── comments.js       # Comment input (used by overlay callback)
-│   │   ├── share-popover.js  # Share link management (viewer + canvas)
+│   │   ├── share-popover.js  # Share link management (viewer + canvas) — optimistic pause/resume spinner, custom expiry dropdown
 │   │   ├── ai-routing.js     # Clipboard AI routing (non-Claude fallback)
 │   │   ├── url-input.js      # URL paste + file picker + drag-drop (PDF / image)
 │   │   ├── help-panel.js     # Getting-started modal (5 feature cards, focus trap)
-│   │   ├── settings-panel.js # Settings modal — tabbed Cloud backend config (Vercel / custom), Deploy-to-Vercel CTA, "Why would I want a new deployment?" help, configured-at green hint, scrollable body with pinned header + Test connection
+│   │   ├── settings-panel.js # Settings modal — top-level tabs: "Cloud Backend" (Vercel / custom, Deploy-to-Vercel CTA, configured-at hint) + "MCP Setup" (config snippet + per-client paths + security notes). Takes `initialTopTab` param.
 │   │   ├── toast.js          # info/warn/error notifications (top-right, stackable, info shows checkmark)
 │   │   └── error-card.js     # Inline error block (message + suggestion + retry)
 │   └── styles/
@@ -144,24 +151,31 @@ frank/
 │       ├── canvas.css        # Canvas topbar, drawer, inspector, curation host, comment popovers, export menu
 ├── daemon/                   # Node.js daemon (TypeScript, strict)
 │   ├── vitest.config.ts
-│   ├── package.json          # deps: ws, pdfmake, tslib (@anthropic-ai/sdk is legacy dead code, slated for removal)
-│   ├── src/cli.ts            # frank start / stop / connect / status / export / uninstall
-│   ├── src/server.ts         # HTTP + WebSocket server, all message handlers
-│   ├── src/protocol.ts       # Shared types and constants
-│   ├── src/projects.ts       # Project CRUD + rename/archive/trash/restore/purge + createProjectFromFile
+│   ├── package.json          # deps: ws, pdfmake, tslib, jszip, @modelcontextprotocol/sdk (@anthropic-ai/sdk is legacy dead code, slated for removal)
+│   ├── src/cli.ts            # frank start / stop / connect / status / export / mcp / uninstall
+│   ├── src/server.ts         # HTTP + WebSocket server, all message handlers (incl. set-project-intent, export-bundle, mcp-add-*, mcp-create-share, canvas-state-changed broadcast)
+│   ├── src/protocol.ts       # Shared types and constants (incl. ProjectV2.intent, bundle + MCP message types)
+│   ├── src/projects.ts       # Project CRUD + rename/archive/trash/restore/purge + createProjectFromFile + setProjectIntent
 │   ├── src/assets.ts         # Content-addressed (sha256) asset storage per project
 │   ├── src/proxy.ts          # Content proxy for iframe-restricted URLs
 │   ├── src/cloud.ts          # Cloud client (share upload, comment fetch) + secret-aware config I/O
-│   ├── src/snapshots.ts      # DOM snapshot + canvas snapshot storage (thumbnail PNG for canvas)
-│   ├── src/curation.ts       # Curation log (approve, dismiss, remix, batch)
+│   ├── src/snapshots.ts      # Canvas "Bookmark moment" + DOM snapshot storage (thumbnail PNG for canvas)
+│   ├── src/curation.ts       # Curation log (approve, dismiss, remix, batch, reset)
 │   ├── src/ai-chain.ts       # AI instruction chain logging
-│   ├── src/export.ts         # Structured JSON export
-│   ├── src/report.ts         # Project report — Markdown + PDF (pdfmake, Roboto)
-│   ├── src/inject.ts         # CLAUDE.md injection/removal
+│   ├── src/export.ts         # Structured JSON export (includes intent)
+│   ├── src/report.ts         # Project report — Markdown + PDF (pdfmake, Roboto); intent appears under "Project brief"
+│   ├── src/bundle.ts         # Bundle-first Download (JSZip: project.json + reports + snapshots + source + assets)
+│   ├── src/canvas-writes.ts  # Programmatic canvas writes — addShape/addText/addPath/addConnector used by MCP
 │   ├── src/canvas.ts         # Canvas state I/O (one JSON blob per project)
-│   ├── src/ai-conversations.ts  # Per-project AI conversation storage (size + msg count caps)
-│   ├── src/ai-providers/claude.ts  # Claude API client, context builder with token budget
-│   └── src/*.test.ts         # Vitest tests (135 across 12 files)
+│   ├── src/live-share.ts     # Live-share transport + per-project-type controllers (canvas/image/pdf)
+│   ├── src/inject.ts         # CLAUDE.md injection/removal
+│   ├── src/mcp/              # MCP server (stdio transport)
+│   │   ├── server.ts         # runMcpServer() — @modelcontextprotocol/sdk StdioServerTransport
+│   │   ├── bridge.ts         # DaemonBridge — WebSocket client bridging stdio tools ↔ running daemon
+│   │   └── tools.ts          # 15 tool definitions + handlers (reads, canvas writes, create_share)
+│   ├── src/ai-conversations.ts  # Per-project AI conversation storage (legacy, UI-unreachable, slated for removal)
+│   ├── src/ai-providers/claude.ts  # Claude API client (legacy, UI-unreachable, slated for removal)
+│   └── src/*.test.ts         # Vitest tests (182 across 21 files; 9 more in the opt-in cloud integration harness)
 ├── frank-cloud/              # Reference cloud backend — Vercel + Blob (users host their own)
 │   ├── api/                  # Serverless functions (share, comment, health)
 │   ├── public/viewer/        # Share viewer page (iframe OR canvas render via Konva CDN)
@@ -209,8 +223,8 @@ frank/
 |---|---|
 | **Home** | Project list + URL/file entry. **Tabs** (Recent / Archived / Deleted) replace the old collapsible sections. Search / sort / type-filter chips below the tab. Cards support **inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete**. Keyboard: ↑/↓ between cards, Enter to open, Delete to trash, F2 to rename. Header has a **Settings** cog (cloud backend config) and **Help** button. |
 | **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar. **Numbered colored pins** render on the overlay for each comment; click → same draggable Close/Edit/Delete popover used by canvas; feedback-row click → pin pulses. Empty-space clicks drop free pins. Proxy failures render an inline **error card with Retry**. |
-| **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Shape- and pin-anchored comments** (SVG icon, speech-bubble-plus cursor), **snapshots** (camera icon, thumbnail saved, toast), **share** (link icon, bundled assets), **export dropdown** (PNG / SVG / PDF / JSON), **undo** (button + Cmd+Z, clears selection so no orphan transformer handles), **timeline** (shared event with viewer), **Cmd+C / Cmd+V / Cmd+D** copy/paste/duplicate shapes, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
-| **Timeline** | Chronological view of comments + snapshots + curations + AI instructions. Canvas snapshots show a Canvas badge + inline thumbnail. **Show folder** (reveal in Finder/Explorer) + unified **Export** dropdown (JSON / Markdown / PDF). Close (X) returns to canvas or viewer depending on the project. |
+| **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Intent pill** (amber/green), **shape- and pin-anchored comments** (SVG icon, speech-bubble-plus cursor), **Bookmark moment** (camera icon — captures canvas state + thumbnail to the timeline), **Share** (link icon, live-share toggle, clickable LIVE·N badge), **Download** (bundle zip), **Export dropdown** (PNG / SVG / PDF / JSON), **undo** (button + Cmd+Z), **timeline** (shared event with viewer), **Cmd+C / Cmd+V / Cmd+D** copy/paste/duplicate shapes, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
+| **Timeline** | Chronological view of comments + bookmarks + curations + AI instructions. Canvas bookmarks show a Canvas badge + inline thumbnail. **Show folder** (reveal in Finder/Explorer) + unified **Export** dropdown (JSON / Markdown / PDF). Close (X) returns to canvas or viewer depending on the project. |
 
 ## Commenting — unified across viewer and canvas
 
@@ -249,12 +263,15 @@ different tools, not visual drift.
 
 ## AI routing (BYO tool — no in-app chat)
 
-Frank does not bundle an in-app AI chat. That would lock users into one provider and force API-key management inside Frank. Instead, two handoff paths route feedback to whatever AI tool the user already uses:
+Frank does not bundle an in-app AI chat. That would lock users into one provider and force API-key management inside Frank. Instead, three handoff paths route feedback to whatever AI tool the user already uses:
 
-- **Clipboard — `ai-routing.js`**: the "Copy as prompt" button on curated comments puts a structured prompt on the clipboard. User pastes into Claude, Cursor, ChatGPT, a local LLM, whatever.
-- **Export — `daemon/src/export.ts` (JSON) + `daemon/src/report.ts` (MD/PDF)**: hand off the entire project at once. Every comment, curation, snapshot, and timeline entry is captured.
+- **MCP server — `daemon/src/mcp/`**: AI connects directly to Frank. The user adds a config snippet (Settings → MCP Setup) that spawns `frank mcp` as a subprocess; stdio-to-WebSocket bridge (`bridge.ts`) forwards tool calls to the running daemon. 15 tools: reads (list_projects, load_project, get_intent, get_comments, get_canvas_state, list_snapshots, get_timeline, export_bundle), canvas writes (add_shape, add_text, add_path, add_connector, insert_template placeholder, add_comment), create_share. Canvas writes broadcast `canvas-state-changed` so open browser tabs re-render live. **Intentionally user-driven (not exposed as MCP tools)**: revoke share, live-share start/resume/pause, delete project, curation actions. These are humans' calls.
+- **Clipboard — `ai-routing.js`**: the "Copy as prompt" button on approved comments puts a structured prompt on the clipboard (including the project's intent if set). User pastes into Claude, Cursor, ChatGPT, a local LLM, whatever.
+- **Export — `daemon/src/export.ts` (JSON) + `daemon/src/report.ts` (MD/PDF) + `daemon/src/bundle.ts` (zip)**: hand off the entire project at once. Every comment, curation, bookmark, and timeline entry is captured. Bundle adds snapshots + source + assets for full-context handoff.
 
 The `daemon/src/ai-chain.ts` log captures every Copy-as-prompt action so the export includes a decision trail of what was routed to which AI.
+
+**MCP projectId discipline:** `activeProjectId` on the daemon is tied to the browser's current view. MCP tools always pass an explicit `projectId` (derived from tool input) so an AI writing to project B never clobbers what the user is looking at in project A.
 
 Historical note: an earlier v2 version had an in-app Claude panel mounted in the viewer's right sidebar. It was removed pre-v3.0 in favor of the BYO-tool pattern above. The daemon-side `ai-conversations.ts` + `ai-providers/claude.ts` modules still exist but are unreachable from the UI — their removal is a v3.x cleanup item, not urgent.
 
@@ -262,9 +279,10 @@ Historical note: an earlier v2 version had an in-app Claude panel mounted in the
 
 ## Data shape
 
-### Project lifecycle flags (`ProjectV2`)
+### Project lifecycle flags + metadata (`ProjectV2`)
 - `archived?: string` — ISO timestamp when archived. Absence = active.
 - `trashed?: string` — ISO timestamp when soft-deleted. Auto-purged after 30 days at daemon startup (`purgeExpiredTrash`).
+- `intent?: string` — free-text project brief, ≤ 2000 chars (trimmed; empty deletes the field). Managed by `setProjectIntent()`. Renders as amber "Add Intent" / green "Intent set" pill in viewer + canvas toolbars; prepended to Copy-for-AI prompts; included in JSON / MD / PDF exports under "Project brief".
 
 ### Comment anchor variants
 - `type: 'element'` — DOM target (viewer). Carries `cssSelector`, `domPath`, visual coords **as percentages of the iframe viewport** (not pixels).
@@ -277,7 +295,10 @@ Historical note: an earlier v2 version had an in-app Claude panel mounted in the
 
 ### Snapshot variants
 - DOM snapshot: `snapshot.html` + optional screenshot. Used by URL/PDF/image projects.
-- Canvas snapshot (`canvasState: true` marker on meta): writes `canvas-state.json` (serialized Konva) + optional `thumbnail.png` (0.5× stage PNG) inside the snapshot dir.
+- Canvas "Bookmark moment" (`canvasState: true` marker on meta): writes `canvas-state.json` (serialized Konva) + optional `thumbnail.png` (0.5× stage PNG) inside the snapshot dir. User-facing terminology is "Bookmark moment" to distinguish capture-a-point-in-time from the Download bundle; the on-disk layout is unchanged from the v2 "snapshot" concept.
+
+### Download bundle
+- Built by `daemon/src/bundle.ts` via JSZip. Contains: `project.json` (structured export), `report.md` + `report.pdf`, `canvas-state.json` (canvas projects), `snapshots/` (every bookmark moment), `source/` (uploaded PDF / image sources), `assets/` (content-addressed canvas image drops + comment attachments).
 
 ### Share payload (canvas)
 `{ canvasState: string, assets: Record<url, dataUrl>, preview: string }` — fully self-contained; cloud viewer needs nothing but Konva from CDN to render.
