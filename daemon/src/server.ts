@@ -66,6 +66,70 @@ function liveShareRate(contentType: 'canvas' | 'image' | 'pdf' | 'url'): number 
   return 1;
 }
 
+// Creates and registers a LiveShareController for an existing active share.
+// Callers: start-live-share (fresh), resume-live-share (when the daemon has
+// been restarted since pause and no in-memory controller survives — without
+// this, Resume is a dead button as soon as the daemon bounces).
+//
+// Throws if no active share is on the project — the UI must create a share
+// before going live.
+function setupLiveShareController(ws: WebSocket, projectId: string): LiveShareController {
+  const project = loadProject(projectId);
+  if (!project.activeShare) throw new Error('No active share — create a share first');
+  const ctype = project.contentType as 'canvas' | 'image' | 'pdf' | 'url';
+  // `ctl` is referenced by the callbacks below; declared with `const` before
+  // the object literal resolves so the closures capture the final value.
+  const ctl: LiveShareController = new LiveShareController({
+    projectId,
+    shareId: project.activeShare.id,
+    contentType: ctype,
+    ratePerSecond: liveShareRate(ctype),
+    onComment: (comment) => {
+      ws.send(JSON.stringify({ type: 'live-share-comment', projectId, comment }));
+    },
+    onPresence: (viewers) => {
+      ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'live', viewers, revision: ctl.revision, lastError: null }));
+    },
+    onAuthorStatus: (status) => {
+      ws.send(JSON.stringify({
+        type: 'live-share-state',
+        projectId,
+        status: status === 'online' ? 'live' : status === 'offline' ? 'offline' : 'idle',
+        viewers: ctl.viewers,
+        revision: ctl.revision,
+        lastError: null,
+      }));
+    },
+    onShareEnded: (reason) => {
+      liveShares.get(projectId)?.stop();
+      liveShares.delete(projectId);
+      if (reason === 'revoked') {
+        ws.send(JSON.stringify({ type: 'share-revoked', projectId }));
+      } else {
+        ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'idle', viewers: 0, revision: ctl.revision, lastError: null }));
+      }
+    },
+    onError: (err) => {
+      ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'error', viewers: ctl.viewers, revision: ctl.revision, lastError: err }));
+    },
+    onBandwidthStatus: (throttled) => {
+      ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: throttled ? 'throttled' : 'live', viewers: ctl.viewers, revision: ctl.revision, lastError: null }));
+    },
+    onSessionTimeout: () => {
+      try {
+        const p = loadProject(projectId);
+        if (p.activeShare?.live) {
+          p.activeShare.live.paused = true;
+          saveProject(projectId, p);
+        }
+      } catch { /* best-effort */ }
+      ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'paused', viewers: ctl.viewers, revision: ctl.revision, lastError: 'session-timeout-2h' }));
+    },
+  });
+  liveShares.set(projectId, ctl);
+  return ctl;
+}
+
 // Phase 3: image projects fork a live push off each comment change. Phase 4
 // will add PDF. Canvas doesn't use this path — it has its own canvas-state
 // fork in save-canvas-state (Phase 2).
@@ -805,68 +869,13 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       (async () => {
         try {
           const { projectId } = msg;
-          const project = loadProject(projectId);
-          if (!project) { reply({ type: 'error', error: 'Project not found' }); return; }
-          if (!project.activeShare) { reply({ type: 'error', error: 'No active share — create a share first' }); return; }
           if (liveShares.has(projectId)) { reply({ type: 'error', error: 'Live share already running' }); return; }
-
-          const ctype = project.contentType as 'canvas' | 'image' | 'pdf' | 'url';
-          const ctl = new LiveShareController({
-            projectId,
-            shareId: project.activeShare.id,
-            contentType: ctype,
-            ratePerSecond: liveShareRate(ctype),
-            onComment: (comment) => {
-              ws.send(JSON.stringify({ type: 'live-share-comment', projectId, comment }));
-            },
-            onPresence: (viewers) => {
-              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'live', viewers, revision: ctl.revision, lastError: null }));
-            },
-            onAuthorStatus: (status) => {
-              ws.send(JSON.stringify({
-                type: 'live-share-state',
-                projectId,
-                status: status === 'online' ? 'live' : status === 'offline' ? 'offline' : 'idle',
-                viewers: ctl.viewers,
-                revision: ctl.revision,
-                lastError: null,
-              }));
-            },
-            onShareEnded: (reason) => {
-              liveShares.get(projectId)?.stop();
-              liveShares.delete(projectId);
-              if (reason === 'revoked') {
-                ws.send(JSON.stringify({ type: 'share-revoked', projectId }));
-              } else {
-                // reason === 'expired'
-                ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'idle', viewers: 0, revision: ctl.revision, lastError: null }));
-              }
-            },
-            onError: (err) => {
-              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'error', viewers: ctl.viewers, revision: ctl.revision, lastError: err }));
-            },
-            onBandwidthStatus: (throttled) => {
-              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: throttled ? 'throttled' : 'live', viewers: ctl.viewers, revision: ctl.revision, lastError: null }));
-            },
-            onSessionTimeout: () => {
-              // UI banner copy (Phase 5 renders it verbatim from this lastError):
-              //   "Live share paused — sessions auto-pause after 2 hours to prevent
-              //    accidental long-running sessions. Click Resume to continue."
-              try {
-                const p = loadProject(projectId);
-                if (p.activeShare?.live) {
-                  p.activeShare.live.paused = true;
-                  saveProject(projectId, p);
-                }
-              } catch { /* best-effort */ }
-              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'paused', viewers: ctl.viewers, revision: ctl.revision, lastError: 'session-timeout-2h' }));
-            },
-          });
-
-          liveShares.set(projectId, ctl);
-          project.activeShare.live = { revision: ctl.revision, startedAt: new Date().toISOString(), paused: false };
-          saveProject(projectId, project);
-
+          const ctl = setupLiveShareController(ws, projectId);
+          const project = loadProject(projectId);
+          if (project.activeShare) {
+            project.activeShare.live = { revision: ctl.revision, startedAt: new Date().toISOString(), paused: false };
+            saveProject(projectId, project);
+          }
           reply({ type: 'live-share-state', projectId, status: 'connecting', viewers: 0, revision: ctl.revision, lastError: null });
         } catch (e: any) {
           reply({ type: 'error', error: e.message });
@@ -905,9 +914,15 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       (async () => {
         try {
           const { projectId } = msg;
-          const ctl = liveShares.get(projectId);
-          if (!ctl) { reply({ type: 'error', error: 'Live share not initialized' }); return; }
-          ctl.resume();
+          // If the controller survived in memory (pause → resume within one
+          // daemon lifetime), reuse it. Otherwise recreate from the persisted
+          // activeShare so Resume works after a daemon restart.
+          let ctl = liveShares.get(projectId);
+          if (!ctl) {
+            ctl = setupLiveShareController(ws, projectId);
+          } else {
+            ctl.resume();
+          }
           try {
             const project = loadProject(projectId);
             if (project.activeShare?.live) {
