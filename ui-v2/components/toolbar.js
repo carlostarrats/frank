@@ -25,29 +25,28 @@ window.addEventListener('frank:share-revoked', (e) => {
 });
 
 function rerenderBadge(projectId) {
-  // Marker-based selector. Both the viewer's toolbar (components/toolbar.js)
-  // and the canvas view's inline share button (views/canvas.js) tag their
-  // share buttons with data-frank-share-btn + data-project-id. Neither
-  // existing button's class name is shared between the two views, so we
-  // use a neutral data-attribute marker rather than a class selector.
-  const shareBtn = document.querySelector('[data-frank-share-btn][data-project-id="' + projectId + '"]');
-  if (!shareBtn) return;
-  const badge = shareBtn.querySelector('.toolbar-live-badge');
+  // Badge lives in a dedicated host span next to the project title, not on
+  // top of the share button. Both the viewer toolbar and the canvas view
+  // include a span with data-frank-live-badge-host + data-project-id as the
+  // insertion point.
+  const host = document.querySelector('[data-frank-live-badge-host][data-project-id="' + projectId + '"]');
+  if (!host) return;
   const state = toolbarLiveState.get(projectId);
   if (!state || (state.status !== 'live' && state.status !== 'throttled')) {
-    if (badge) badge.remove();
+    host.innerHTML = '';
+    host.hidden = true;
     return;
   }
   const count = state.viewers || 0;
   const label = count === 1 ? 'LIVE · 1' : `LIVE · ${count}`;
-  if (badge) {
-    badge.textContent = label;
-  } else {
-    const el = document.createElement('span');
-    el.className = 'toolbar-live-badge';
-    el.textContent = label;
-    shareBtn.appendChild(el);
+  let badge = host.querySelector('.toolbar-live-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'toolbar-live-badge';
+    host.appendChild(badge);
   }
+  badge.textContent = label;
+  host.hidden = false;
 }
 
 // Called from view render paths after the share button is mounted to sync
@@ -64,6 +63,7 @@ export function renderToolbar(container, { projectName, url, onBack, projectId }
     <div class="toolbar">
       <button class="btn-ghost toolbar-back" id="toolbar-back" title="Back" aria-label="Back">←</button>
       <span class="toolbar-title">${escapeHtml(projectName)}</span>
+      <span class="toolbar-live-badge-host" data-frank-live-badge-host data-project-id="${projectId || ''}" hidden></span>
       <span class="toolbar-url">${escapeHtml(url || '')}</span>
       <div class="toolbar-spacer"></div>
       <div class="toolbar-actions">
@@ -78,7 +78,7 @@ export function renderToolbar(container, { projectName, url, onBack, projectId }
           ${iconTimeline()}
         </button>
         <button class="toolbar-btn toolbar-ai-toggle" id="toolbar-ai-toggle" title="Ask Claude">AI</button>
-        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-share" data-frank-share-btn data-project-id="${projectId || ''}" title="Share" aria-label="Share">
+        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-share" title="Share" aria-label="Share">
           ${iconLink()}
         </button>
       </div>

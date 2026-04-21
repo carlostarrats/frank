@@ -94,12 +94,13 @@ export function renderCanvas(container, { onBack }) {
       <div class="canvas-topbar">
         <button class="btn-ghost canvas-back" title="Back">←</button>
         <div class="canvas-title">${escapeHtml(project.name)}</div>
+        <span class="toolbar-live-badge-host" data-frank-live-badge-host data-project-id="${projectManager.getId() || ''}" hidden></span>
         <div class="canvas-topbar-spacer"></div>
         <button class="btn-ghost canvas-icon-btn canvas-undo-btn" id="canvas-undo-btn" title="Undo (⌘Z)" aria-label="Undo" disabled>${iconUndo()}</button>
         <button class="btn-ghost canvas-icon-btn canvas-comment-toggle" id="canvas-comment-toggle" title="Comment on shape" aria-label="Toggle comment mode">${iconCommentPlus()}</button>
         <button class="btn-ghost canvas-icon-btn" id="canvas-timeline-btn" title="Timeline" aria-label="Timeline">${iconTimeline()}</button>
         <button class="btn-ghost canvas-icon-btn canvas-snapshot-btn" id="canvas-snapshot-btn" title="Take snapshot" aria-label="Take snapshot">${iconCamera()}</button>
-        <button class="btn-ghost canvas-icon-btn canvas-share-btn" id="canvas-share-btn" data-frank-share-btn data-project-id="${projectManager.getId() || ''}" title="Share canvas" aria-label="Share canvas">${iconLink()}</button>
+        <button class="btn-ghost canvas-icon-btn canvas-share-btn" id="canvas-share-btn" title="Share canvas" aria-label="Share canvas">${iconLink()}</button>
         <div class="canvas-export-wrapper">
           <button class="btn-ghost canvas-icon-btn canvas-export-btn" id="canvas-export-btn" title="Export" aria-label="Export">${iconDownload()}</button>
           <div class="canvas-export-menu" id="canvas-export-menu" hidden>

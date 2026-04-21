@@ -1330,22 +1330,25 @@
   flex: 1;
 }
 
-/* v3 Phase 5: ambient LIVE badge on toolbar share buttons */
-[data-frank-share-btn] {
-  position: relative;  /* anchor for the absolute-positioned badge */
+/* v3 Phase 5: ambient LIVE badge sits inline next to the project title */
+.toolbar-live-badge-host {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+}
+.toolbar-live-badge-host[hidden] {
+  display: none;
 }
 .toolbar-live-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  padding: 2px 6px;
+  padding: 2px 8px;
   background: #ef4444;
   color: #fff;
-  font: 600 9px/1.2 -apple-system, system-ui, sans-serif;
-  border-radius: 8px;
-  letter-spacing: 0.02em;
+  font: 600 10px/1.2 -apple-system, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  border-radius: 10px;
   animation: toolbar-live-pulse 2s ease-in-out infinite;
   pointer-events: none;
+  white-space: nowrap;
 }
 @keyframes toolbar-live-pulse {
   0%, 100% { opacity: 1; }
