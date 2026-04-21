@@ -31,6 +31,13 @@ export default async function handler(req: Request): Promise<Response> {
       }
       const meta = JSON.parse(metaBlob);
 
+      // Check revocation first — DELETE sets both revoked:true AND
+      // expiresAt=epoch, so without this the expiry branch fires with
+      // the misleading 'expired' error message.
+      if (meta.revoked === true) {
+        return Response.json({ error: 'revoked' }, { status: 410 });
+      }
+
       // Check expiry
       if (new Date(meta.expiresAt) < new Date()) {
         return Response.json({
