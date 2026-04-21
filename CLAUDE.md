@@ -5,7 +5,20 @@ A collaboration layer for any web content. Point it at any URL — localhost, st
 
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
-Current branch: `dev-v2.07`.
+Latest tagged release: `v3.0` (canvas live share + async share for URL/PDF/image).
+Current branch: `dev-v3.1` (post-v3.0 cleanup / no named milestone).
+
+## v3.0 scope, and what's NOT on the roadmap
+
+**Live share is a canvas-only user-facing feature.** Canvas projects get full live collaboration (shape edits, drops, moves, comments all propagate to open viewers over SSE). Image, PDF, and URL projects pick up the shared transport infrastructure incidentally but surface static share + commenting as their UX — same as v2.
+
+**URL live share was explored and deprioritized.** Screen-sharing (Google Meet, Zoom, Tuple) handles the real-time URL review case; v2's static share covers async. URL live would fight the architecture (cross-origin observability, auth leakage through proxy, reviewer network-context divergence) for use cases already covered by better tools. Not on the roadmap.
+
+**Phase 4b (PDF.js rendering migration) was dropped.** It was scoped as enabling PDF live sync. With PDF live sync not a feature, Phase 4b's justification collapsed. Browser-native PDF rendering is adequate for static PDF share.
+
+**No named post-v3.0 milestone.** `dev-v3.x` branches hold fragile-list cleanup from the Phase 6 handler audit, bug fixes from real v3.0 usage, or sit idle. Forcing a milestone when none is warranted is worse than shipping slowly.
+
+Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 
 ---
 
@@ -29,12 +42,16 @@ Current branch: `dev-v2.07`.
 
 ### Self-Hosted Cloud
 - Sharing talks to a backend **the user hosts**. There is no Anthropic-run cloud.
-- The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md): four JSON-over-HTTPS endpoints (`/api/health`, `POST+GET /api/share`, `POST /api/comment`).
-- `frank-cloud/` is the **reference implementation** for Vercel + Blob. Any host that serves the contract works — Cloudflare Workers, Deno Deploy, self-hosted Node, etc. The Settings modal (home header → cog icon) has a "Use Vercel" tab leading with a one-click **Deploy to Vercel** button (`vercel.com/new/clone?...` with `root-directory=frank-cloud` + `FRANK_API_KEY` env prompt) and a "Use your own" tab for alternative backends. Two collapsibles under the deploy button — "Prefer the terminal?" (condensed two-command path) and "Full setup walkthrough" — cover the CLI routes.
+- The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md). v3 adds live-share endpoints on top of v2's static-share shape: `/api/health`, `GET+POST+DELETE /api/share`, `POST /api/comment`, `POST /api/share/:id/state`, `GET /api/share/:id/stream`, `GET /api/share/:id/author-stream`, `POST /api/share/:id/ping`.
+- `frank-cloud/` is the **reference implementation** — Vercel serverless functions + Vercel Blob (durable share payloads) + Upstash Redis (live presence, pubsub, session tracking, rolling 60s diff buffer). Full deployment walkthrough including required Vercel Marketplace integrations and the Deployment Protection gotcha: [`frank-cloud/DEPLOYMENT.md`](frank-cloud/DEPLOYMENT.md).
+- Any host that serves the contract works — Cloudflare Workers, Deno Deploy, self-hosted Node, etc. The Settings modal (home header → cog icon) has a "Use Vercel" tab with a one-click **Deploy to Vercel** button (`vercel.com/new/clone?...` with `root-directory=frank-cloud` + `FRANK_API_KEY` env prompt) and a "Use your own" tab for alternative backends.
+- Required env vars on the backend: `FRANK_API_KEY`, `KV_REST_API_URL`, `KV_REST_API_TOKEN` (Vercel Marketplace naming) OR `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (direct Upstash naming — `lib/redis.ts` reads either), `BLOB_READ_WRITE_TOKEN`.
+- Handler runtime split: `api/health.ts` and `api/tick.ts` run on Vercel's **edge** runtime (Fetch-API, no Blob deps). All blob-touching handlers run on Vercel's **nodejs** runtime with classic `(req: VercelRequest, res: VercelResponse)` signatures — edge rejects `@vercel/blob` at build time because of its transitive Node-only deps. `DEPLOYMENT.md` covers why.
 - The CLI equivalent is `frank connect <url> --key <key>`, which writes URL + key to `~/.frank/config.json` (mode 0600, secret-aware write). The Settings modal hits the same daemon handlers (`set-cloud-config`, `test-cloud-connection`).
 - `saveCloudConfig()` also writes `cloudConfiguredAt` (ISO timestamp). It flows back through `get/set-cloud-config` so the Settings UI can show a green "Already configured on <date>" hint at the top of both tabs when a config is on file.
 - Cloud is optional — everything except sharing works offline. Until it's configured, the Share button warns that cloud isn't set up.
 - For canvas sharing, the daemon bundles the canvas state + every referenced asset as inline data URLs into the share payload, so the cloud viewer can render without round-tripping back to the daemon.
+- For live share, the daemon opens a long-lived SSE connection to `/api/share/:id/author-stream` per active live share and POSTs state updates to `/api/share/:id/state` with monotonic revisions. Viewers open `/api/share/:id/stream` and receive either a full state (cold open, or 30s stale) or a diff replay from the 60s rolling buffer. All three per-project-type controllers (canvas/image/pdf) share the transport; only canvas surfaces live as a user-facing feature.
 
 ### Plain JS Frontend
 - **No build step.** The `ui-v2/` directory is served directly by the daemon's HTTP server.
@@ -279,19 +296,25 @@ Wired: viewer proxy failure (error card), canvas save double-failure (toast + re
 
 ## Testing
 
-The daemon has a Vitest test suite (**135 tests across 12 files**). Tests use temp directories — never touch real `~/.frank/`.
+The daemon has a Vitest test suite (**182 passing across 21 files**, plus an opt-in cloud integration harness with 9 more tests). Unit tests use temp directories — never touch real `~/.frank/`.
 
 ```bash
 cd daemon
-npm test           # run all tests once
+npm test           # run all unit tests once
 npm run test:watch # watch mode
+
+# Opt-in integration harness — exercises the real backend contract.
+# Skipped on a plain `npm test` run. See frank-cloud/INTEGRATION_TESTING.md.
+FRANK_CLOUD_BASE_URL=http://localhost:3000 \
+  FRANK_CLOUD_API_KEY=<key> \
+  npm test -- cloud-integration
 ```
 
 Test files live alongside source: `src/*.test.ts`. Each test file mocks `./protocol.js` to redirect `PROJECTS_DIR` to a temp directory. The `inject.test.ts` file additionally mocks `os.homedir()` using `vi.hoisted()`.
 
-**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `ai-conversations.ts`.
+**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `ai-conversations.ts`, `revision-store.ts`, `live-share.ts` (transport + per-project-type controllers for canvas/image/pdf).
 
-After changing any daemon module, run `npm test` to verify nothing broke.
+After changing any daemon module, run `npm test` to verify nothing broke. For changes that touch the daemon ↔ cloud contract, run the integration harness too — see the "Shipping a phase" section below.
 
 ---
 
