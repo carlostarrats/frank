@@ -1,8 +1,7 @@
 /* App chrome styles */
 
-/* Viewer toolbar + canvas topbar share a single visual language. Any change
-   here should be mirrored in .canvas-topbar (canvas.css) — they're intended
-   to look identical. */
+/* Unified toolbar — used by viewer (components/toolbar.js) and canvas
+   (views/canvas.js). Single source of truth for the app chrome. */
 .toolbar {
   display: flex;
   align-items: center;
