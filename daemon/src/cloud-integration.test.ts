@@ -13,7 +13,12 @@ const API_KEY = process.env.FRANK_CLOUD_API_KEY;
 
 const skip = !BASE_URL || !API_KEY;
 
-describe.skipIf(skip)('cloud integration', () => {
+// Edge functions on `vercel dev` have a cold-start warmup per endpoint
+// (~2–4s first hit, <1s once warm). Default Vitest per-test timeout of
+// 5s isn't enough for tests that exercise two or three cold endpoints
+// in sequence. Bump it to 15s for the whole suite; the SSE test has
+// its own explicit longer timeout.
+describe.skipIf(skip)('cloud integration', { timeout: 15_000 }, () => {
   beforeAll(() => {
     if (!BASE_URL) throw new Error('FRANK_CLOUD_BASE_URL required');
     if (!API_KEY) throw new Error('FRANK_CLOUD_API_KEY required');
@@ -251,6 +256,8 @@ describe.skipIf(skip)('cloud integration', () => {
       }),
     });
     expect(post.status).toBe(410);
+    const body = await post.json();
+    expect(body.error).toBe('revoked');
   });
 
   it('ping on nonexistent share returns 404', async () => {

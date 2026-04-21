@@ -43,6 +43,12 @@ export default async function handler(req: Request): Promise<Response> {
     const metaRes = await fetch(metaBlobs.blobs[0].url);
     const meta = JSON.parse(await metaRes.text());
 
+    // Check revocation first — parity with GET /api/share's ordering,
+    // so callers get the accurate error code when a share was revoked.
+    if (meta.revoked === true) {
+      return Response.json({ error: 'revoked' }, { status: 410 });
+    }
+
     if (new Date(meta.expiresAt) < new Date()) {
       return Response.json({ error: 'Share expired' }, { status: 410 });
     }
