@@ -923,6 +923,11 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           project.activeShare = null;
           saveProject(projectId, project);
           reply({ type: 'share-revoked', projectId });
+          // Also push fresh project state so the UI's projectManager clears
+          // its cached activeShare. Without this the popover + toolbar refresh
+          // from share-revoked but projectManager.get() still reports the
+          // old activeShare until the next full reload.
+          reply({ type: 'project-loaded', projectId, project, comments: loadComments(projectId) });
         } catch (e: any) {
           reply({ type: 'error', error: e.message });
         }
