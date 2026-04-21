@@ -470,10 +470,10 @@
 }
 .home-col { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
 
-/* Left-column intro — headline + lede, outside the framed panels. */
-.home-intro { display: flex; flex-direction: column; gap: var(--space-3); }
+/* About-panel headline + lede. Live inside a .home-panel so the panel
+   owns padding; stacking is handled by .home-panel > * + *. */
 .home-headline {
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
   font-weight: 600;
   line-height: 1.3;
   color: var(--foreground);
@@ -482,7 +482,6 @@
   font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--muted-foreground);
-  max-width: 56ch;
 }
 
 /* Terminal-frame panel — border on all sides with a title that straddles
@@ -517,11 +516,9 @@
 
 .home-masthead {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
-  padding-bottom: var(--space-6);
   margin-bottom: var(--space-12);
-  border-bottom: 1px dashed var(--border);
 }
 .home-masthead-spacer { flex: 1; }
 .home-icon-btn {
@@ -771,6 +768,9 @@
   height: 56px;
   filter: brightness(0) invert(1);
 }
+@media (min-width: 1024px) {
+  .home-logo { height: 72px; }
+}
 
 .home-version {
   font-size: 11px;
@@ -930,7 +930,7 @@
   align-items: center;
   gap: 6px;
 }
-.home-filter-row .home-sort {
+.home-filter-row .home-sort-wrapper {
   flex-shrink: 0;
 }
 .home-search {
@@ -939,23 +939,52 @@
   padding: 4px 10px;
   font-size: 13px;
 }
-.home-sort {
-  appearance: none;
-  -webkit-appearance: none;
+
+/* Sort dropdown — custom menu matching the canvas/timeline export dropdowns
+   and the project-card context menu. Replaces the native <select>. */
+.home-sort-wrapper { position: relative; display: inline-flex; }
+.home-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 28px;
-  padding: 0 22px 0 8px;
+  padding: 0 10px;
   font-size: 12px;
-  background-color: transparent;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  background-size: 10px 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  border-radius: 0;
-  color: var(--text-muted);
-  width: auto;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
 }
-.home-sort:hover { color: var(--text); }
+.home-sort-btn:hover { background: var(--muted); color: var(--foreground); }
+.home-sort-btn[aria-expanded="true"] { background: var(--muted); color: var(--foreground); border-color: var(--ring); }
+.home-sort-caret { opacity: 0.7; }
+.home-sort-menu {
+  position: fixed;
+  min-width: 140px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 1000;
+}
+.home-sort-menu[hidden] { display: none; }
+.home-sort-item {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--foreground);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+}
+.home-sort-item:hover { background: color-mix(in oklch, var(--ring), transparent 85%); }
+.home-sort-item.active { color: var(--foreground); background: color-mix(in oklch, var(--ring), transparent 80%); }
 .home-filter-chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chip {
   display: inline-flex;
@@ -971,10 +1000,10 @@
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.chip:hover { background: var(--bg-surface); color: var(--text); }
+.chip:hover { background: var(--muted); color: var(--foreground); }
 .chip.active {
-  background: var(--bg-surface);
-  color: var(--text);
+  background: var(--muted);
+  color: var(--foreground);
   border-color: var(--ring);
 }
 .chip-count {

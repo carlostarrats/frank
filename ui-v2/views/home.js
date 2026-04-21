@@ -12,6 +12,21 @@ const DEFAULT_UI_STATE = {
   tab: 'recent',            // 'recent' | 'archived' | 'trash'
 };
 
+const SORT_LABELS = {
+  recent: 'Recent',
+  oldest: 'Oldest',
+  alpha: 'A–Z',
+  type: 'Type',
+};
+
+const FILTER_LABELS = {
+  all: 'All',
+  canvas: 'Canvas',
+  url: 'URL',
+  pdf: 'PDF',
+  image: 'Image',
+};
+
 let uiState = { ...DEFAULT_UI_STATE };
 let openMenu = null;
 
@@ -37,10 +52,10 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
 
       <div class="home-grid">
         <div class="home-col home-col-left">
-          <div class="home-intro">
+          <section class="home-panel" data-title="about">
             <h1 class="home-headline">A local-first collaboration layer.</h1>
             <p class="home-lede">Runs on your machine. Point Frank at a URL, drop in a file, or start a canvas — then comment, curate, and route feedback to AI. Every decision captured. Nothing leaves your computer unless you share.</p>
-          </div>
+          </section>
 
           <section class="home-panel" data-title="new share">
             <div class="home-new" id="home-new"></div>
@@ -192,11 +207,9 @@ function renderToolbar(activeProjects) {
     acc[p.contentType] = (acc[p.contentType] || 0) + 1;
     return acc;
   }, {});
-  const chip = (id, label) => {
-    const count = id === 'all' ? activeProjects.length : (typeCounts[id] || 0);
-    const active = uiState.filter === id ? ' active' : '';
-    return `<button class="chip${active}" data-filter="${id}">${label}<span class="chip-count">${count}</span></button>`;
-  };
+  const countFor = (id) => id === 'all' ? activeProjects.length : (typeCounts[id] || 0);
+
+  const caret = `<svg class="home-sort-caret" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
   return `
     <div class="home-toolbar">
@@ -208,17 +221,28 @@ function renderToolbar(activeProjects) {
         id="home-search-input"
       >
       <div class="home-filter-row">
-        ${chip('all', 'All')}
-        ${chip('canvas', 'Canvas')}
-        ${chip('url', 'URL')}
-        ${chip('pdf', 'PDF')}
-        ${chip('image', 'Image')}
-        <select class="input home-sort" id="home-sort-select" title="Sort">
-          <option value="recent"${uiState.sort === 'recent' ? ' selected' : ''}>Recent</option>
-          <option value="oldest"${uiState.sort === 'oldest' ? ' selected' : ''}>Oldest</option>
-          <option value="alpha"${uiState.sort === 'alpha' ? ' selected' : ''}>A–Z</option>
-          <option value="type"${uiState.sort === 'type' ? ' selected' : ''}>Type</option>
-        </select>
+        <div class="home-sort-wrapper">
+          <button type="button" class="btn-secondary home-sort-btn" id="home-filter-btn" aria-haspopup="menu" aria-expanded="false" title="Kind">
+            <span class="home-sort-label">${FILTER_LABELS[uiState.filter]} <span class="chip-count">${countFor(uiState.filter)}</span></span>
+            ${caret}
+          </button>
+          <div class="home-sort-menu" id="home-filter-menu" role="menu" hidden>
+            ${['all', 'canvas', 'url', 'pdf', 'image'].map(k => `
+              <button type="button" role="menuitemradio" aria-checked="${uiState.filter === k}" class="home-sort-item${uiState.filter === k ? ' active' : ''}" data-filter="${k}">${FILTER_LABELS[k]} <span class="chip-count">${countFor(k)}</span></button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="home-sort-wrapper">
+          <button type="button" class="btn-secondary home-sort-btn" id="home-sort-btn" aria-haspopup="menu" aria-expanded="false" title="Sort">
+            <span class="home-sort-label">${SORT_LABELS[uiState.sort] || 'Sort'}</span>
+            ${caret}
+          </button>
+          <div class="home-sort-menu" id="home-sort-menu" role="menu" hidden>
+            ${['recent', 'oldest', 'alpha', 'type'].map(k => `
+              <button type="button" role="menuitemradio" aria-checked="${uiState.sort === k}" class="home-sort-item${uiState.sort === k ? ' active' : ''}" data-sort="${k}">${SORT_LABELS[k]}</button>
+            `).join('')}
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -237,19 +261,49 @@ function wireToolbar(host, refresh) {
     });
   }
 
-  const sort = host.querySelector('#home-sort-select');
-  if (sort) {
-    sort.addEventListener('change', (e) => {
-      uiState.sort = e.target.value;
-      refresh();
-    });
-  }
+  wireDropdown(host, '#home-sort-btn', '#home-sort-menu', 'sort', refresh);
+  wireDropdown(host, '#home-filter-btn', '#home-filter-menu', 'filter', refresh);
+}
 
-  host.querySelectorAll('.chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      uiState.filter = btn.dataset.filter;
+// Shared wiring for the Kind + Sort dropdowns: toggle, click-outside,
+// Escape, fixed-positioning anchor relative to the trigger button.
+function wireDropdown(host, btnSel, menuSel, stateKey, refresh) {
+  const btn = host.querySelector(btnSel);
+  const menu = host.querySelector(menuSel);
+  if (!btn || !menu) return;
+  const itemSel = `data-${stateKey}`;
+
+  const close = () => {
+    menu.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!menu.hasAttribute('hidden')) { close(); return; }
+    const rect = btn.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.left = `${rect.right - menu.offsetWidth || rect.right - 140}px`;
+    menu.removeAttribute('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    // Re-anchor after layout so offsetWidth is known.
+    const w = menu.offsetWidth;
+    menu.style.left = `${Math.max(8, rect.right - w)}px`;
+  });
+  menu.querySelectorAll('.home-sort-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      uiState[stateKey] = item.getAttribute(itemSel);
+      close();
       refresh();
     });
+  });
+  document.addEventListener('click', (e) => {
+    if (menu.hasAttribute('hidden')) return;
+    if (e.target.closest('.home-sort-wrapper')) return;
+    close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.hasAttribute('hidden')) close();
   });
 }
 
