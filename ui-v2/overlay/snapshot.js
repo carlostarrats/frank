@@ -88,3 +88,34 @@ export function detectSensitiveContent(html) {
 
   return warnings;
 }
+
+// Builds a share snapshot for image/PDF project types — fetches the source
+// file from the daemon's /files/ route (same-origin, so this works) and
+// inlines it as a data URL. Returns null on failure.
+export async function buildMediaFileSnapshot(filePath) {
+  try {
+    const res = await fetch(`/files/${encodeURIComponent(filePath)}`);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const mimeType = blob.type || 'application/octet-stream';
+    const fileDataUrl = await blobToDataUrl(blob);
+    return {
+      fileDataUrl,
+      mimeType,
+      capturedAt: new Date().toISOString(),
+      frankVersion: '2',
+    };
+  } catch (e) {
+    console.error('[snapshot] buildMediaFileSnapshot failed:', e);
+    return null;
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Read failed'));
+    reader.readAsDataURL(blob);
+  });
+}

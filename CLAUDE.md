@@ -295,6 +295,24 @@ After changing any daemon module, run `npm test` to verify nothing broke.
 
 ---
 
+## Shipping a phase
+
+A phase isn't complete when `daemon/npm test` passes. It's complete when the end-to-end flow it enables works against a real deployment — `vercel dev` locally or a Vercel preview — with the cloud integration harness green.
+
+For any phase that touches the daemon ↔ cloud contract:
+
+1. **Daemon unit tests pass** — `cd daemon && npm test`.
+2. **Cloud integration harness passes** — `FRANK_CLOUD_BASE_URL=<url> FRANK_CLOUD_API_KEY=<key> npm test -- cloud-integration` (see [`frank-cloud/INTEGRATION_TESTING.md`](frank-cloud/INTEGRATION_TESTING.md)).
+3. **Manual smoke of the phase's user-visible flow in a browser.**
+
+Steps 1 and 2 are table stakes; step 3 catches UI-layer bugs neither set of tests can see. Skipping any of the three invalidates the "phase complete" claim.
+
+This rule was written after the v3.0 smoke test surfaced five categorical cloud bugs that had survived Phases 1–5 because only step 1 was enforced. The rule exists because the failure mode is real and recent.
+
+> **Enforcement is currently advisory.** Stronger patterns (a `npm run preflight` script, a pre-merge git hook, a required checkbox in the plan template) are v3.x follow-ups — see the "Out of scope" section of [`docs/superpowers/plans/2026-04-20-v3-phase6-cloud-stabilization.md`](docs/superpowers/plans/2026-04-20-v3-phase6-cloud-stabilization.md).
+
+---
+
 ## After changing UI code
 
 After any change to files in `ui-v2/`:

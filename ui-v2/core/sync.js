@@ -40,6 +40,10 @@ function connect() {
         resolve(msg);
         return;
       }
+      if (msg.type === 'live-share-state' || msg.type === 'live-share-comment' || msg.type === 'share-revoked') {
+        window.dispatchEvent(new CustomEvent(`frank:${msg.type}`, { detail: msg }));
+        return;
+      }
       for (const handler of messageHandlers) handler(msg);
     } catch (e) {
       console.warn('[sync] parse error:', e);
@@ -88,6 +92,10 @@ const sync = {
   connect,
   onMessage(handler) { messageHandlers.push(handler); },
   offMessage(handler) { messageHandlers = messageHandlers.filter(h => h !== handler); },
+  // Generic send for WebSocket messages without a dedicated method — used by
+  // live-share lifecycle events (start/stop/resume/revoke) and any other
+  // fire-and-forget messages that don't need a typed wrapper.
+  send(msg) { return send(msg); },
 
   listProjects() { return send({ type: 'list-projects' }); },
   loadProject(projectId) { return send({ type: 'load-project', projectId }); },
@@ -113,8 +121,8 @@ const sync = {
   },
   deleteComment(commentId) { return send({ type: 'delete-comment', commentId }); },
   requestProxy(url) { return send({ type: 'proxy-url', url }); },
-  uploadShare(snapshot, coverNote, contentType, oldShareId, oldRevokeToken) {
-    return send({ type: 'upload-share', snapshot, coverNote, contentType, oldShareId, oldRevokeToken });
+  uploadShare(snapshot, coverNote, contentType, oldShareId, oldRevokeToken, expiryDays) {
+    return send({ type: 'upload-share', snapshot, coverNote, contentType, oldShareId, oldRevokeToken, expiryDays });
   },
   getCloudStatus() {
     return send({ type: 'cloud-status' });

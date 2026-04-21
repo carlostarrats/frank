@@ -17,5 +17,5 @@ export default function handler(req: Request): Response {
     return Response.json({ status: 'error', message: 'Invalid API key' }, { status: 401 });
   }
 
-  return Response.json({ status: 'ok', version: '2' });
+  return Response.json({ status: 'ok', version: '3' });
 }

@@ -34,6 +34,12 @@ export interface ActiveShare {
   coverNote: string;
   lastSyncedNoteId: string | null;
   unseenNotes: number;
+  // v3 additions — absent on v2 shares
+  live?: {
+    revision: number;           // last revision the daemon pushed successfully
+    startedAt: string;          // ISO — when the live session opened
+    paused: boolean;            // true when the author clicked "Stop live share"
+  };
 }
 
 export interface CommentAnchor {
@@ -106,7 +112,16 @@ export interface AddScreenRequest { type: 'add-screen'; route: string; label: st
 export interface AddCommentRequest { type: 'add-comment'; screenId: string; anchor: CommentAnchor; text: string; requestId?: number; }
 export interface DeleteCommentRequest { type: 'delete-comment'; commentId: string; requestId?: number; }
 export interface ProxyUrlRequest { type: 'proxy-url'; url: string; requestId?: number; }
-export interface UploadShareRequest { type: 'upload-share'; snapshot: unknown; coverNote: string; contentType: string; oldShareId?: string; oldRevokeToken?: string; requestId?: number; }
+export interface UploadShareRequest {
+  type: 'upload-share';
+  snapshot: unknown;
+  coverNote: string;
+  contentType: string;
+  oldShareId?: string;
+  oldRevokeToken?: string;
+  expiryDays?: number;  // v3 Phase 5: optional. Absent = backend default (7 days).
+  requestId?: number;
+}
 export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; }
 export interface GetCloudConfigRequest { type: 'get-cloud-config'; requestId?: number; }
 export interface SetCloudConfigRequest { type: 'set-cloud-config'; cloudUrl: string; apiKey: string; requestId?: number; }
@@ -127,6 +142,19 @@ export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackI
 export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
 export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }
 export interface RevealProjectFolderRequest { type: 'reveal-project-folder'; projectId?: string; requestId?: number; }
+
+// v3 live-share controls (UI → daemon)
+export interface StartLiveShareRequest { type: 'start-live-share'; projectId: string; requestId?: number; }
+export interface StopLiveShareRequest { type: 'stop-live-share'; projectId: string; requestId?: number; }
+export interface ResumeLiveShareRequest { type: 'resume-live-share'; projectId: string; requestId?: number; }
+export interface PushLiveStateRequest {
+  type: 'push-live-state';
+  projectId: string;
+  kind: 'state' | 'diff';
+  payload: unknown;
+  requestId?: number;
+}
+export interface RevokeShareRequest { type: 'revoke-share'; projectId: string; requestId?: number; }
 
 export type AppMessage =
   | ListProjectsRequest
@@ -166,7 +194,12 @@ export type AppMessage =
   | ClearAiApiKeyRequest
   | ListAiConversationsRequest
   | LoadAiConversationRequest
-  | SendAiMessageRequest;
+  | SendAiMessageRequest
+  | StartLiveShareRequest
+  | StopLiveShareRequest
+  | ResumeLiveShareRequest
+  | PushLiveStateRequest
+  | RevokeShareRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -334,6 +367,27 @@ export interface ConversationFullMessage {
 }
 export interface FolderRevealedMessage { type: 'folder-revealed'; requestId?: number; path: string; }
 
+// v3 live-share status broadcasts (daemon → UI)
+export interface LiveShareStateMessage {
+  type: 'live-share-state';
+  projectId: string;
+  // 'unsupported' = backend is v2-only (see Migration Coexistence section).
+  // 'throttled' = daemon hit bandwidth cap; live is still active but current edits are buffered.
+  status: 'idle' | 'connecting' | 'live' | 'paused' | 'offline' | 'error' | 'unsupported' | 'throttled';
+  viewers: number;
+  revision: number;
+  lastError: string | null;
+}
+export interface LiveShareCommentMessage {
+  type: 'live-share-comment';
+  projectId: string;
+  comment: Comment;
+}
+export interface ShareRevokedMessage {
+  type: 'share-revoked';
+  projectId: string;
+}
+
 export type DaemonMessage =
   | ProjectListMessage
   | ProjectLoadedMessage
@@ -361,7 +415,10 @@ export type DaemonMessage =
   | AiStreamEndedMessage
   | AiStreamErrorMessage
   | ConversationFullMessage
-  | FolderRevealedMessage;
+  | FolderRevealedMessage
+  | LiveShareStateMessage
+  | LiveShareCommentMessage
+  | ShareRevokedMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 

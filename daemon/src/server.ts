@@ -18,7 +18,8 @@ import { saveAsset, ALLOWED_MIME_TYPES } from './assets.js';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB cap for base64-over-WS uploads
 import { proxyRequest } from './proxy.js';
-import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments, saveCloudConfig, healthCheck, getCloudConfiguredAt } from './cloud.js';
+import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments, saveCloudConfig, healthCheck, getCloudConfiguredAt, revokeShare } from './cloud.js';
+import { LiveShareController } from './live-share.js';
 import { mergeCloudComments } from './projects.js';
 import { saveSnapshot, saveCanvasSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
 import { addCuration, applyCurationToComments } from './curation.js';
@@ -35,6 +36,12 @@ import {
 } from './ai-conversations.js';
 import { buildContext, streamChat } from './ai-providers/claude.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { buildCanvasLivePayload } from './canvas-live.js';
+import { decideCanvasSend, clearSendState } from './canvas-send-state.js';
+import { buildImageLivePayload } from './image-live.js';
+import { decideImageSend, clearImageSendState } from './image-send-state.js';
+import { buildPdfLivePayload } from './pdf-live.js';
+import { decidePdfSend, clearPdfSendState } from './pdf-send-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,6 +52,61 @@ let activeProjectId: string | null = null;
 
 // Active proxy targets: maps a slug to a target URL
 const proxyTargets = new Map<string, string>();
+
+// One LiveShareController per projectId. Paused on stop-live-share (entry
+// stays in the map so resume-live-share can reuse the same controller);
+// removed on revoke-share / SIGINT.
+const liveShares = new Map<string, LiveShareController>();
+
+function liveShareRate(contentType: 'canvas' | 'image' | 'pdf' | 'url'): number {
+  if (contentType === 'canvas') return 15;
+  if (contentType === 'pdf') return 5;
+  if (contentType === 'image') return 1;
+  return 1;
+}
+
+// Phase 3: image projects fork a live push off each comment change. Phase 4
+// will add PDF. Canvas doesn't use this path — it has its own canvas-state
+// fork in save-canvas-state (Phase 2).
+//
+// Race behavior: two near-simultaneous comment events (e.g., add + curate
+// firing within ~100ms) each call this function. Both call buildImageLivePayload,
+// which re-reads the LATEST comments.json each time — so both pushes reflect
+// post-both-events state, not pre-event state. The LiveShareController's
+// pushState/pushDiff coalesces under the hood (Phase 1 `live-share.ts`:
+// `this.pending = { kind, payload }` replaces any pending update; `flushTimer`
+// debounces), so the backend only sees the final state, not intermediate ones.
+async function forkImageLivePush(projectId: string): Promise<void> {
+  const ctl = liveShares.get(projectId);
+  if (!ctl) return;
+  const project = loadProject(projectId);
+  if (!project || project.contentType !== 'image' || !project.activeShare?.id) return;
+  try {
+    const payload = await buildImageLivePayload(projectId);
+    if (!payload) return;
+    const decision = decideImageSend(project.activeShare.id, payload);
+    if (decision.kind === 'state') ctl.pushState(decision.payload);
+    else ctl.pushDiff(decision.payload);
+  } catch { /* best-effort; persistence already succeeded */ }
+}
+
+// Phase 4a: PDF projects fork a live push off each comment change. Same
+// pattern as Phase 3's forkImageLivePush — the PDF file is immutable during
+// a session, so comment changes drive live updates. Page/scroll sync is
+// NOT implemented here (deferred to Phase 4b post-PDF.js-migration).
+async function forkPdfLivePush(projectId: string): Promise<void> {
+  const ctl = liveShares.get(projectId);
+  if (!ctl) return;
+  const project = loadProject(projectId);
+  if (!project || project.contentType !== 'pdf' || !project.activeShare?.id) return;
+  try {
+    const payload = await buildPdfLivePayload(projectId);
+    if (!payload) return;
+    const decision = decidePdfSend(project.activeShare.id, payload);
+    if (decision.kind === 'state') ctl.pushState(decision.payload);
+    else ctl.pushDiff(decision.payload);
+  } catch { /* best-effort; persistence already succeeded */ }
+}
 
 export function startServer(): void {
   fs.mkdirSync(FRANK_DIR, { recursive: true });
@@ -201,6 +263,32 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         const comments = loadComments(msg.projectId);
         activeProjectId = msg.projectId;
         reply({ type: 'project-loaded', projectId: msg.projectId, project, comments });
+        // Re-emit live-share state so the UI can populate ambient badges +
+        // popover status without waiting for the next state tick. Phase 5's
+        // syncToolbarLiveBadge relied on this being available on mount;
+        // before this fix the badge never appeared on a reload of a
+        // live-sharing project.
+        const ctl = liveShares.get(msg.projectId);
+        const diskLive = project.activeShare?.live;
+        if (ctl && diskLive && !diskLive.paused) {
+          reply({
+            type: 'live-share-state',
+            projectId: msg.projectId,
+            status: 'live',
+            viewers: ctl.viewers,
+            revision: ctl.revision,
+            lastError: null,
+          });
+        } else if (diskLive?.paused) {
+          reply({
+            type: 'live-share-state',
+            projectId: msg.projectId,
+            status: 'paused',
+            viewers: ctl?.viewers || 0,
+            revision: ctl?.revision || diskLive.revision || 0,
+            lastError: null,
+          });
+        }
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -347,6 +435,8 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           text: msg.text,
         });
         broadcast({ type: 'comment-added', comment } as any);
+        void forkImageLivePush(activeProjectId);
+        void forkPdfLivePush(activeProjectId);
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -357,6 +447,8 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
         deleteComment(activeProjectId, msg.commentId);
+        void forkImageLivePush(activeProjectId);
+        void forkPdfLivePush(activeProjectId);
         const project = loadProject(activeProjectId);
         const comments = loadComments(activeProjectId);
         reply({ type: 'project-loaded', projectId: activeProjectId, project, comments });
@@ -383,7 +475,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           const project = activeProjectId ? loadProject(activeProjectId) : null;
           const oldShareId = project?.activeShare?.id;
           const oldRevokeToken = project?.activeShare?.revokeToken;
-          const result = await uploadShare(msg.snapshot, msg.coverNote, msg.contentType, oldShareId, oldRevokeToken);
+          const result = await uploadShare(msg.snapshot, msg.coverNote, msg.contentType, oldShareId, oldRevokeToken, msg.expiryDays);
           if ('error' in result) {
             reply({ type: 'error', error: result.error });
           } else {
@@ -393,7 +485,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
                 id: result.shareId,
                 revokeToken: result.revokeToken,
                 createdAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                expiresAt: new Date(Date.now() + (msg.expiryDays ?? 7) * 24 * 60 * 60 * 1000).toISOString(),
                 coverNote: msg.coverNote,
                 lastSyncedNoteId: null,
                 unseenNotes: 0,
@@ -511,6 +603,8 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         };
         const curation = addCuration(activeProjectId, msg.commentIds, msg.action, origTexts, msg.remixedText || '', msg.dismissReason || '');
         applyCurationToComments(activeProjectId, msg.commentIds, statusMap[msg.action]);
+        void forkImageLivePush(activeProjectId);
+        void forkPdfLivePush(activeProjectId);
         const updatedComments = loadComments(activeProjectId);
         reply({ type: 'curation-done', curation });
         broadcast({ type: 'project-loaded', projectId: activeProjectId, project: loadProject(activeProjectId), comments: updatedComments } as any);
@@ -588,6 +682,25 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
       try {
         saveCanvasState(activeProjectId, msg.state);
+
+        // v3 Phase 2: fork the live-share push off the save path.
+        // buildCanvasLivePayload reads the just-persisted canvas JSON + assets;
+        // decideCanvasSend determines state-vs-diff based on the per-share cache.
+        const ctl = liveShares.get(activeProjectId);
+        const project = loadProject(activeProjectId);
+        const shareId = project?.activeShare?.id;
+        if (ctl && shareId) {
+          (async () => {
+            try {
+              const payload = await buildCanvasLivePayload(activeProjectId!);
+              if (!payload) return;
+              const decision = decideCanvasSend(shareId, payload);
+              if (decision.kind === 'state') ctl.pushState(decision.payload);
+              else ctl.pushDiff(decision.payload);
+            } catch { /* best-effort; persistence already succeeded */ }
+          })();
+        }
+
         reply({ type: 'canvas-state-saved' });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
@@ -653,6 +766,172 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'send-ai-message': {
       if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
       handleSendAiMessage(ws, activeProjectId, msg);
+      break;
+    }
+
+    case 'start-live-share': {
+      (async () => {
+        try {
+          const { projectId } = msg;
+          const project = loadProject(projectId);
+          if (!project) { reply({ type: 'error', error: 'Project not found' }); return; }
+          if (!project.activeShare) { reply({ type: 'error', error: 'No active share — create a share first' }); return; }
+          if (liveShares.has(projectId)) { reply({ type: 'error', error: 'Live share already running' }); return; }
+
+          const ctype = project.contentType as 'canvas' | 'image' | 'pdf' | 'url';
+          const ctl = new LiveShareController({
+            projectId,
+            shareId: project.activeShare.id,
+            contentType: ctype,
+            ratePerSecond: liveShareRate(ctype),
+            onComment: (comment) => {
+              ws.send(JSON.stringify({ type: 'live-share-comment', projectId, comment }));
+            },
+            onPresence: (viewers) => {
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'live', viewers, revision: ctl.revision, lastError: null }));
+            },
+            onAuthorStatus: (status) => {
+              ws.send(JSON.stringify({
+                type: 'live-share-state',
+                projectId,
+                status: status === 'online' ? 'live' : status === 'offline' ? 'offline' : 'idle',
+                viewers: ctl.viewers,
+                revision: ctl.revision,
+                lastError: null,
+              }));
+            },
+            onShareEnded: (reason) => {
+              liveShares.get(projectId)?.stop();
+              liveShares.delete(projectId);
+              if (reason === 'revoked') {
+                ws.send(JSON.stringify({ type: 'share-revoked', projectId }));
+              } else {
+                // reason === 'expired'
+                ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'idle', viewers: 0, revision: ctl.revision, lastError: null }));
+              }
+            },
+            onError: (err) => {
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'error', viewers: ctl.viewers, revision: ctl.revision, lastError: err }));
+            },
+            onBandwidthStatus: (throttled) => {
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: throttled ? 'throttled' : 'live', viewers: ctl.viewers, revision: ctl.revision, lastError: null }));
+            },
+            onSessionTimeout: () => {
+              // UI banner copy (Phase 5 renders it verbatim from this lastError):
+              //   "Live share paused — sessions auto-pause after 2 hours to prevent
+              //    accidental long-running sessions. Click Resume to continue."
+              try {
+                const p = loadProject(projectId);
+                if (p.activeShare?.live) {
+                  p.activeShare.live.paused = true;
+                  saveProject(projectId, p);
+                }
+              } catch { /* best-effort */ }
+              ws.send(JSON.stringify({ type: 'live-share-state', projectId, status: 'paused', viewers: ctl.viewers, revision: ctl.revision, lastError: 'session-timeout-2h' }));
+            },
+          });
+
+          liveShares.set(projectId, ctl);
+          project.activeShare.live = { revision: ctl.revision, startedAt: new Date().toISOString(), paused: false };
+          saveProject(projectId, project);
+
+          reply({ type: 'live-share-state', projectId, status: 'connecting', viewers: 0, revision: ctl.revision, lastError: null });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'stop-live-share': {
+      (async () => {
+        try {
+          const { projectId } = msg;
+          const ctl = liveShares.get(projectId);
+          if (ctl) ctl.pause();
+          try {
+            const project = loadProject(projectId);
+            if (project.activeShare?.live) {
+              project.activeShare.live.paused = true;
+              saveProject(projectId, project);
+            }
+            if (project?.activeShare) {
+              clearSendState(project.activeShare.id);
+              clearImageSendState(project.activeShare.id);
+              clearPdfSendState(project.activeShare.id);
+            }
+          } catch { /* best-effort */ }
+          reply({ type: 'live-share-state', projectId, status: 'paused', viewers: 0, revision: ctl?.revision ?? 0, lastError: null });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'resume-live-share': {
+      (async () => {
+        try {
+          const { projectId } = msg;
+          const ctl = liveShares.get(projectId);
+          if (!ctl) { reply({ type: 'error', error: 'Live share not initialized' }); return; }
+          ctl.resume();
+          try {
+            const project = loadProject(projectId);
+            if (project.activeShare?.live) {
+              project.activeShare.live.paused = false;
+              saveProject(projectId, project);
+            }
+          } catch { /* best-effort */ }
+          reply({ type: 'live-share-state', projectId, status: 'connecting', viewers: ctl.viewers, revision: ctl.revision, lastError: null });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'push-live-state': {
+      const { projectId } = msg;
+      const ctl = liveShares.get(projectId);
+      if (!ctl) { reply({ type: 'error', error: 'Live share not running' }); break; }
+      if (msg.kind === 'state') {
+        ctl.pushState(msg.payload);
+      } else {
+        ctl.pushDiff(msg.payload);
+      }
+      // fire-and-forget: no response
+      break;
+    }
+
+    case 'revoke-share': {
+      (async () => {
+        try {
+          const { projectId } = msg;
+          const project = loadProject(projectId);
+          if (!project.activeShare) { reply({ type: 'error', error: 'No active share' }); return; }
+          const ctl = liveShares.get(projectId);
+          if (ctl) {
+            await ctl.revoke(project.activeShare.revokeToken);
+          } else {
+            await revokeShare(project.activeShare.id, project.activeShare.revokeToken);
+          }
+          liveShares.delete(projectId);
+          clearSendState(project.activeShare.id);
+          clearImageSendState(project.activeShare.id);
+          clearPdfSendState(project.activeShare.id);
+          project.activeShare = null;
+          saveProject(projectId, project);
+          reply({ type: 'share-revoked', projectId });
+          // Also push fresh project state so the UI's projectManager clears
+          // its cached activeShare. Without this the popover + toolbar refresh
+          // from share-revoked but projectManager.get() still reports the
+          // old activeShare until the next full reload.
+          reply({ type: 'project-loaded', projectId, project, comments: loadComments(projectId) });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
       break;
     }
   }
@@ -819,3 +1098,16 @@ function broadcast(message: DaemonMessage): void {
     }
   }
 }
+
+process.on('SIGINT', async () => {
+  for (const [projectId, ctl] of liveShares.entries()) {
+    await ctl.stop();
+    const project = loadProject(projectId);
+    if (project?.activeShare?.id) {
+      clearSendState(project.activeShare.id);
+      clearImageSendState(project.activeShare.id);
+      clearPdfSendState(project.activeShare.id);
+    }
+  }
+  process.exit(0);
+});

@@ -1,12 +1,12 @@
 // viewer.js — Content viewer: iframe wrapper with overlay and comments
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
-import { renderToolbar } from '../components/toolbar.js';
+import { renderToolbar, syncToolbarLiveBadge } from '../components/toolbar.js';
 import { setupOverlay, toggleCommentMode, disableCommentMode, isCommentModeActive } from '../overlay/overlay.js';
 import { createViewerPinRenderer } from '../overlay/pins.js';
 import { renderCuration } from '../components/curation.js';
 import { showCommentInput } from '../components/comments.js';
-import { captureSnapshot, detectSensitiveContent } from '../overlay/snapshot.js';
+import { captureSnapshot, detectSensitiveContent, buildMediaFileSnapshot } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
 import { mountAiPanel, toggleAiPanel } from '../components/ai-panel.js';
 import { renderErrorCard } from '../components/error-card.js';
@@ -31,7 +31,9 @@ export function renderViewer(container, { onBack }) {
     projectName: project.name,
     url: project.url || project.file || '',
     onBack,
+    projectId: projectManager.getId(),
   });
+  syncToolbarLiveBadge(projectManager.getId());
 
   const sidebar = container.querySelector('#viewer-sidebar');
   const commentToggle = container.querySelector('#toolbar-comment-toggle');
@@ -114,22 +116,57 @@ export function renderViewer(container, { onBack }) {
 
   // Share flow: capture snapshot → check sensitive → upload
   window.addEventListener('frank:capture-snapshot', async (e) => {
-    const iframe = document.querySelector('#content-iframe');
-    if (!iframe) return;
-
-    const snapshot = await captureSnapshot(iframe);
-    if (!snapshot) {
-      updateSharePopover({ error: 'Could not capture snapshot' });
+    const project = projectManager.get();
+    if (!project) {
+      updateSharePopover({ error: 'No project loaded' });
       return;
     }
 
-    // Check for sensitive content
-    const warnings = detectSensitiveContent(snapshot.html);
-    if (warnings.length > 0) {
-      const proceed = confirm(`Warning: ${warnings.join(', ')}. Share anyway?`);
-      if (!proceed) {
-        updateSharePopover({ error: 'Cancelled' });
+    let snapshot = null;
+    if (project.contentType === 'url') {
+      const iframe = document.querySelector('#content-iframe');
+      if (!iframe) {
+        updateSharePopover({ error: 'No content to capture' });
         return;
+      }
+      snapshot = await captureSnapshot(iframe);
+    } else if (project.contentType === 'image' || project.contentType === 'pdf') {
+      if (!project.file) {
+        updateSharePopover({ error: 'Project has no file' });
+        return;
+      }
+      snapshot = await buildMediaFileSnapshot(project.file);
+    } else {
+      updateSharePopover({ error: `Unsupported project type: ${project.contentType}` });
+      return;
+    }
+
+    if (!snapshot) {
+      updateSharePopover({ error: 'Could not build snapshot' });
+      return;
+    }
+
+    // Pre-upload size check for data-URL payloads. Vercel Hobby's function
+    // body limit is ~5 MB; the payload gets JSON-wrapped with cover note +
+    // metadata. A 4 MB ceiling on fileDataUrl leaves comfortable headroom
+    // and surfaces a user-friendly error instead of letting the upload fail
+    // with a cryptic network error.
+    const DATA_URL_CEILING = 4 * 1024 * 1024;
+    if (snapshot.fileDataUrl && snapshot.fileDataUrl.length > DATA_URL_CEILING) {
+      updateSharePopover({ error: 'File is too large to share directly. Resize or compress before sharing.' });
+      return;
+    }
+
+    // Check for sensitive content (URL snapshots only — data URLs are opaque
+    // base64 and would false-positive on almost any image's byte pattern).
+    if (snapshot.html) {
+      const warnings = detectSensitiveContent(snapshot.html);
+      if (warnings.length > 0) {
+        const proceed = confirm(`Warning: ${warnings.join(', ')}. Share anyway?`);
+        if (!proceed) {
+          updateSharePopover({ error: 'Cancelled' });
+          return;
+        }
       }
     }
 
@@ -137,19 +174,21 @@ export function renderViewer(container, { onBack }) {
       const result = await sync.uploadShare(
         snapshot,
         e.detail.coverNote,
-        projectManager.get()?.contentType || 'url',
+        project.contentType,
+        undefined,  // oldShareId — unused on fresh creation
+        undefined,  // oldRevokeToken
+        e.detail.expiryDays,
       );
       if (result.error) {
         updateSharePopover({ error: result.error });
       } else {
         // Update project state
-        const project = projectManager.get();
         if (project) {
           project.activeShare = {
             id: result.shareId,
             revokeToken: result.revokeToken,
             createdAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+            expiresAt: new Date(Date.now() + (e.detail.expiryDays ?? 7) * 86400000).toISOString(),
             coverNote: e.detail.coverNote,
             lastSyncedNoteId: null,
             unseenNotes: 0,

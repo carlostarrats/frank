@@ -4,6 +4,18 @@
 
 **v2.06** — Builds on v2.02–v2.05: file drop on the home view, drag-and-drop images onto the canvas, shape-anchored comments that follow shapes on drag, canvas snapshots with inline thumbnails, canvas sharing through your own Frank Cloud, vector PDF/SVG export, project reports, undo/redo, tool shortcuts, non-canvas keyboard accessibility, and a project-management surface (rename, archive, soft-delete, search/sort/filter). Latest additions: one-click **Deploy to Vercel** button in Settings (no terminal required), "Already configured on <date>" hint, and a scrollable Settings modal for tall content.
 
+## v3 — live share
+
+v3.0 is functionally complete for canvas, image, and PDF projects. Phase 1 shipped the transport layer (SSE streams, monotonic revisions, rolling 60-second diff buffer, viewer presence, share revocation, 2-hour session auto-pause). Phase 2 wired canvas projects. Phase 3 wired image projects. Phase 4a wired PDF projects — comments only; PDF page + scroll sync is deferred to Phase 4b (v3.x) and requires a PDF.js rendering migration. Phase 5 closed the v2 gaps the direction doc named: explicit "Revoke share" button, optional share-expiration picker (1 day / 7 days / 30 days / 90 days / 1 year), content-type-aware "too large for live share" copy, and an ambient LIVE badge on the toolbar share button. URL live share is deferred to v3.1. Tagging v3.0 is gated on a full smoke-test pass across all project types.
+
+- Contract: [`CLOUD_API.md`](CLOUD_API.md) v3 section
+- Phase 1 plan: [`docs/superpowers/plans/2026-04-19-v3-phase1-sse-foundation.md`](docs/superpowers/plans/2026-04-19-v3-phase1-sse-foundation.md)
+- Phase 2 plan: [`docs/superpowers/plans/2026-04-19-v3-phase2-canvas-live.md`](docs/superpowers/plans/2026-04-19-v3-phase2-canvas-live.md)
+- Phase 3 plan: [`docs/superpowers/plans/2026-04-20-v3-phase3-image-live.md`](docs/superpowers/plans/2026-04-20-v3-phase3-image-live.md)
+- Phase 4a plan: [`docs/superpowers/plans/2026-04-20-v3-phase4a-pdf-comments-live.md`](docs/superpowers/plans/2026-04-20-v3-phase4a-pdf-comments-live.md)
+- Phase 5 plan: [`docs/superpowers/plans/2026-04-20-v3-phase5-lifecycle-polish.md`](docs/superpowers/plans/2026-04-20-v3-phase5-lifecycle-polish.md)
+- Reference backend env vars + setup: [`frank-cloud/README.md`](frank-cloud/README.md)
+
 **Frank is a terminal tool.** You start it from the command line, and it opens a browser-based UI at `localhost:42068`. Requires [Node.js](https://nodejs.org/) (v18+).
 
 

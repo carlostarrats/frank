@@ -67,17 +67,22 @@ function renderViewer(app, data) {
   const contentEl = document.getElementById('v-content');
   if (snapshot?.canvasState) {
     renderCanvasSnapshot(contentEl, snapshot);
+    window.__frankInitialRevision = snapshot.revision ?? 0;
   } else if (snapshot?.html) {
     const iframe = document.createElement('iframe');
     iframe.className = 'v-iframe';
     iframe.sandbox = 'allow-same-origin';
     iframe.srcdoc = snapshot.html;
     contentEl.appendChild(iframe);
-  } else if (snapshot?.fileUrl) {
+  } else if (snapshot?.fileDataUrl) {
     if (metadata.contentType === 'image') {
-      contentEl.innerHTML = `<img src="${esc(snapshot.fileUrl)}" class="v-image" alt="Shared content">`;
+      contentEl.innerHTML = `<img src="${esc(snapshot.fileDataUrl)}" class="v-image" alt="Shared content">`;
+      __imageCache = { fileDataUrl: snapshot.fileDataUrl, mimeType: snapshot.mimeType };
+    } else if (metadata.contentType === 'pdf') {
+      contentEl.innerHTML = `<iframe src="${esc(snapshot.fileDataUrl)}" class="v-iframe"></iframe>`;
+      __pdfCache = { fileDataUrl: snapshot.fileDataUrl, mimeType: snapshot.mimeType };
     } else {
-      contentEl.innerHTML = `<iframe src="${esc(snapshot.fileUrl)}" class="v-iframe"></iframe>`;
+      contentEl.innerHTML = '<div class="v-error"><p>Unsupported content type</p></div>';
     }
   } else {
     contentEl.innerHTML = '<div class="v-error"><p>No content in this share</p></div>';
@@ -156,31 +161,93 @@ function saveAuthor(name) { localStorage.setItem('frank-author', name); }
 
 // ─── Canvas snapshot rendering ──────────────────────────────────────────────
 
-async function renderCanvasSnapshot(host, snapshot) {
-  host.innerHTML = '<div class="viewer-loading">Loading canvas…</div>';
+// Module-level state: preserved across live-share events so updates render
+// in place rather than stacking new stages.
+let __canvasStage = null;
+const __assetCache = {}; // url → dataUrl, merged across state + diff events
+
+// v3 Phase 3 — image live share cache. Cold-open render seeds this with the
+// initial snapshot's fileDataUrl; renderImageLive compares incoming payload
+// fileDataUrl against it to skip redundant `img.src =` assignments when the
+// image hasn't changed (the 30s-promotion case: same image, new comments).
+// If a future feature ever swaps the source image mid-session, the cache
+// comparison triggers a visible img.src update.
+let __imageCache = null; // { fileDataUrl, mimeType } or null
+
+// v3 Phase 4a — PDF live share cache. Same pattern as __imageCache: cold-open
+// render seeds this, and renderPdfLive compares payload.fileDataUrl against
+// it to skip redundant iframe src reassignment. PDF file is immutable during
+// a session so the src rarely changes; state events carry it for snapshot
+// freshness, not because the PDF actually updated.
+let __pdfCache = null; // { fileDataUrl, mimeType } or null
+
+async function renderCanvas(payload) {
+  // payload shape: { canvasState: string, assets: Record<url, dataUrl> }
+  if (!payload || !payload.canvasState) return;
+
+  // Merge assets from this payload into the long-lived cache. Diff events
+  // may arrive with assets: {} — that's fine, the cache retains prior entries.
+  Object.assign(__assetCache, payload.assets || {});
+
   try {
     await loadKonvaOnce();
   } catch {
-    host.innerHTML = '<div class="v-error"><p>Could not load canvas renderer.</p></div>';
+    const host = document.getElementById('v-content');
+    if (host) host.innerHTML = '<div class="v-error"><p>Could not load canvas renderer.</p></div>';
     return;
   }
 
-  host.innerHTML = '<div class="v-canvas-wrapper" id="v-canvas-wrapper"></div>';
-  const wrapper = host.querySelector('#v-canvas-wrapper');
-  const width = wrapper.clientWidth || 900;
-  const height = wrapper.clientHeight || 600;
-
   const Konva = window.Konva;
-  const stage = new Konva.Stage({ container: wrapper, width, height });
-  const contentLayer = new Konva.Layer();
-  stage.add(contentLayer);
+
+  // On first render, build the wrapper + stage. On subsequent renders
+  // (live-share updates), reuse the existing stage by clearing its layers.
+  let contentLayer;
+  if (!__canvasStage) {
+    const host = document.getElementById('v-content');
+    if (!host) return;
+    host.innerHTML = '<div class="v-canvas-wrapper" id="v-canvas-wrapper"></div>';
+    const wrapper = host.querySelector('#v-canvas-wrapper');
+    const width = wrapper.clientWidth || 900;
+    const height = wrapper.clientHeight || 600;
+
+    __canvasStage = new Konva.Stage({ container: wrapper, width, height });
+    contentLayer = new Konva.Layer();
+    __canvasStage.add(contentLayer);
+
+    // Wheel zoom for reviewers — wired once on stage creation.
+    __canvasStage.on('wheel', (e) => {
+      e.evt.preventDefault();
+      const oldScale = __canvasStage.scaleX();
+      const pointer = __canvasStage.getPointerPosition();
+      const mousePt = {
+        x: (pointer.x - __canvasStage.x()) / oldScale,
+        y: (pointer.y - __canvasStage.y()) / oldScale,
+      };
+      const step = 1.08;
+      const newScale = e.evt.deltaY > 0 ? oldScale / step : oldScale * step;
+      const clamped = Math.max(0.1, Math.min(8, newScale));
+      __canvasStage.scale({ x: clamped, y: clamped });
+      __canvasStage.position({
+        x: pointer.x - mousePt.x * clamped,
+        y: pointer.y - mousePt.y * clamped,
+      });
+    });
+  } else {
+    // Reuse existing stage: destroy existing layer children and replace layer.
+    __canvasStage.destroyChildren();
+    contentLayer = new Konva.Layer();
+    __canvasStage.add(contentLayer);
+  }
+
+  const width = __canvasStage.width();
+  const height = __canvasStage.height();
 
   // Deserialize the canvas content. Image nodes reference assetUrl; swap each
-  // one for the inline data URL bundled in snapshot.assets.
-  const parsed = typeof snapshot.canvasState === 'string'
-    ? JSON.parse(snapshot.canvasState)
-    : snapshot.canvasState;
-  const assets = snapshot.assets || {};
+  // one for the inline data URL from __assetCache (populated by state events
+  // and the initial snapshot; diff events rely on the cached entries).
+  const parsed = typeof payload.canvasState === 'string'
+    ? JSON.parse(payload.canvasState)
+    : payload.canvasState;
 
   for (const def of (parsed.children || [])) {
     try {
@@ -197,7 +264,7 @@ async function renderCanvasSnapshot(host, snapshot) {
   const images = contentLayer.find('Image');
   for (const node of images) {
     const url = node.getAttr('assetUrl');
-    const dataUrl = assets[url];
+    const dataUrl = __assetCache[url];
     if (!dataUrl) continue;
     await new Promise((resolve) => {
       const img = new Image();
@@ -211,33 +278,22 @@ async function renderCanvasSnapshot(host, snapshot) {
   const bounds = contentLayer.getClientRect();
   if (bounds && bounds.width > 0 && bounds.height > 0) {
     const scale = Math.min((width - 40) / bounds.width, (height - 40) / bounds.height, 1);
-    stage.scale({ x: scale, y: scale });
-    stage.position({
+    __canvasStage.scale({ x: scale, y: scale });
+    __canvasStage.position({
       x: (width - bounds.width * scale) / 2 - bounds.x * scale,
       y: (height - bounds.height * scale) / 2 - bounds.y * scale,
     });
   }
 
-  // Wheel zoom for reviewers.
-  stage.on('wheel', (e) => {
-    e.evt.preventDefault();
-    const oldScale = stage.scaleX();
-    const pointer = stage.getPointerPosition();
-    const mousePt = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale,
-    };
-    const step = 1.08;
-    const newScale = e.evt.deltaY > 0 ? oldScale / step : oldScale * step;
-    const clamped = Math.max(0.1, Math.min(8, newScale));
-    stage.scale({ x: clamped, y: clamped });
-    stage.position({
-      x: pointer.x - mousePt.x * clamped,
-      y: pointer.y - mousePt.y * clamped,
-    });
-  });
-
   contentLayer.draw();
+}
+
+// Called by renderViewer for the initial snapshot render. `host` is always
+// document.getElementById('v-content'), which renderCanvas also looks up
+// internally — so they refer to the same element.
+async function renderCanvasSnapshot(host, snapshot) {
+  host.innerHTML = '<div class="viewer-loading">Loading canvas…</div>';
+  await renderCanvas(snapshot);
 }
 
 let konvaPromise = null;
@@ -271,3 +327,186 @@ function timeAgo(iso) {
 }
 
 init();
+
+// ─── v3 live-share client ───────────────────────────────────────────────────
+// Subscribes to /api/share/:id/stream, dispatches events via CustomEvent
+// for project-type-specific renderers (Phases 2–4). For Phase 1 this client
+// routes events but does not itself re-render project content.
+
+(function initLiveShare() {
+  const shareId = new URLSearchParams(location.search).get('id')
+    || location.pathname.match(/\/s\/([^/]+)/)?.[1];
+  if (!shareId) return;
+
+  const presenceEl = document.getElementById('frank-presence');
+  const authorStatusEl = document.getElementById('frank-author-status');
+  const reconnectEl = document.getElementById('frank-reconnect');
+
+  let lastRevision = window.__frankInitialRevision ?? -1;
+  let es = null;
+  let heartbeatTimer = null;
+  let fallbackPollTimer = null;
+
+  function setPresence(n) {
+    if (!presenceEl) return;
+    presenceEl.textContent = n === 1 ? '1 watching' : `${n} watching`;
+    presenceEl.hidden = n === 0;
+  }
+  function setAuthor(status) {
+    if (!authorStatusEl) return;
+    authorStatusEl.dataset.status = status;
+    authorStatusEl.hidden = false;
+    authorStatusEl.textContent = {
+      online: 'Author online',
+      offline: 'Author offline',
+      ended: 'Author ended live share',
+    }[status] || '';
+  }
+  function setReconnecting(on) { if (reconnectEl) reconnectEl.hidden = !on; }
+
+  function openStream() {
+    setReconnecting(false);
+    es = new EventSource(`/api/share/${encodeURIComponent(shareId)}/stream`, { withCredentials: true });
+    es.addEventListener('state', (ev) => {
+      const data = JSON.parse(ev.data);
+      lastRevision = data.revision;
+      window.dispatchEvent(new CustomEvent('frank:state', { detail: data }));
+    });
+    es.addEventListener('diff', (ev) => {
+      const data = JSON.parse(ev.data);
+      lastRevision = data.revision;
+      window.dispatchEvent(new CustomEvent('frank:diff', { detail: data }));
+    });
+    es.addEventListener('comment', (ev) => {
+      window.dispatchEvent(new CustomEvent('frank:comment', { detail: JSON.parse(ev.data) }));
+    });
+    es.addEventListener('presence', (ev) => {
+      const { viewers } = JSON.parse(ev.data);
+      setPresence(viewers);
+    });
+    es.addEventListener('author-status', (ev) => {
+      const { status } = JSON.parse(ev.data);
+      setAuthor(status);
+    });
+    es.addEventListener('share-ended', (ev) => {
+      const { reason } = JSON.parse(ev.data);
+      setAuthor('ended');
+      if (es) { es.close(); es = null; }
+      document.body.classList.add(`frank-ended-${reason}`);
+    });
+    es.onerror = () => {
+      setReconnecting(true);
+      // Browser auto-reconnects via EventSource. If terminal (404/410) the
+      // readyState goes to CLOSED — fall back to polling.
+      if (es && es.readyState === EventSource.CLOSED) {
+        es = null;
+        startPollingFallback();
+      }
+    };
+  }
+
+  function startPollingFallback() {
+    if (fallbackPollTimer) return;
+    const pollEl = document.getElementById('frank-updates-disabled');
+    if (pollEl) pollEl.hidden = false;
+    async function poll() {
+      try {
+        const r = await fetch(`/api/share?id=${encodeURIComponent(shareId)}`);
+        const j = await r.json();
+        if (j.snapshot && j.snapshot.revision && j.snapshot.revision > lastRevision) {
+          lastRevision = j.snapshot.revision;
+          window.dispatchEvent(new CustomEvent('frank:state', { detail: j.snapshot }));
+        }
+      } catch { /* keep trying */ }
+    }
+    fallbackPollTimer = setInterval(poll, 5_000);
+  }
+
+  function startHeartbeat() {
+    heartbeatTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      fetch(`/api/share/${encodeURIComponent(shareId)}/ping`, { method: 'POST', credentials: 'include' })
+        .catch(() => { /* transient */ });
+    }, 60_000);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !es && !fallbackPollTimer) {
+      openStream();
+    }
+  });
+
+  openStream();
+  startHeartbeat();
+})();
+
+// ─── v3 Phase 2: canvas live-render ─────────────────────────────────────────
+// Wire canvas re-renders to live-share events dispatched by initLiveShare.
+// `state` events carry the full asset bundle; `diff` events carry just the
+// canvas JSON (assets are already in __assetCache from the most recent state
+// event or the initial snapshot).
+
+// v3 Phase 3 — image live share renderer. Declaration of __imageCache lives
+// alongside __canvasStage and __assetCache above, by convention.
+function renderImageLive(payload) {
+  // payload is either:
+  //   state: { fileDataUrl, mimeType, comments }
+  //   diff:  { comments }
+  // The <img> element in #v-content stays put across events. We update the
+  // src only when fileDataUrl actually changed, and re-render the comment
+  // list on every event that carries comments.
+  if (payload?.fileDataUrl) {
+    if (__imageCache?.fileDataUrl !== payload.fileDataUrl) {
+      __imageCache = { fileDataUrl: payload.fileDataUrl, mimeType: payload.mimeType };
+      const img = document.querySelector('#v-content .v-image');
+      if (img) img.src = payload.fileDataUrl;
+    }
+  }
+  if (Array.isArray(payload?.comments)) {
+    renderCommentList(payload.comments);
+  }
+}
+
+// v3 Phase 4a — PDF live share renderer. Declaration of __pdfCache lives
+// alongside __canvasStage / __assetCache / __imageCache above, by convention.
+function renderPdfLive(payload) {
+  // payload is either:
+  //   state: { fileDataUrl, mimeType, comments }
+  //   diff:  { comments }
+  // The <iframe> element in #v-content stays put across events. The iframe
+  // src only changes on true source-file swaps (rare — the PDF is immutable
+  // during a session). We re-render the comment list on every event that
+  // carries comments.
+  if (payload?.fileDataUrl) {
+    if (__pdfCache?.fileDataUrl !== payload.fileDataUrl) {
+      __pdfCache = { fileDataUrl: payload.fileDataUrl, mimeType: payload.mimeType };
+      const iframe = document.querySelector('#v-content .v-iframe');
+      if (iframe) iframe.src = payload.fileDataUrl;
+    }
+  }
+  if (Array.isArray(payload?.comments)) {
+    renderCommentList(payload.comments);
+  }
+}
+
+window.addEventListener('frank:state', async (e) => {
+  const { contentType, payload } = e.detail || {};
+  if (contentType === 'canvas') {
+    await renderCanvas(payload);
+  } else if (contentType === 'image') {
+    renderImageLive(payload);
+  } else if (contentType === 'pdf') {
+    renderPdfLive(payload);
+  }
+});
+
+window.addEventListener('frank:diff', async (e) => {
+  const { contentType, payload } = e.detail || {};
+  if (contentType === 'canvas') {
+    await renderCanvas(payload);
+  } else if (contentType === 'image') {
+    renderImageLive(payload);
+  } else if (contentType === 'pdf') {
+    renderPdfLive(payload);
+  }
+});
