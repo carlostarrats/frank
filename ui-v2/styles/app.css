@@ -414,19 +414,61 @@
     grid-template-columns: minmax(0, 6fr) minmax(260px, 4fr);
     gap: var(--space-12);
   }
+
+  /* Terminal-frame around the projects column — border on all sides with
+     the tab list straddling the top edge like a window title. The tabs
+     mask the border where they sit via their own background, so the line
+     "breaks" around each label. */
   .home-col-right {
-    overflow-y: auto;
+    border: 1px solid var(--border);
     min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0 var(--space-5);
+  }
+  .home-col-right .home-projects {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .home-col-right .home-tabs {
+    margin: calc(var(--space-4) * -1) calc(var(--space-2) * -1) var(--space-5);
+    align-self: flex-start;
+    border-bottom: none;
+    background: transparent;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .home-col-right .home-tab {
+    background: var(--background);
+    padding: 0 var(--space-3);
+    margin-bottom: 0;
+    border-bottom: 2px solid transparent;
+    height: 1.75rem;
+  }
+  .home-col-right .home-tab.active {
+    border-bottom-color: var(--foreground);
+  }
+  .home-col-right .home-section {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: var(--space-4);
+    margin-right: calc(var(--space-2) * -1);
     padding-right: var(--space-2);
   }
-  /* Scrollbar styling for the right column — match the terminal vibe. */
-  .home-col-right::-webkit-scrollbar { width: 8px; }
-  .home-col-right::-webkit-scrollbar-track { background: transparent; }
-  .home-col-right::-webkit-scrollbar-thumb {
+  /* Scrollbar inside the right column — match the terminal vibe. */
+  .home-col-right .home-section::-webkit-scrollbar { width: 8px; }
+  .home-col-right .home-section::-webkit-scrollbar-track { background: transparent; }
+  .home-col-right .home-section::-webkit-scrollbar-thumb {
     background: var(--border);
     border-radius: var(--radius-round);
   }
-  .home-col-right::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+  .home-col-right .home-section::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
 }
 .home-col { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
 
