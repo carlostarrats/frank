@@ -94,6 +94,22 @@
   --duration-fast: 120ms;
   --duration-base: 180ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Legacy var aliases. Older CSS (Phase 1–5 of v2 / v3) references names
+   * like --text-primary / --bg-elevated / --border-subtle that predate the
+   * shadcn migration and aren't defined above. Mapping them here so those
+   * rules inherit from the correct tokens instead of silently falling back
+   * to initial/inherit. The long-term fix is to rename call sites to the
+   * canonical tokens above; these aliases are the interim. */
+  --text-primary: var(--foreground);
+  --text-muted: var(--muted-foreground);
+  --bg-app: var(--background);
+  --bg-surface: var(--muted);
+  --bg-elevated: var(--card);
+  --border-subtle: var(--border);
+  --input-bg: var(--background);
+  --button-primary-bg: var(--primary);
+  --button-primary-text: var(--primary-foreground);
 }
 
 .light {
