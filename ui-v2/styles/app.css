@@ -611,6 +611,7 @@
   background: var(--muted);
 }
 .home-icon-btn svg { flex-shrink: 0; }
+a.home-icon-btn { text-decoration: none; }
 
 /* Terminal-style section header: uppercase title followed by a horizontal
    rule that extends to the right edge of the column. Used by the projects
