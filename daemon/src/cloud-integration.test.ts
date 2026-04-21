@@ -214,5 +214,78 @@ describe.skipIf(skip)('cloud integration', () => {
 
     const fetched = await fetch(`${BASE_URL}/api/share?id=${shareId}`);
     expect(fetched.status).toBe(410);
+    const body = await fetched.json();
+    expect(body.error).toBe('revoked');
+  });
+
+  it('comment on revoked share returns 410', async () => {
+    const create = await fetch(`${BASE_URL}/api/share`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        snapshot: { html: '<p>comment-after-revoke</p>' },
+        contentType: 'url',
+      }),
+    });
+    const { shareId, revokeToken } = await create.json();
+
+    const del = await fetch(`${BASE_URL}/api/share?id=${shareId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'x-frank-revoke-token': revokeToken,
+      },
+    });
+    expect(del.status).toBe(200);
+
+    const post = await fetch(`${BASE_URL}/api/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shareId,
+        author: 'harness',
+        text: 'should be rejected',
+      }),
+    });
+    expect(post.status).toBe(410);
+  });
+
+  it('ping on nonexistent share returns 404', async () => {
+    // Valid-looking but never-created id.
+    const res = await fetch(`${BASE_URL}/api/share/nonexistent9X/ping`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('ping on revoked share returns 410', async () => {
+    const create = await fetch(`${BASE_URL}/api/share`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        snapshot: { html: '<p>ping-after-revoke</p>' },
+        contentType: 'url',
+      }),
+    });
+    const { shareId, revokeToken } = await create.json();
+
+    await fetch(`${BASE_URL}/api/share?id=${shareId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'x-frank-revoke-token': revokeToken,
+      },
+    });
+
+    const ping = await fetch(`${BASE_URL}/api/share/${shareId}/ping`, {
+      method: 'POST',
+    });
+    expect(ping.status).toBe(410);
   });
 });
