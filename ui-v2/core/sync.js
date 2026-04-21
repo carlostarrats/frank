@@ -143,6 +143,7 @@ const sync = {
     return send({ type: 'log-ai-instruction', feedbackIds, curationIds, instruction });
   },
   exportProject() { return send({ type: 'export-project' }); },
+  exportBundle() { return send({ type: 'export-bundle' }); },
   exportReport(format) { return send({ type: 'export-report', format }); },
   revealProjectFolder(projectId) { return send({ type: 'reveal-project-folder', projectId }); },
   getCloudConfig() { return send({ type: 'get-cloud-config' }); },

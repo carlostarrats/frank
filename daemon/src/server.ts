@@ -26,6 +26,7 @@ import { addCuration, applyCurationToComments } from './curation.js';
 import { addAiInstruction } from './ai-chain.js';
 import { exportProject } from './export.js';
 import { exportReport } from './report.js';
+import { buildBundle } from './bundle.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
 import {
   getClaudeApiKey, setClaudeApiKey, clearClaudeApiKey,
@@ -656,6 +657,24 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           if (msg.format !== 'markdown' && msg.format !== 'pdf') throw new Error(`Unknown format: ${msg.format}`);
           const result = await exportReport(activeProjectId!, msg.format);
           reply({ type: 'report-ready', format: msg.format, mimeType: result.mimeType, data: result.data });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'export-bundle': {
+      if (!activeProjectId) { reply({ type: 'error', error: 'No active project' }); break; }
+      (async () => {
+        try {
+          const { buffer, filename } = await buildBundle(activeProjectId!);
+          reply({
+            type: 'bundle-ready',
+            mimeType: 'application/zip',
+            filename,
+            data: buffer.toString('base64'),
+          });
         } catch (e: any) {
           reply({ type: 'error', error: e.message });
         }

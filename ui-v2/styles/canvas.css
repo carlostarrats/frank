@@ -306,6 +306,26 @@
   font-family: inherit;
 }
 .timeline-export-item:hover { background: color-mix(in oklch, var(--ring), transparent 85%); }
+.timeline-export-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px;
+}
+.timeline-export-primary .timeline-export-item-label {
+  font-weight: 600;
+  color: var(--text);
+}
+.timeline-export-primary .timeline-export-item-hint {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.timeline-export-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
 
 /* ── Inline comment input popover ─────────────────────────────────────────── */
 

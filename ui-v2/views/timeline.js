@@ -10,11 +10,16 @@ export function renderTimeline(container, { onBack }) {
       <div class="toolbar-spacer"></div>
       <button class="toolbar-btn" id="timeline-reveal" title="Show project folder on disk">Show folder</button>
       <div class="timeline-export-wrapper">
-        <button class="toolbar-btn toolbar-icon-btn" id="timeline-export-btn" title="Export" aria-label="Export">${iconDownload()}</button>
+        <button class="toolbar-btn toolbar-icon-btn" id="timeline-export-btn" title="Download project bundle (zip)" aria-label="Download bundle">${iconDownload()}</button>
         <div class="timeline-export-menu" id="timeline-export-menu" hidden>
-          <button data-format="json" class="timeline-export-item">JSON</button>
-          <button data-format="markdown" class="timeline-export-item">Markdown</button>
-          <button data-format="pdf" class="timeline-export-item">PDF</button>
+          <button data-format="bundle" class="timeline-export-item timeline-export-primary">
+            <span class="timeline-export-item-label">Download bundle</span>
+            <span class="timeline-export-item-hint">zip — JSON + reports + snapshots</span>
+          </button>
+          <div class="timeline-export-sep" aria-hidden="true"></div>
+          <button data-format="json" class="timeline-export-item">JSON only</button>
+          <button data-format="markdown" class="timeline-export-item">Markdown only</button>
+          <button data-format="pdf" class="timeline-export-item">PDF only</button>
         </div>
       </div>
       <span class="toolbar-close-gap"></span>
@@ -53,7 +58,13 @@ export function renderTimeline(container, { onBack }) {
       const format = item.dataset.format;
       const projectName = projectManager.get()?.name || 'project';
       try {
-        if (format === 'json') {
+        if (format === 'bundle') {
+          const result = await sync.exportBundle();
+          if (result.type === 'error') throw new Error(result.error);
+          const bytes = Uint8Array.from(atob(result.data), c => c.charCodeAt(0));
+          const blob = new Blob([bytes], { type: result.mimeType || 'application/zip' });
+          downloadBlob(blob, result.filename || `${projectName}-bundle.zip`);
+        } else if (format === 'json') {
           const result = await sync.exportProject();
           if (!result?.data) throw new Error('No data');
           const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });

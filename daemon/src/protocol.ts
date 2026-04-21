@@ -146,6 +146,7 @@ export interface CurateCommentRequest { type: 'curate-comment'; commentIds: stri
 export interface LogAiInstructionRequest { type: 'log-ai-instruction'; feedbackIds: string[]; curationIds: string[]; instruction: string; requestId?: number; }
 export interface ExportProjectRequest { type: 'export-project'; requestId?: number; }
 export interface ExportReportRequest { type: 'export-report'; format: 'markdown' | 'pdf'; requestId?: number; }
+export interface ExportBundleRequest { type: 'export-bundle'; requestId?: number; }
 export interface RevealProjectFolderRequest { type: 'reveal-project-folder'; projectId?: string; requestId?: number; }
 
 // v3 live-share controls (UI → daemon)
@@ -192,6 +193,7 @@ export type AppMessage =
   | LogAiInstructionRequest
   | ExportProjectRequest
   | ExportReportRequest
+  | ExportBundleRequest
   | RevealProjectFolderRequest
   | LoadCanvasStateRequest
   | SaveCanvasStateRequest
@@ -289,6 +291,13 @@ export interface ReportReadyMessage {
   format: 'markdown' | 'pdf';
   mimeType: string;
   data: string; // markdown text or base64-encoded PDF
+}
+export interface BundleReadyMessage {
+  type: 'bundle-ready';
+  requestId?: number;
+  mimeType: 'application/zip';
+  filename: string;
+  data: string; // base64-encoded zip bytes
 }
 export interface CanvasStateLoadedMessage { type: 'canvas-state-loaded'; requestId?: number; state: string | null; }
 export interface CanvasStateSavedMessage { type: 'canvas-state-saved'; requestId?: number; }
@@ -410,6 +419,7 @@ export type DaemonMessage =
   | AiInstructionLoggedMessage
   | ExportReadyMessage
   | ReportReadyMessage
+  | BundleReadyMessage
   | CanvasStateLoadedMessage
   | CanvasStateSavedMessage
   | AssetUploadedMessage
