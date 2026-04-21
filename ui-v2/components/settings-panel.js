@@ -205,15 +205,6 @@ export function showSettingsPanel() {
           <div class="settings-tab-panel" data-tab="custom" role="tabpanel" hidden>
             <p class="settings-configured-at" data-configured-at hidden></p>
 
-            <details class="settings-cli">
-              <summary>Prefer the terminal?</summary>
-              <p class="settings-field-hint">Skip this form and save both values from your shell:</p>
-              <div class="settings-cmd">
-                <code>frank connect &lt;url&gt; --key &lt;bearer-token&gt;</code>
-                <button class="settings-cmd-copy" data-copy="frank connect <url> --key <bearer-token>">Copy</button>
-              </div>
-            </details>
-
             <p class="settings-hint">
               Point Frank at any host that implements the
               <a href="https://github.com/carlostarrats/frank/blob/main/CLOUD_API.md" target="_blank" rel="noopener">Cloud API contract</a>
@@ -256,6 +247,15 @@ export function showSettingsPanel() {
                 and
                 <a href="https://github.com/carlostarrats/frank/blob/main/CLOUD_API.md" target="_blank" rel="noopener">CLOUD_API.md</a>.
               </p>
+            </details>
+
+            <details class="settings-cli">
+              <summary>Prefer the terminal?</summary>
+              <p class="settings-field-hint">Skip this form and save both values from your shell:</p>
+              <div class="settings-cmd">
+                <code>frank connect &lt;url&gt; --key &lt;bearer-token&gt;</code>
+                <button class="settings-cmd-copy" data-copy="frank connect <url> --key <bearer-token>">Copy</button>
+              </div>
             </details>
 
             <hr class="settings-divider">
