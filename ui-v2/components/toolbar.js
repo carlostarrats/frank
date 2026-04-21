@@ -40,10 +40,19 @@ function rerenderBadge(projectId) {
   }
   const count = state.viewers || 0;
   const label = count === 1 ? 'LIVE · 1' : `LIVE · ${count}`;
+  // Badge is a button so users can click it to open the share modal and
+  // pause from there — same affordance as the ⋯ / link icon, but closer to
+  // where their attention already is when live is on.
   let badge = host.querySelector('.toolbar-live-badge');
   if (!badge) {
-    badge = document.createElement('span');
+    badge = document.createElement('button');
+    badge.type = 'button';
     badge.className = 'toolbar-live-badge';
+    badge.title = 'Open share to manage or pause live share';
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showSharePopover(badge, { onClose() {} });
+    });
     host.appendChild(badge);
   }
   badge.textContent = label;

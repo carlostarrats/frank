@@ -1670,10 +1670,19 @@
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.04em;
+  border: none;
   border-radius: var(--radius-round);
   animation: toolbar-live-pulse 2s ease-in-out infinite;
-  pointer-events: none;
+  cursor: pointer;
   white-space: nowrap;
+  transition: filter var(--duration-fast) var(--ease-standard);
+}
+.toolbar-live-badge:hover {
+  filter: brightness(1.1);
+}
+.toolbar-live-badge:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 @keyframes toolbar-live-pulse {
   0%, 100% { opacity: 1; }
