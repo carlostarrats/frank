@@ -1,6 +1,7 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put, list } from '@vercel/blob';
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
 function generateId(): string {
   const bytes = new Uint8Array(9);
@@ -10,24 +11,31 @@ function generateId(): string {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').slice(0, 12);
 }
 
-export default async function handler(req: Request): Promise<Response> {
+function headerString(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204 });
+    res.status(204).end();
+    return;
   }
 
   // GET /api/share?id=xxx — public (reviewers)
   if (req.method === 'GET') {
-    const url = new URL(req.url);
-    const shareId = url.searchParams.get('id');
+    const shareId = typeof req.query.id === 'string' ? req.query.id : undefined;
     if (!shareId || !/^[a-zA-Z0-9_-]{8,20}$/.test(shareId)) {
-      return Response.json({ error: 'Invalid share ID' }, { status: 400 });
+      res.status(400).json({ error: 'Invalid share ID' });
+      return;
     }
 
     try {
       // Fetch meta
       const metaBlob = await fetchBlob(`shares/${shareId}/meta.json`);
       if (!metaBlob) {
-        return Response.json({ error: 'not found' }, { status: 404 });
+        res.status(404).json({ error: 'not found' });
+        return;
       }
       const meta = JSON.parse(metaBlob);
 
@@ -35,15 +43,17 @@ export default async function handler(req: Request): Promise<Response> {
       // expiresAt=epoch, so without this the expiry branch fires with
       // the misleading 'expired' error message.
       if (meta.revoked === true) {
-        return Response.json({ error: 'revoked' }, { status: 410 });
+        res.status(410).json({ error: 'revoked' });
+        return;
       }
 
       // Check expiry
       if (new Date(meta.expiresAt) < new Date()) {
-        return Response.json({
+        res.status(410).json({
           error: 'expired',
           message: 'This has been updated. Ask the owner for the new link.',
-        }, { status: 410 });
+        });
+        return;
       }
 
       // Fetch snapshot
@@ -52,11 +62,11 @@ export default async function handler(req: Request): Promise<Response> {
 
       // Fetch comments
       const commentBlobs = await list({ prefix: `shares/${shareId}/comments/` });
-      const comments = [];
+      const comments: unknown[] = [];
       for (const blob of commentBlobs.blobs) {
         try {
-          const res = await fetch(blob.url);
-          comments.push(JSON.parse(await res.text()));
+          const r = await fetch(blob.url);
+          comments.push(JSON.parse(await r.text()));
         } catch { /* skip corrupt */ }
       }
 
@@ -69,9 +79,9 @@ export default async function handler(req: Request): Promise<Response> {
         addRandomSuffix: false, allowOverwrite: true,
       });
 
-      return Response.json({
+      res.status(200).json({
         snapshot,
-        comments: comments.sort((a: any, b: any) => a.ts.localeCompare(b.ts)),
+        comments: (comments as { ts: string }[]).sort((a, b) => a.ts.localeCompare(b.ts)),
         coverNote: meta.coverNote || '',
         metadata: {
           createdAt: meta.createdAt,
@@ -80,24 +90,28 @@ export default async function handler(req: Request): Promise<Response> {
           contentType: meta.contentType || 'url',
         },
       });
+      return;
     } catch (e: any) {
-      return Response.json({ error: e.message }, { status: 500 });
+      res.status(500).json({ error: e.message });
+      return;
     }
   }
 
   // POST /api/share — authenticated (daemon)
   if (req.method === 'POST') {
-    const apiKey = req.headers.get('Authorization')?.replace('Bearer ', '');
+    const apiKey = headerString(req.headers['authorization'])?.replace('Bearer ', '');
     if (apiKey !== process.env.FRANK_API_KEY) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     try {
-      const body = await req.json();
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
       const { snapshot, coverNote, contentType, expiryDays, oldShareId, oldRevokeToken } = body;
 
       if (!snapshot) {
-        return Response.json({ error: 'Missing snapshot' }, { status: 400 });
+        res.status(400).json({ error: 'Missing snapshot' });
+        return;
       }
 
       // Revoke old share if provided
@@ -147,35 +161,42 @@ export default async function handler(req: Request): Promise<Response> {
         addRandomSuffix: false, allowOverwrite: true,
       });
 
-      return Response.json({
+      res.status(200).json({
         shareId,
         revokeToken,
         url: `/s/${shareId}`,
       });
+      return;
     } catch (e: any) {
-      return Response.json({ error: e.message }, { status: 500 });
+      res.status(500).json({ error: e.message });
+      return;
     }
   }
 
   // DELETE /api/share?id=xxx — authenticated, revokes + tears down.
   if (req.method === 'DELETE') {
-    const apiKey = req.headers.get('Authorization')?.replace('Bearer ', '');
+    const apiKey = headerString(req.headers['authorization'])?.replace('Bearer ', '');
     if (apiKey !== process.env.FRANK_API_KEY) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
-    const url = new URL(req.url);
-    const shareId = url.searchParams.get('id');
+    const shareId = typeof req.query.id === 'string' ? req.query.id : undefined;
     if (!shareId || !/^[a-zA-Z0-9_-]{8,20}$/.test(shareId)) {
-      return Response.json({ error: 'Invalid share ID' }, { status: 400 });
+      res.status(400).json({ error: 'Invalid share ID' });
+      return;
     }
-    const revokeToken = req.headers.get('x-frank-revoke-token') || '';
+    const revokeToken = headerString(req.headers['x-frank-revoke-token']) || '';
 
     try {
       const metaBlob = await fetchBlob(`shares/${shareId}/meta.json`);
-      if (!metaBlob) return Response.json({ error: 'not found' }, { status: 404 });
+      if (!metaBlob) {
+        res.status(404).json({ error: 'not found' });
+        return;
+      }
       const meta = JSON.parse(metaBlob);
       if (meta.revokeToken !== revokeToken) {
-        return Response.json({ error: 'Invalid revoke token' }, { status: 403 });
+        res.status(403).json({ error: 'Invalid revoke token' });
+        return;
       }
 
       // 1. Invalidate — flip the meta flag + expire so new requests see 410.
@@ -213,21 +234,23 @@ export default async function handler(req: Request): Promise<Response> {
         }
       } catch { /* best effort */ }
 
-      return Response.json({ ok: true });
+      res.status(200).json({ ok: true });
+      return;
     } catch (e: any) {
-      return Response.json({ error: e.message }, { status: 500 });
+      res.status(500).json({ error: e.message });
+      return;
     }
   }
 
-  return Response.json({ error: 'Method not allowed' }, { status: 405 });
+  res.status(405).json({ error: 'Method not allowed' });
 }
 
 async function fetchBlob(key: string): Promise<string | null> {
   try {
     const blobs = await list({ prefix: key });
     if (blobs.blobs.length === 0) return null;
-    const res = await fetch(blobs.blobs[0].url);
-    return await res.text();
+    const r = await fetch(blobs.blobs[0].url);
+    return await r.text();
   } catch {
     return null;
   }
