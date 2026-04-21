@@ -893,7 +893,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.home-filter-row .home-filter-chips {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-wrap: wrap;
+  gap: 4px;
+}
+.home-filter-row .home-sort {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .home-search {
   width: 100%;
@@ -904,7 +914,6 @@
 .home-sort {
   appearance: none;
   -webkit-appearance: none;
-  margin-left: 16px;
   height: 28px;
   padding: 0 22px 0 8px;
   font-size: 12px;
