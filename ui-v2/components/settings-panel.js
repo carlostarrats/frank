@@ -40,9 +40,28 @@ export function showSettingsPanel() {
 
             <p class="settings-hint">
               Deploy the reference backend (in <code>frank-cloud/</code>) to
-              your own Vercel account. One click, then paste two values back
-              here.
+              your own Vercel account. The backend needs three things to
+              work: a Redis store (for live share), a Blob store (for share
+              payloads), and an API key.
             </p>
+
+            <details class="settings-cli" open>
+              <summary>What you'll set up (~10 minutes)</summary>
+              <ol class="settings-guide-steps">
+                <li><strong>Upstash Redis</strong> — powers live-share presence, pub/sub, session tracking. Free tier is fine.</li>
+                <li><strong>Vercel Blob</strong> — stores share payloads, snapshots, reviewer comments. Free tier.</li>
+                <li><strong>FRANK_API_KEY</strong> — random string that authenticates this Frank daemon against your backend.</li>
+              </ol>
+              <p class="settings-field-hint">
+                The <strong>Deploy</strong> button below handles the clone +
+                build + <code>FRANK_API_KEY</code> prompt. Linking the two
+                stores and disabling Deployment Protection are manual
+                post-deploy steps — Vercel's UI doesn't automate those
+                through the clone URL. The checklist below has exact
+                click-paths. Full walkthrough with screenshots:
+                <a href="https://github.com/carlostarrats/frank/blob/main/frank-cloud/DEPLOYMENT.md" target="_blank" rel="noopener">DEPLOYMENT.md</a>.
+              </p>
+            </details>
 
             <a
               class="settings-deploy-btn"
@@ -54,11 +73,31 @@ export function showSettingsPanel() {
               <span>Deploy to Vercel</span>
             </a>
             <p class="settings-field-hint">
-              Opens Vercel in a new tab. You'll sign into your own account,
-              set a value for <code>FRANK_API_KEY</code> when prompted, and
-              click Deploy. When it finishes, copy the deployment URL and
-              the key value into the fields below.
+              Opens Vercel in a new tab. Sign in, set a value for
+              <code>FRANK_API_KEY</code> when prompted, click Deploy. Come
+              back here after the build finishes.
             </p>
+
+            <details class="settings-cli" open>
+              <summary>After deploy — 3 manual steps in the Vercel dashboard</summary>
+              <ol class="settings-guide-steps">
+                <li>
+                  <strong>Open your project → Storage tab → "Connect Store" → Upstash Redis.</strong>
+                  <span class="settings-field-hint">Pick the free-tier plan, click Install, then link it to this project. Vercel auto-adds the env vars <code>KV_REST_API_URL</code> + <code>KV_REST_API_TOKEN</code>.</span>
+                </li>
+                <li>
+                  <strong>Same tab → "Connect Store" → Blob.</strong>
+                  <span class="settings-field-hint">Pick <strong>Public</strong> access (share links need to load without auth), link to this project. Auto-adds <code>BLOB_READ_WRITE_TOKEN</code>. Creating a store is not the same as linking — confirm in the store's Projects tab that this project shows up.</span>
+                </li>
+                <li>
+                  <strong>Settings → Deployment Protection → set Vercel Authentication to Disabled.</strong>
+                  <span class="settings-field-hint">Frank share URLs are public by design — anonymous reviewers open them without a Vercel account. The default protection gate blocks that. Full Disable (not "Only Production Deployments").</span>
+                </li>
+                <li>
+                  <strong>Redeploy once</strong> so the new env vars take effect. (Deployments tab → latest deploy → ⋯ → Redeploy.)
+                </li>
+              </ol>
+            </details>
 
             <details class="settings-cli">
               <summary>Why would I want a new deployment?</summary>
@@ -86,7 +125,12 @@ export function showSettingsPanel() {
                 <code>vercel env add FRANK_API_KEY production</code>
                 <button class="settings-cmd-copy" data-copy="vercel env add FRANK_API_KEY production">Copy</button>
               </div>
-              <p class="settings-field-hint">Redeploy once (<code>vercel --prod</code>) so the env var takes effect, then paste the URL and key below.</p>
+              <p class="settings-field-hint">
+                Then finish the dashboard-only steps: Storage → link
+                Upstash Redis + Blob, Settings → Deployment Protection →
+                Disabled. Redeploy (<code>vercel --prod</code>) so the
+                env vars take effect. Paste URL + key below.
+              </p>
             </details>
 
             <details class="settings-cli">
@@ -114,9 +158,30 @@ export function showSettingsPanel() {
                     <code>vercel env add FRANK_API_KEY production</code>
                     <button class="settings-cmd-copy" data-copy="vercel env add FRANK_API_KEY production">Copy</button>
                   </div>
-                  <span class="settings-field-hint">Paste a long random string when prompted. Redeploy once (<code>vercel --prod</code>) so the env var takes effect.</span>
+                  <span class="settings-field-hint">Paste a long random string when prompted.</span>
+                </li>
+                <li>
+                  <span>Link Upstash Redis + Blob to the project (dashboard):</span>
+                  <span class="settings-field-hint">The CLI doesn't automate this part. In the Vercel dashboard, open your project → <strong>Storage</strong> → <strong>Connect Store</strong> → Upstash Redis (free tier, link to project). Repeat for Blob (public access, link to project).</span>
+                </li>
+                <li>
+                  <span>Disable Vercel Authentication:</span>
+                  <span class="settings-field-hint">Dashboard → Settings → Deployment Protection → set Vercel Authentication to <strong>Disabled</strong>. Share URLs are public by design.</span>
+                </li>
+                <li>
+                  <span>Redeploy so the new env vars take effect:</span>
+                  <div class="settings-cmd">
+                    <code>vercel --prod</code>
+                    <button class="settings-cmd-copy" data-copy="vercel --prod">Copy</button>
+                  </div>
+                  <span class="settings-field-hint">Then paste the URL and key below.</span>
                 </li>
               </ol>
+              <p class="settings-field-hint">
+                Full walkthrough with screenshots + the exact gotchas we
+                hit during v3.0 setup:
+                <a href="https://github.com/carlostarrats/frank/blob/main/frank-cloud/DEPLOYMENT.md" target="_blank" rel="noopener">DEPLOYMENT.md</a>.
+              </p>
             </details>
 
             <hr class="settings-divider">
@@ -154,7 +219,10 @@ export function showSettingsPanel() {
               Point Frank at any host that implements the
               <a href="https://github.com/carlostarrats/frank/blob/main/CLOUD_API.md" target="_blank" rel="noopener">Cloud API contract</a>
               — Cloudflare Workers, Deno Deploy, a Node server, anything that
-              serves the four endpoints.
+              serves the seven endpoints (static share CRUD, comments, live
+              share state + stream + ping + health). If your backend doesn't
+              implement the live-share endpoints, canvas live share won't
+              work against it but static share still will.
             </p>
 
             <hr class="settings-divider">
