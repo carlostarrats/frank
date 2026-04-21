@@ -2,6 +2,9 @@
 
 Self-hosted sharing backend for [Frank](https://github.com/carlostarrats/frank). Deploy this to your own Vercel account to enable shareable links with commenting.
 
+> **For full deployment instructions** — env vars, provisioning, post-deploy smoke probes, Vercel UI gotchas — see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+> **For integration-test setup**, see **[INTEGRATION_TESTING.md](INTEGRATION_TESTING.md)**.
+
 ## Deploy
 
 1. Click the button below to deploy to your Vercel account
