@@ -192,12 +192,18 @@ export default async function handler(req: Request): Promise<Response> {
       const { deleteBuffer } = await import('../lib/diff-buffer.js');
       await deleteRevision(shareId);
       await deleteBuffer(shareId);
-      // Blob cleanup: prefix-delete. Best-effort — if it fails, meta is already
-      // flagged revoked so further requests 410.
+      // Blob cleanup: prefix-delete everything EXCEPT meta.json. The meta
+      // blob stays as the revocation tombstone so GET / comment / ping
+      // can return 410 with error:'revoked' — deleting it would collapse
+      // that path to a 404 and clients can't distinguish "never existed"
+      // from "was revoked."
       try {
         const { del } = await import('@vercel/blob');
         const listed = await list({ prefix: `shares/${shareId}/` });
-        for (const b of listed.blobs) await del(b.url);
+        for (const b of listed.blobs) {
+          if (b.pathname === `shares/${shareId}/meta.json`) continue;
+          await del(b.url);
+        }
       } catch { /* best effort */ }
 
       return Response.json({ ok: true });
