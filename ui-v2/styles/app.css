@@ -393,18 +393,40 @@
 }
 
 /* Two columns on desktop (≥ 1024px), stack on tablet/mobile. Left column
-   holds the masthead + entry (URL/file/canvas); right column holds the
-   project list. Column gap is meaty so the two feel like separate panes. */
+   holds the entry (URL/file/canvas); right column holds the project list.
+   On desktop the right column scrolls independently — the page stays put. */
 .home-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-10);
 }
 @media (min-width: 1024px) {
+  #view-home { overflow: hidden; }
+  .home {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
   .home-grid {
+    flex: 1;
+    min-height: 0;
     grid-template-columns: minmax(0, 6fr) minmax(260px, 4fr);
     gap: var(--space-12);
   }
+  .home-col-right {
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: var(--space-2);
+  }
+  /* Scrollbar styling for the right column — match the terminal vibe. */
+  .home-col-right::-webkit-scrollbar { width: 8px; }
+  .home-col-right::-webkit-scrollbar-track { background: transparent; }
+  .home-col-right::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: var(--radius-round);
+  }
+  .home-col-right::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
 }
 .home-col { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
 
