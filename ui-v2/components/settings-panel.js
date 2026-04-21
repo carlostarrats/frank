@@ -219,10 +219,44 @@ export function showSettingsPanel() {
               <a href="https://github.com/carlostarrats/frank/blob/main/CLOUD_API.md" target="_blank" rel="noopener">Cloud API contract</a>
               — Cloudflare Workers, Deno Deploy, a Node server, anything that
               serves the seven endpoints (static share CRUD, comments, live
-              share state + stream + ping + health). If your backend doesn't
-              implement the live-share endpoints, canvas live share won't
-              work against it but static share still will.
+              share state + stream + ping + health).
             </p>
+
+            <details class="settings-cli" open>
+              <summary>What your backend needs (regardless of platform)</summary>
+              <ol class="settings-guide-steps">
+                <li>
+                  <strong>Redis-compatible store.</strong>
+                  <span class="settings-field-hint">Powers live-share presence, pub/sub, session tracking, and the 60-second diff buffer. The reference impl uses Upstash Redis over their REST API; other stores work if you adapt <code>frank-cloud/lib/redis.ts</code>. Skip this and canvas live share won't work, but static share still will.</span>
+                </li>
+                <li>
+                  <strong>Blob / object store with public read.</strong>
+                  <span class="settings-field-hint">Stores share payloads, snapshots, comments. The reference impl uses Vercel Blob with public access. Any S3-compatible store works — what matters is that reviewer URLs can fetch share payloads without auth (the unguessable share ID is the access control).</span>
+                </li>
+                <li>
+                  <strong>API key auth.</strong>
+                  <span class="settings-field-hint">Frank's daemon sends a long-lived bearer token in the Authorization header on every authed request. Your backend checks it. The reference impl stores this in a <code>FRANK_API_KEY</code> env var.</span>
+                </li>
+                <li>
+                  <strong>Long-lived SSE connections.</strong>
+                  <span class="settings-field-hint">The <code>/api/share/:id/stream</code> and <code>/author-stream</code> endpoints hold open for minutes at a time. If your host caps request duration (AWS Lambda classic, Vercel Hobby at ~300s, Cloudflare Workers at 30s) you'll see disconnects; SSE reconnects handle this but viewers notice. Hosts with longer timeouts give a smoother experience.</span>
+                </li>
+                <li>
+                  <strong>Public read access on share URLs.</strong>
+                  <span class="settings-field-hint">Share links are opened by anonymous reviewers. If your host has an auth/access gate by default (like Vercel's "Deployment Protection"), disable it on the routes reviewers hit (<code>/s/*</code>, <code>/api/share*</code>, <code>/api/comment</code>).</span>
+                </li>
+                <li>
+                  <strong>CORS for <code>/api/*</code>.</strong>
+                  <span class="settings-field-hint">The daemon runs at <code>localhost:42068</code>, your backend runs elsewhere. The API routes need <code>Access-Control-Allow-Origin: *</code> (or your daemon's origin), plus OPTIONS preflight support. See <code>frank-cloud/vercel.json</code> for the header set.</span>
+                </li>
+              </ol>
+              <p class="settings-field-hint">
+                Full reference implementation + the exact contract:
+                <a href="https://github.com/carlostarrats/frank/blob/main/frank-cloud/DEPLOYMENT.md" target="_blank" rel="noopener">DEPLOYMENT.md</a>
+                and
+                <a href="https://github.com/carlostarrats/frank/blob/main/CLOUD_API.md" target="_blank" rel="noopener">CLOUD_API.md</a>.
+              </p>
+            </details>
 
             <hr class="settings-divider">
 
