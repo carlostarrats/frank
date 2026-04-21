@@ -34,14 +34,19 @@ function connect() {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
+      // Fire broadcast events for state-change types FIRST, regardless of
+      // whether the message also carries a requestId. Without this the initial
+      // reply to start/pause/resume-live-share would resolve the pending
+      // promise and short-circuit, and the share-popover listener would never
+      // see the state transition — the spinner would spin forever until the
+      // next unrelated broadcast (or page refresh) arrived.
+      if (msg.type === 'live-share-state' || msg.type === 'live-share-comment' || msg.type === 'share-revoked') {
+        window.dispatchEvent(new CustomEvent(`frank:${msg.type}`, { detail: msg }));
+      }
       if (msg.requestId && pendingRequests.has(msg.requestId)) {
         const { resolve } = pendingRequests.get(msg.requestId);
         pendingRequests.delete(msg.requestId);
         resolve(msg);
-        return;
-      }
-      if (msg.type === 'live-share-state' || msg.type === 'live-share-comment' || msg.type === 'share-revoked') {
-        window.dispatchEvent(new CustomEvent(`frank:${msg.type}`, { detail: msg }));
         return;
       }
       for (const handler of messageHandlers) handler(msg);
