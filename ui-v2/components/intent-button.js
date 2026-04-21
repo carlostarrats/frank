@@ -14,6 +14,11 @@ import projectManager from '../core/project.js';
 export function mountIntentButton(host) {
   if (!host) return () => {};
 
+  // Inline SVG check — the unicode ✓ glyph renders as a hairline diagonal at
+  // this size across most Mono/UI fonts, so a heavier SVG stroke reads much
+  // better against the pill's outline.
+  const CHECK_ICON = `<svg class="intent-pill-check" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg>`;
+
   const render = () => {
     const project = projectManager.get();
     const filled = !!(project && project.intent && project.intent.trim());
@@ -22,7 +27,7 @@ export function mountIntentButton(host) {
     btn.type = 'button';
     btn.className = `intent-pill ${filled ? 'intent-pill-filled' : 'intent-pill-empty'}`;
     btn.title = filled ? 'Edit project intent' : 'Add a project brief so AI handoffs carry context';
-    btn.textContent = filled ? '✓ Intent' : 'Add Intent';
+    btn.innerHTML = filled ? `${CHECK_ICON}<span>Intent</span>` : 'Add Intent';
     btn.addEventListener('click', openIntentModal);
     host.appendChild(btn);
   };
