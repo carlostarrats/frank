@@ -31,9 +31,9 @@ export function renderViewer(container, { onBack }) {
     projectName: project.name,
     url: project.url || project.file || '',
     onBack,
-    projectId: project.id,
+    projectId: projectManager.getId(),
   });
-  syncToolbarLiveBadge(project.id);
+  syncToolbarLiveBadge(projectManager.getId());
 
   const sidebar = container.querySelector('#viewer-sidebar');
   const commentToggle = container.querySelector('#toolbar-comment-toggle');
