@@ -1,7 +1,7 @@
 # Frank — Claude Code Context
 
 ## What This Is
-A collaboration layer for any web content. Point it at any URL — localhost, staging, production — or drop a PDF, image, or canvas, and Frank wraps it with commenting, sharing, feedback curation, AI routing, and a complete data trail of how the thing was built.
+A local-first collaboration layer. Point it at any URL — localhost, staging, production — or drop a PDF, image, or canvas, and Frank wraps it with commenting, async review, live multiplayer canvas collaboration, feedback curation, AI routing, and a complete data trail of how the thing was built.
 
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
