@@ -70,7 +70,7 @@ Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 | Browser UI | Plain JS ES modules (no framework, no build step) |
 | Canvas | [Konva](https://konvajs.org/) 9, loaded via `<script>` tag |
 | Daemon | Node.js + TypeScript — HTTP server (42068) + WebSocket (42069) |
-| AI | `@anthropic-ai/sdk`, streaming via `messages.stream()` |
+| AI | Bring your own — Frank exports project context (JSON / MD / PDF) or hands off via "Copy as prompt". No in-app AI chat. |
 | Content wrapping | iframe + transparent overlay + content proxy |
 | Cloud sharing | Vercel serverless functions + Blob storage (self-hosted) |
 | Project storage | JSON files in `~/.frank/projects/` |
@@ -93,7 +93,7 @@ frank/
 │   │   └── project.js        # In-memory project state manager
 │   ├── views/
 │   │   ├── home.js           # Project list — tabs (Recent/Archived/Deleted), create, rename, archive, trash, search/sort/filter, Settings + Help buttons
-│   │   ├── viewer.js         # Content viewer — iframe + overlay + comment pins + popover + AI panel + error card on proxy fail
+│   │   ├── viewer.js         # Content viewer — iframe + overlay + comment pins + popover + error card on proxy fail
 │   │   ├── canvas.js         # Konva canvas view — tools, comments, snapshots, share, export, shortcuts, undo (button + Cmd+Z), copy/paste/duplicate, timeline
 │   │   └── timeline.js       # Chronological view + unified Export dropdown (JSON/MD/PDF) + Show-folder button
 │   ├── canvas/
@@ -128,7 +128,6 @@ frank/
 │   │   ├── comments.js       # Comment input (used by overlay callback)
 │   │   ├── share-popover.js  # Share link management (viewer + canvas)
 │   │   ├── ai-routing.js     # Clipboard AI routing (non-Claude fallback)
-│   │   ├── ai-panel.js       # In-app Claude conversation, streaming
 │   │   ├── url-input.js      # URL paste + file picker + drag-drop (PDF / image)
 │   │   ├── help-panel.js     # Getting-started modal (5 feature cards, focus trap)
 │   │   ├── settings-panel.js # Settings modal — tabbed Cloud backend config (Vercel / custom), Deploy-to-Vercel CTA, "Why would I want a new deployment?" help, configured-at green hint, scrollable body with pinned header + Test connection
@@ -143,10 +142,9 @@ frank/
 │       ├── curation.css      # Curation panel styles
 │       ├── timeline.css      # Timeline view + canvas badge + thumbnail
 │       ├── canvas.css        # Canvas topbar, drawer, inspector, curation host, comment popovers, export menu
-│       └── ai-panel.css      # AI panel chrome
 ├── daemon/                   # Node.js daemon (TypeScript, strict)
 │   ├── vitest.config.ts
-│   ├── package.json          # deps: @anthropic-ai/sdk, ws, pdfmake, tslib
+│   ├── package.json          # deps: ws, pdfmake, tslib (@anthropic-ai/sdk is legacy dead code, slated for removal)
 │   ├── src/cli.ts            # frank start / stop / connect / status / export / uninstall
 │   ├── src/server.ts         # HTTP + WebSocket server, all message handlers
 │   ├── src/protocol.ts       # Shared types and constants
@@ -181,7 +179,7 @@ frank/
 
 - **URL-first or canvas-first**: the input is a URL, file (PDF/image), or a blank canvas — not a JSON schema
 - **Daemon is sole file writer**: UI never touches the filesystem
-- **All data local by default**: nothing leaves the machine unless user hits Share (or uses the AI panel, which calls Claude directly with the user's own key)
+- **All data local by default**: nothing leaves the machine unless user hits Share. Frank does not call any AI service itself; routing to AI is clipboard + export only.
 - **Self-hosted cloud**: users deploy their own sharing backend (Vercel reference in `frank-cloud/` or any host implementing `CLOUD_API.md`)
 - **Setup is required for sharing**: Share button warns until cloud is configured via Settings modal or `frank connect`
 - **No build step**: `ui-v2/` must be servable as-is
@@ -210,7 +208,7 @@ frank/
 | View | What it shows |
 |---|---|
 | **Home** | Project list + URL/file entry. **Tabs** (Recent / Archived / Deleted) replace the old collapsible sections. Search / sort / type-filter chips below the tab. Cards support **inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete**. Keyboard: ↑/↓ between cards, Enter to open, Delete to trash, F2 to rename. Header has a **Settings** cog (cloud backend config) and **Help** button. |
-| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar + AI panel sidebar. **Numbered colored pins** render on the overlay for each comment; click → same draggable Close/Edit/Delete popover used by canvas; feedback-row click → pin pulses. Empty-space clicks drop free pins. Proxy failures render an inline **error card with Retry**. |
+| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar. **Numbered colored pins** render on the overlay for each comment; click → same draggable Close/Edit/Delete popover used by canvas; feedback-row click → pin pulses. Empty-space clicks drop free pins. Proxy failures render an inline **error card with Retry**. |
 | **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Shape- and pin-anchored comments** (SVG icon, speech-bubble-plus cursor), **snapshots** (camera icon, thumbnail saved, toast), **share** (link icon, bundled assets), **export dropdown** (PNG / SVG / PDF / JSON), **undo** (button + Cmd+Z, clears selection so no orphan transformer handles), **timeline** (shared event with viewer), **Cmd+C / Cmd+V / Cmd+D** copy/paste/duplicate shapes, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
 | **Timeline** | Chronological view of comments + snapshots + curations + AI instructions. Canvas snapshots show a Canvas badge + inline thumbnail. **Show folder** (reveal in Finder/Explorer) + unified **Export** dropdown (JSON / Markdown / PDF). Close (X) returns to canvas or viewer depending on the project. |
 
@@ -246,17 +244,19 @@ unified on both sides.
   why status changes appeared to do nothing.
 
 Surface-specific features (canvas has undo/export/inspector/shapes; viewer
-has URL proxy/AI panel/multi-page tracking) are intentional — they reflect
+has URL proxy / multi-page tracking) are intentional — they reflect
 different tools, not visual drift.
 
-## AI panel
+## AI routing (BYO tool — no in-app chat)
 
-- Persistent Claude conversation docked as a second right-side sidebar in the viewer. Toggle via the "AI" button in the toolbar.
-- Claude API key lives in `~/.frank/config.json` under `aiProviders.claude.apiKey`. The daemon enforces `0600` permissions on every write and never logs the key.
-- Conversations persist at `~/.frank/projects/{id}/ai-conversations/{conversationId}.json`. Size-first caps: soft warn at 2 MB / 100 messages (banner), hard cap at 5 MB / 200 messages (forces a new conversation with `continuedFrom` linking back).
-- `buildContext()` in `ai-providers/claude.ts` assembles each turn's prompt within a per-section token budget (preamble 500 / canvas 3000 / comments 2000 / snapshots 1000 / remainder for history). Logs per-section char counts without content.
-- Streaming responses flow daemon → WebSocket → UI: `ai-stream-started` → `ai-stream-delta` × N → `ai-stream-ended` (or `ai-stream-error`).
-- Clipboard-based AI routing (`ai-routing.js`) still works as a fallback for users of non-Claude providers — the "Copy as prompt" button on curated comments is unchanged.
+Frank does not bundle an in-app AI chat. That would lock users into one provider and force API-key management inside Frank. Instead, two handoff paths route feedback to whatever AI tool the user already uses:
+
+- **Clipboard — `ai-routing.js`**: the "Copy as prompt" button on curated comments puts a structured prompt on the clipboard. User pastes into Claude, Cursor, ChatGPT, a local LLM, whatever.
+- **Export — `daemon/src/export.ts` (JSON) + `daemon/src/report.ts` (MD/PDF)**: hand off the entire project at once. Every comment, curation, snapshot, and timeline entry is captured.
+
+The `daemon/src/ai-chain.ts` log captures every Copy-as-prompt action so the export includes a decision trail of what was routed to which AI.
+
+Historical note: an earlier v2 version had an in-app Claude panel mounted in the viewer's right sidebar. It was removed pre-v3.0 in favor of the BYO-tool pattern above. The daemon-side `ai-conversations.ts` + `ai-providers/claude.ts` modules still exist but are unreachable from the UI — their removal is a v3.x cleanup item, not urgent.
 
 ---
 

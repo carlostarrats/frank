@@ -41,10 +41,10 @@ const CARDS = [
   {
     id: 'ai',
     title: 'Route feedback to AI',
-    blurb: 'Pipe curated feedback into your AI with a click. Frank keeps the chain of context so the AI sees what was said and why.',
+    blurb: 'Pipe curated feedback into the AI tool you already use — Claude, Cursor, ChatGPT, whatever. Frank keeps the chain of context so the AI sees what was said and why.',
     cta: 'Learn more',
     action: 'expand',
-    detail: 'Approve the comments that should drive changes, remix the language if needed, then send to Claude or copy as a prompt for any other assistant. Full conversation history persists per project.',
+    detail: 'Approve the comments that should drive changes, remix the language if needed, then click "Copy as prompt" on any comment — a structured prompt lands on your clipboard, ready to paste into any AI. Or export the whole project (JSON or Markdown/PDF report) to hand off everything at once: comments, curation decisions, snapshots, and timeline. Frank does not bundle an in-app AI chat — that would lock you into one provider and force API-key management. Use whichever AI you already trust.',
   },
   {
     id: 'share',

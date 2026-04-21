@@ -8,7 +8,6 @@ import { renderCuration } from '../components/curation.js';
 import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent, buildMediaFileSnapshot } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
-import { mountAiPanel, toggleAiPanel } from '../components/ai-panel.js';
 import { renderErrorCard } from '../components/error-card.js';
 import { toastError, toastInfo } from '../components/toast.js';
 
@@ -23,7 +22,6 @@ export function renderViewer(container, { onBack }) {
         <div class="viewer-loading">Loading content...</div>
       </div>
       <div class="viewer-sidebar" id="viewer-sidebar"></div>
-      <div class="viewer-ai-sidebar" id="viewer-ai-sidebar"></div>
     </div>
   `;
 
@@ -73,17 +71,6 @@ export function renderViewer(container, { onBack }) {
     }
   };
   window.addEventListener('keydown', onEscape);
-
-  const aiSidebar = container.querySelector('#viewer-ai-sidebar');
-  mountAiPanel(aiSidebar);
-  const aiToggle = container.querySelector('#toolbar-ai-toggle');
-  if (aiToggle) {
-    aiToggle.addEventListener('click', () => {
-      toggleAiPanel();
-      const isOpen = aiSidebar.classList.contains('open');
-      aiToggle.classList.toggle('active', isOpen);
-    });
-  }
 
   // Render curation panel in sidebar. Comment mode toggling lives on the
   // toolbar comment icon — no need for a redundant button inside the panel.

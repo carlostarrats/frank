@@ -67,50 +67,18 @@ export function renderToolbar(container, { projectName, url, onBack, projectId }
       <span class="toolbar-url">${escapeHtml(url || '')}</span>
       <div class="toolbar-spacer"></div>
       <div class="toolbar-actions">
-        <button class="toolbar-btn toolbar-info-btn" id="toolbar-info" title="What do these do?">?</button>
-        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-snapshot" title="Take snapshot" aria-label="Take snapshot">
-          ${iconCamera()}
-        </button>
         <button class="toolbar-btn toolbar-icon-btn toolbar-comment-btn" id="toolbar-comment-toggle" title="Add comment" aria-label="Toggle comment mode">
           ${iconCommentPlus()}
         </button>
         <button class="toolbar-btn toolbar-icon-btn" id="toolbar-timeline" title="Timeline" aria-label="Timeline">
           ${iconTimeline()}
         </button>
-        <button class="toolbar-btn toolbar-ai-toggle" id="toolbar-ai-toggle" title="Ask Claude">AI</button>
+        <button class="toolbar-btn toolbar-icon-btn" id="toolbar-snapshot" title="Take snapshot" aria-label="Take snapshot">
+          ${iconCamera()}
+        </button>
         <button class="toolbar-btn toolbar-icon-btn" id="toolbar-share" title="Share" aria-label="Share">
           ${iconLink()}
         </button>
-      </div>
-    </div>
-    <div class="toolbar-info-overlay" id="toolbar-info-overlay" style="display:none">
-      <div class="toolbar-info-modal">
-        <div class="toolbar-info-header">
-          <h3>Toolbar Guide</h3>
-          <button class="toolbar-info-close" id="toolbar-info-close">✕</button>
-        </div>
-        <div class="toolbar-info-content">
-          <div class="toolbar-info-item">
-            <span class="toolbar-info-icon">${iconCamera()}</span>
-            <strong>Snapshot</strong>
-            <p>Save the current page state as a point-in-time record. Use it to bookmark meaningful moments before and after changes.</p>
-          </div>
-          <div class="toolbar-info-item">
-            <span class="toolbar-info-icon">${iconTimeline()}</span>
-            <strong>Timeline</strong>
-            <p>View all snapshots, comments, and decisions in chronological order. The full history of your project.</p>
-          </div>
-          <div class="toolbar-info-item">
-            <span class="toolbar-info-icon">${iconCommentPlus()}</span>
-            <strong>Comment mode</strong>
-            <p>Toggle comment mode. Your cursor turns into a speech-bubble-plus — click any element on the page to anchor a comment. Click the button again or press Esc to exit.</p>
-          </div>
-          <div class="toolbar-info-item">
-            <span class="toolbar-info-icon">${iconLink()}</span>
-            <strong>Share</strong>
-            <p>Generate a shareable link so others can view the page and leave comments from their browser.</p>
-          </div>
-        </div>
       </div>
     </div>
   `;
@@ -123,16 +91,6 @@ export function renderToolbar(container, { projectName, url, onBack, projectId }
 
   container.querySelector('#toolbar-timeline')?.addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent('frank:open-timeline'));
-  });
-
-  // Info modal toggle
-  const infoBtn = container.querySelector('#toolbar-info');
-  const infoOverlay = container.querySelector('#toolbar-info-overlay');
-  const infoClose = container.querySelector('#toolbar-info-close');
-  infoBtn.addEventListener('click', () => { infoOverlay.style.display = 'flex'; });
-  infoClose.addEventListener('click', () => { infoOverlay.style.display = 'none'; });
-  infoOverlay.addEventListener('click', (e) => {
-    if (e.target === infoOverlay) infoOverlay.style.display = 'none';
   });
 
   const shareBtn = container.querySelector('#toolbar-share');

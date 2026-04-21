@@ -85,11 +85,10 @@ Everything is captured: every comment, every AI conversation, every snapshot, ev
 - **Properties inspector** — fill, stroke, opacity, font size, alignment (L/C/R, T/M/B) when multiple shapes selected
 - **Persistent** — canvas state saved to `~/.frank/projects/{id}/canvas-state.json` per project
 
-### In-app AI panel
-- **Claude conversations** — docked sidebar in the viewer, streaming responses via `@anthropic-ai/sdk`
-- **Project context baked in** — every turn includes your curated comments, recent snapshot metadata, and (for canvas projects) the canvas state, within an explicit token budget
-- **Persistent across sessions** — conversations stored per project with size-aware caps and automatic continuation linking
-- **Clipboard fallback** — "Copy as prompt" on any message, so non-Claude AIs still work
+### Route feedback to AI (BYO tool)
+- **Copy as prompt** — on any curated comment. A structured prompt lands on the clipboard with the comment, its context, and the decision chain. Paste into Claude, Cursor, ChatGPT, a local LLM, anywhere.
+- **Export the whole project** — JSON or Markdown/PDF report; captures every comment, curation, snapshot, and timeline entry. Hand off the full context to any AI at once.
+- **No in-app AI chat, no API-key management** — Frank deliberately doesn't bundle a chat panel. That would lock you into one provider and require managing keys. Route feedback to whatever tool you already trust.
 
 ### Collaboration
 - **Self-hosted sharing** — deploy Frank Cloud to your own Vercel account; shared snapshots live in your Blob storage, live-share presence/events live in your Upstash Redis
@@ -135,28 +134,22 @@ LOCAL (your machine)                         CLOUD (your Vercel account, optiona
 | - Asset storage (sha256)  |                | - /api/comment            |
 | - Canvas state I/O        |                | - Share viewer page       |
 | - Snapshot + thumbnail    |                |   (URL, PDF, image iframe |
-| - AI conversation store   |                |    OR canvas via Konva)   |
-| - Report builder (MD/PDF) |                |                           |
-| - Claude API client       |                |      +-----------------+  |
-| - Live-share controllers  |                |      | Vercel Blob     |  |
-|   (canvas/image/pdf)      |                |      | (share payloads)|  |
-| - Project I/O (~/.frank/) |                |      +-----------------+  |
-+---------------------------+                |      | Upstash Redis   |  |
-        |                                    |      | (live presence, |  |
-        v                                    |      |  pubsub, diffs) |  |
-  Browser UI (localhost:42068)               |      +-----------------+  |
-  - Home (URL / file / canvas entry,         +---------------------------+
-    search/sort/filter, help modal)                          ^
-  - Viewer (iframe + overlay +                               | share viewers
-    curation + AI panel)                                     | (anonymous)
-  - Canvas (Konva + tools + live                             |
-    badge + share + export)                                Reviewers
-  - Timeline (MD/PDF report)
-
-            |
-            v
-    Claude API (api.anthropic.com)
-    (your key, your call)
+| - Report builder (MD/PDF) |                |    OR canvas via Konva)   |
+| - Live-share controllers  |                |                           |
+|   (canvas/image/pdf)      |                |      +-----------------+  |
+| - Project I/O (~/.frank/) |                |      | Vercel Blob     |  |
++---------------------------+                |      | (share payloads)|  |
+        |                                    |      +-----------------+  |
+        v                                    |      | Upstash Redis   |  |
+  Browser UI (localhost:42068)               |      | (live presence, |  |
+  - Home (URL / file / canvas entry,         |      |  pubsub, diffs) |  |
+    search/sort/filter, help modal)          |      +-----------------+  |
+  - Viewer (iframe + overlay + curation)     +---------------------------+
+  - Canvas (Konva + tools + live                           ^
+    badge + share + export)                                | share viewers
+  - Timeline (MD/PDF report,                               | (anonymous)
+    "Copy as prompt" routes to                             |
+    external AI)                                         Reviewers
 ```
 
 Everything lives locally in `~/.frank/` unless you explicitly hit Share or connect an AI provider. The cloud is optional; AI is optional; sharing is optional.
@@ -168,7 +161,7 @@ Everything lives locally in `~/.frank/` unless you explicitly hit Share or conne
 | Browser UI | Plain JS ES modules — no framework, no build step |
 | Canvas | [Konva](https://konvajs.org/) 9 (MIT), loaded via `<script>` tag |
 | Daemon | Node.js + TypeScript — HTTP + WebSocket server |
-| AI | [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript), streaming via `messages.stream()` |
+| AI | BYO — "Copy as prompt" puts a structured prompt on your clipboard; export (JSON / Markdown / PDF) hands off the whole project. Frank does not bundle an in-app AI chat. |
 | Cloud sharing | Vercel serverless functions + Blob storage + Upstash Redis (self-hosted) |
 | Canvas export | Konva→SVG translator → [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) for vector PDF (both loaded from CDN on first use) |
 | Report export | [pdfmake](http://pdfmake.org/) — vector PDF with Roboto, daemon-side |
@@ -227,17 +220,19 @@ Hit the **Help** button in the top-right any time you want a quick tour.
 
 When you're done, hit `Ctrl+C` in the terminal or run `frank stop`.
 
-### Using Claude in the app
+### Route feedback to AI (bring your own tool)
 
-Frank's AI panel talks to Claude directly — no copy-paste required, and the conversation has your project context built in.
+Frank does not bundle an in-app AI chat. That would lock you into one provider and force API-key management. Instead, two paths hand Frank's context off to whatever AI you already use:
 
-1. Open any project in the viewer and click the **AI** button in the toolbar.
-2. The first time, click the gear icon and paste your Claude API key. Get one at <https://console.anthropic.com/>.
-3. The key is written to `~/.frank/config.json` with `0600` permissions (owner read/write only). The daemon never logs it.
+**Copy as prompt** (comment-by-comment). On any curated comment, click the Copy button — a structured prompt lands on your clipboard with the comment, its context, and the decision chain. Paste into Claude, Cursor, ChatGPT, a local LLM, anywhere.
 
-Every conversation is stored per-project at `~/.frank/projects/{id}/ai-conversations/`. The panel includes your curated comments, recent snapshot metadata, and (for canvas projects) the canvas state as context on every turn, within an explicit token budget so you never blow past Claude's context window.
+**Export the whole project** (handoff-all-at-once).
 
-Prefer a different AI? Every user message has a **Copy** button that exports it as a structured prompt you can paste into any other assistant. The old clipboard-routing flow on curated comments still works for the same reason.
+```bash
+frank export --project <id>
+```
+
+Exports structured JSON: every comment, curation decision, snapshot, timeline entry. Or open the Timeline view and hit Export → Markdown / PDF for a human-readable report. The same data, two shapes — pick whichever your AI tool prefers as input.
 
 ### Connect to cloud (for sharing)
 
@@ -306,7 +301,7 @@ The backend contract has seven JSON-over-HTTPS endpoints: `/api/health`, `GET+PO
 
 - **Local by default** — all project data, canvas state, uploaded files, image assets, and AI conversations stay in `~/.frank/` on your machine
 - **API keys stay local** — Claude key stored at `~/.frank/config.json` with `0600` permissions; the daemon never logs it
-- **AI calls are your calls** — Frank connects to the Claude API using your key; Anthropic's privacy terms apply; nothing routes through Frank's infrastructure (there isn't any)
+- **No AI calls from Frank** — Frank does not talk to any AI service. Routing feedback to AI happens via clipboard (Copy as prompt) or export (JSON / Markdown / PDF); you paste into whichever AI tool you already use, under whatever terms that tool provides.
 - **No telemetry, no analytics, no accounts**
 - **Sharing is opt-in** — when you share, a snapshot is uploaded to YOUR Vercel Blob storage
 - **Canvas share bundling** — canvas shares inline every referenced image asset as a data URL inside the share payload; nothing else is uploaded beyond what's visible on the canvas
@@ -360,9 +355,10 @@ frank/
 |   +-- canvas/               # Stage, tools, transformer, serialize, shapes, paths, connectors,
 |   |                         #   anchors, templates, properties, comments (pins), image (drop),
 |   |                         #   shortcuts, history (undo/redo), svg-export, export (PNG/SVG/PDF/JSON)
-|   +-- components/           # toolbar, curation, comments, share-popover, ai-routing, ai-panel,
-|   |                         #   url-input (paste/drop/pick), help-panel, toast, error-card
-|   +-- styles/               # tokens, ui, app, overlay, comments, curation, canvas, timeline, ai-panel
+|   +-- components/           # toolbar, curation, comments, share-popover, ai-routing
+|   |                         #   (Copy-as-prompt clipboard flow), url-input, help-panel,
+|   |                         #   toast, error-card
+|   +-- styles/               # tokens, ui, app, overlay, comments, curation, canvas, timeline
 +-- daemon/                   # Node.js daemon (TypeScript)
 |   +-- src/cli.ts            # CLI commands: start/stop/status/connect/export/uninstall
 |   +-- src/server.ts         # HTTP + WebSocket server, all message handlers
@@ -372,9 +368,7 @@ frank/
 |   +-- src/snapshots.ts      # DOM + canvas snapshot storage (with thumbnail)
 |   +-- src/curation.ts       # Curation log
 |   +-- src/canvas.ts         # Canvas state I/O
-|   +-- src/ai-conversations.ts     # Per-project AI conversation storage with caps
-|   +-- src/ai-providers/claude.ts  # Claude API client + context builder
-|   +-- src/ai-chain.ts       # AI instruction chain log
+|   +-- src/ai-chain.ts       # AI-routing chain log (captured for export handoff)
 |   +-- src/proxy.ts          # Content proxy for iframe-restricted URLs
 |   +-- src/cloud.ts          # Self-hosted cloud client + secret-aware config I/O
 |   +-- src/export.ts         # Structured JSON export
@@ -408,7 +402,6 @@ What this means in practice:
 Frank bundles or depends on the following third-party software. All are permissive licenses (MIT, 0BSD, or Apache-2.0). Full copyright notices for each are preserved in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md), which must accompany any redistribution of Frank.
 
 - [Konva](https://konvajs.org/) — MIT (loaded via CDN at runtime)
-- [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript) — MIT (daemon)
 - [ws](https://github.com/websockets/ws) — MIT (daemon)
 - [pdfmake](http://pdfmake.org/) — MIT (daemon — project report PDF)
 - [tslib](https://github.com/microsoft/tslib) — 0BSD (transitive, via pdfmake)
