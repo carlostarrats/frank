@@ -40,7 +40,12 @@ function connect() {
       // promise and short-circuit, and the share-popover listener would never
       // see the state transition — the spinner would spin forever until the
       // next unrelated broadcast (or page refresh) arrived.
-      if (msg.type === 'live-share-state' || msg.type === 'live-share-comment' || msg.type === 'share-revoked') {
+      if (
+        msg.type === 'live-share-state' ||
+        msg.type === 'live-share-comment' ||
+        msg.type === 'share-revoked' ||
+        msg.type === 'canvas-state-changed'
+      ) {
         window.dispatchEvent(new CustomEvent(`frank:${msg.type}`, { detail: msg }));
       }
       if (msg.requestId && pendingRequests.has(msg.requestId)) {

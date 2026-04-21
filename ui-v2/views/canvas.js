@@ -449,6 +449,26 @@ export function renderCanvas(container, { onBack }) {
     syncUndoBtn();
   });
 
+  // Pick up canvas-state changes authored by MCP tools so AI-added shapes
+  // stream into the open tab without a refresh. Only acts when the broadcast
+  // targets the currently-open project. Deserialize replaces all children,
+  // so the user's current selection is cleared — consistent with how undo
+  // behaves. After applying the new state the history baseline is reset so
+  // undo doesn't try to reverse into the pre-AI version.
+  const onCanvasStateChanged = (e) => {
+    const detail = e.detail;
+    if (!detail || detail.projectId !== projectManager.getId()) return;
+    try {
+      deserializeInto(contentLayer, detail.state);
+      comments.render();
+      history.reset();
+      syncUndoBtn();
+    } catch (err) {
+      console.warn('[canvas] could not apply remote state:', err);
+    }
+  };
+  window.addEventListener('frank:canvas-state-changed', onCanvasStateChanged);
+
   // Toolbar undo button: same path as Cmd+Z. Disabled attribute is kept in
   // sync by syncUndoBtn; clicking while disabled is a no-op.
   // Canvas topbar → timeline view (same event the viewer's toolbar dispatches).

@@ -152,6 +152,65 @@ export interface ExportReportRequest { type: 'export-report'; format: 'markdown'
 export interface ExportBundleRequest { type: 'export-bundle'; projectId?: string; requestId?: number; }
 export interface RevealProjectFolderRequest { type: 'reveal-project-folder'; projectId?: string; requestId?: number; }
 
+// v3.2 MCP canvas writes (MCP subprocess → daemon). All operations take an
+// explicit projectId — MCP callers must never rely on the daemon's
+// activeProjectId (which belongs to the browser's currently-open project).
+export interface McpAddShapeRequest {
+  type: 'mcp-add-shape';
+  projectId: string;
+  kind: 'rectangle' | 'circle' | 'ellipse' | 'triangle' | 'diamond' | 'hexagon' | 'star' | 'sticky' | 'parallelogram' | 'document' | 'cylinder' | 'cloud' | 'speech';
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  text?: string;
+  fill?: string;
+  stroke?: string;
+  requestId?: number;
+}
+export interface McpAddTextRequest {
+  type: 'mcp-add-text';
+  projectId: string;
+  x: number;
+  y: number;
+  text: string;
+  fontSize?: number;
+  requestId?: number;
+}
+export interface McpAddPathRequest {
+  type: 'mcp-add-path';
+  projectId: string;
+  points: number[];
+  stroke?: string;
+  requestId?: number;
+}
+export interface McpAddConnectorRequest {
+  type: 'mcp-add-connector';
+  projectId: string;
+  fromId: string;
+  toId: string;
+  kind: 'arrow' | 'elbow';
+  requestId?: number;
+}
+export interface McpInsertTemplateRequest {
+  type: 'mcp-insert-template';
+  projectId: string;
+  template: 'kanban' | 'mindmap' | 'flowchart' | 'calendar';
+  x: number;
+  y: number;
+  requestId?: number;
+}
+export interface McpAddCommentRequest {
+  type: 'mcp-add-comment';
+  projectId: string;
+  shapeId?: string;          // when anchoring to a canvas shape
+  x: number;
+  y: number;
+  text: string;
+  author?: string;
+  requestId?: number;
+}
+
 // v3 live-share controls (UI → daemon)
 export interface StartLiveShareRequest { type: 'start-live-share'; projectId: string; requestId?: number; }
 export interface StopLiveShareRequest { type: 'stop-live-share'; projectId: string; requestId?: number; }
@@ -210,7 +269,13 @@ export type AppMessage =
   | StopLiveShareRequest
   | ResumeLiveShareRequest
   | PushLiveStateRequest
-  | RevokeShareRequest;
+  | RevokeShareRequest
+  | McpAddShapeRequest
+  | McpAddTextRequest
+  | McpAddPathRequest
+  | McpAddConnectorRequest
+  | McpInsertTemplateRequest
+  | McpAddCommentRequest;
 
 // ─── Daemon → App (WebSocket) ───────────────────────────────────────────────
 
@@ -406,6 +471,21 @@ export interface ShareRevokedMessage {
   projectId: string;
 }
 
+// v3.2 MCP broadcasts so open browser tabs pick up AI-authored canvas writes
+// without a refresh. `source` helps the UI distinguish machine- vs human-
+// authored edits later (e.g., a timeline badge).
+export interface CanvasStateChangedMessage {
+  type: 'canvas-state-changed';
+  projectId: string;
+  state: string;          // full Konva JSON
+  source: 'ai';
+}
+export interface McpWriteAckMessage {
+  type: 'mcp-write-ack';
+  requestId?: number;
+  id: string;             // id of the created shape / text / etc.
+}
+
 export type DaemonMessage =
   | ProjectListMessage
   | ProjectLoadedMessage
@@ -437,7 +517,9 @@ export type DaemonMessage =
   | FolderRevealedMessage
   | LiveShareStateMessage
   | LiveShareCommentMessage
-  | ShareRevokedMessage;
+  | ShareRevokedMessage
+  | CanvasStateChangedMessage
+  | McpWriteAckMessage;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 

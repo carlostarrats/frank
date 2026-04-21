@@ -28,6 +28,7 @@ import { exportProject } from './export.js';
 import { exportReport } from './report.js';
 import { buildBundle } from './bundle.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
+import { addShape, addText, addPath, addConnector } from './canvas-writes.js';
 import {
   getClaudeApiKey, setClaudeApiKey, clearClaudeApiKey,
 } from './cloud.js';
@@ -962,6 +963,73 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       break;
     }
 
+    // ─── MCP canvas writes ───────────────────────────────────────────────
+    //
+    // Each write appends to the target project's canvas-state.json and
+    // broadcasts canvas-state-changed so every open browser tab on that
+    // project picks up the new content without a refresh. The write+read
+    // order guarantees the broadcast payload already reflects the append.
+    case 'mcp-add-shape': {
+      try {
+        const { id } = addShape(msg.projectId, {
+          kind: msg.kind, x: msg.x, y: msg.y,
+          width: msg.width, height: msg.height, text: msg.text,
+          fill: msg.fill, stroke: msg.stroke,
+        });
+        pushCanvasStateChanged(msg.projectId);
+        reply({ type: 'mcp-write-ack', id });
+      } catch (e: any) { reply({ type: 'error', error: e.message }); }
+      break;
+    }
+    case 'mcp-add-text': {
+      try {
+        const { id } = addText(msg.projectId, { x: msg.x, y: msg.y, text: msg.text, fontSize: msg.fontSize });
+        pushCanvasStateChanged(msg.projectId);
+        reply({ type: 'mcp-write-ack', id });
+      } catch (e: any) { reply({ type: 'error', error: e.message }); }
+      break;
+    }
+    case 'mcp-add-path': {
+      try {
+        const { id } = addPath(msg.projectId, msg.points, msg.stroke);
+        pushCanvasStateChanged(msg.projectId);
+        reply({ type: 'mcp-write-ack', id });
+      } catch (e: any) { reply({ type: 'error', error: e.message }); }
+      break;
+    }
+    case 'mcp-add-connector': {
+      try {
+        const { id } = addConnector(msg.projectId, msg.fromId, msg.toId, msg.kind);
+        pushCanvasStateChanged(msg.projectId);
+        reply({ type: 'mcp-write-ack', id });
+      } catch (e: any) { reply({ type: 'error', error: e.message }); }
+      break;
+    }
+    case 'mcp-insert-template': {
+      // Templates are currently defined only in the browser (ui-v2/canvas/
+      // templates.js). For v1 the MCP tool tells the AI to use add_shape for
+      // the pieces it needs — a daemon-side template library is a follow-up.
+      reply({ type: 'error', error: 'insert_template is not yet supported on the daemon; compose the template from add_shape + add_connector for now.' });
+      break;
+    }
+    case 'mcp-add-comment': {
+      try {
+        const anchor = msg.shapeId
+          ? { type: 'shape' as const, shapeId: msg.shapeId, x: msg.x, y: msg.y, shapeLastKnown: { x: msg.x, y: msg.y } }
+          : { type: 'pin' as const, x: msg.x, y: msg.y };
+        const comment = addComment(msg.projectId, {
+          screenId: 'canvas',  // canvas projects use this screen id
+          anchor,
+          author: msg.author || 'AI',
+          text: msg.text,
+        });
+        // Let every tab re-render comments + pins.
+        broadcast({ type: 'project-loaded', projectId: msg.projectId, project: loadProject(msg.projectId), comments: loadComments(msg.projectId) } as any);
+        reply({ type: 'mcp-write-ack', id: comment.id });
+      } catch (e: any) { reply({ type: 'error', error: e.message }); }
+      break;
+    }
+
     case 'revoke-share': {
       (async () => {
         try {
@@ -1146,6 +1214,15 @@ async function syncCloudComments(): Promise<void> {
   } catch {
     // Silent fail — sync is best-effort
   }
+}
+
+// Read the current canvas-state and push it to every connected panel client.
+// Called after MCP canvas writes so open tabs pick up AI-authored shapes
+// without a refresh. Silent no-op if there's no state on disk.
+function pushCanvasStateChanged(projectId: string): void {
+  const state = loadCanvasState(projectId);
+  if (!state) return;
+  broadcast({ type: 'canvas-state-changed', projectId, state, source: 'ai' });
 }
 
 function broadcast(message: DaemonMessage): void {
