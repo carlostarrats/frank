@@ -988,7 +988,8 @@ a.home-icon-btn { text-decoration: none; }
   border-radius: var(--radius-sm);
   outline: none;
 }
-.project-card-name:hover:not(.editing) { background: color-mix(in oklch, var(--bg-surface), transparent 50%); }
+/* Rename happens via the ⋯ menu or F2, not click — so the name no
+ * longer shows a hover affordance that would promise edit-on-click. */
 .project-card-name.editing {
   background: var(--bg-surface);
   box-shadow: 0 0 0 2px var(--ring);

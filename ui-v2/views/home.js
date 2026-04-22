@@ -441,15 +441,11 @@ function wireCards(host, projects, variant, { onOpenProject, refresh }) {
       }
     });
 
-    // Inline rename on name click (active + archived). Mouse-only entry
-    // point — the keyboard path uses F2 above.
+    // Clicks on the name just select text — they don't open the project
+    // or enter rename mode. Renaming is ⋯ menu or F2 only. (Stops the
+    // card's open-on-click handler from firing.)
     const nameEl = card.querySelector('.project-card-name');
-    if (variant !== 'trash') {
-      nameEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        startRename(nameEl, project, refresh);
-      });
-    }
+    nameEl.addEventListener('click', (e) => { e.stopPropagation(); });
 
     // Context menu.
     const menuBtn = card.querySelector('.project-menu-btn');
