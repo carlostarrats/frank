@@ -22,9 +22,21 @@ const MAX_CANVAS_DIM = 800;
 export function attachImageDrop(container, contentLayer, { onCommit, getStage } = {}) {
   const stage = getStage ? getStage() : contentLayer.getStage();
 
+  // Drag-depth counter. dragenter/dragleave fire once per child crossing,
+  // so a simple `e.target === container` check misses edge cases (drop
+  // cancelled outside the window, fast exits, ESC). Counting enter/leave
+  // and clearing only when the counter hits zero is the browser-wide
+  // fix for "stuck drop overlay" bugs.
+  let depth = 0;
+  const clearOverlay = () => {
+    depth = 0;
+    container.classList.remove('canvas-stage-dragover');
+  };
+
   const onDragEnter = (e) => {
     if (!hasFiles(e.dataTransfer)) return;
     e.preventDefault();
+    depth++;
     container.classList.add('canvas-stage-dragover');
   };
   const onDragOver = (e) => {
@@ -33,13 +45,14 @@ export function attachImageDrop(container, contentLayer, { onCommit, getStage } 
     e.dataTransfer.dropEffect = 'copy';
   };
   const onDragLeave = (e) => {
-    // Only clear when leaving the container itself, not a child.
-    if (e.target === container) container.classList.remove('canvas-stage-dragover');
+    if (!hasFiles(e.dataTransfer)) return;
+    depth = Math.max(0, depth - 1);
+    if (depth === 0) container.classList.remove('canvas-stage-dragover');
   };
   const onDrop = async (e) => {
     if (!hasFiles(e.dataTransfer)) return;
     e.preventDefault();
-    container.classList.remove('canvas-stage-dragover');
+    clearOverlay();
     const files = Array.from(e.dataTransfer.files || []).filter(f => ACCEPTED_IMAGE_MIME.includes(f.type));
     if (files.length === 0) return;
 
@@ -65,11 +78,24 @@ export function attachImageDrop(container, contentLayer, { onCommit, getStage } 
   container.addEventListener('dragleave', onDragLeave);
   container.addEventListener('drop', onDrop);
 
+  // Safety nets: dragend fires when a drag completes or is cancelled
+  // (including ESC), but isn't always delivered to the drop target.
+  // Listening on window catches those strays. The document-level drop
+  // handler covers drops that land outside the container — without it,
+  // the browser's default is to navigate to the file, which would blow
+  // away the canvas.
+  const onWindowDragEnd = () => clearOverlay();
+  const onWindowDrop = () => clearOverlay();
+  window.addEventListener('dragend', onWindowDragEnd);
+  window.addEventListener('drop', onWindowDrop);
+
   return () => {
     container.removeEventListener('dragenter', onDragEnter);
     container.removeEventListener('dragover', onDragOver);
     container.removeEventListener('dragleave', onDragLeave);
     container.removeEventListener('drop', onDrop);
+    window.removeEventListener('dragend', onWindowDragEnd);
+    window.removeEventListener('drop', onWindowDrop);
   };
 }
 
