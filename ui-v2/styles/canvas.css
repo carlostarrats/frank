@@ -548,23 +548,59 @@
 
 .canvas-inspector-color-input {
   display: flex;
-  gap: var(--space-2);
   align-items: center;
+  width: 100%;
 }
-.canvas-inspector-swatch {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
+.canvas-inspector-color-input .clr-field {
+  width: 100%;
+}
+/* Style the Coloris-bound text input to match the app's Input primitive.
+ * Left padding leaves room for the swatch button Coloris injects. */
+.canvas-inspector-color-input-field {
+  width: 100%;
+  background: transparent;
   border: 1px solid var(--input);
   border-radius: var(--radius-md);
-  background: transparent;
-  cursor: pointer;
-  flex-shrink: 0;
+  padding: 0 var(--space-3) 0 calc(var(--space-3) + 1.5rem);
+  height: 2.25rem;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
 }
-.canvas-inspector-swatch::-webkit-color-swatch-wrapper { padding: 2px; }
-.canvas-inspector-swatch::-webkit-color-swatch { border: 0; border-radius: calc(var(--radius-md) - 2px); }
+.canvas-inspector-color-input-field:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
+}
+/* Coloris injects .clr-field as a wrapper with an absolutely-positioned
+ * swatch button. Pin the button to the left edge and resize to match
+ * Frank's density. */
+.canvas-inspector-color-input .clr-field button {
+  width: 1.25rem;
+  height: 1.25rem;
+  left: 0.5rem;
+  right: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--input);
+}
+
+/* Coloris picker panel — match Frank's zero-radius aesthetic.
+ * Coloris ships with pill/rounded pieces; these rules square them off
+ * so the panel reads like the rest of the app. */
+.clr-picker,
+.clr-picker *,
+.clr-picker *::before,
+.clr-picker *::after {
+  border-radius: 0 !important;
+}
+.clr-picker {
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
 
 .canvas-inspector-range-label {
   display: flex;

@@ -16,6 +16,7 @@ import { Label } from '../ui/label.js';
 import { Separator } from '../ui/separator.js';
 import { h } from '../ui/dom.js';
 import { dissolveGroup } from './templates.js';
+import { ensureColorisConfigured, bindColorisFields } from './color-picker.js';
 
 export function createInspector({ host, onChange }) {
   host.innerHTML = `
@@ -172,6 +173,10 @@ export function createInspector({ host, onChange }) {
         onChange?.();
       },
     }));
+
+    // Wrap any newly-mounted `.coloris` inputs so their swatch preview renders.
+    // Coloris doesn't observe the DOM, so each render needs an explicit bind.
+    bindColorisFields(body);
   }
 
   return { setSelection };
@@ -304,32 +309,22 @@ function svg(body) {
 // ── Field builders ───────────────────────────────────────────────────────────
 
 function colorField({ label, value, onChange }) {
-  let swatchInput;
-  let textInput;
+  ensureColorisConfigured();
+  const input = h('input', {
+    type: 'text',
+    class: 'canvas-inspector-color-input-field coloris',
+    value: value.hex,
+    'data-coloris': '',
+    spellcheck: 'false',
+    autocomplete: 'off',
+    onInput: (e) => {
+      const next = e.target.value.trim();
+      onChange(next);
+    },
+  });
   const row = h('div', { class: 'canvas-inspector-row' }, [
     Label({ text: label }),
-    h('div', { class: 'canvas-inspector-color-input' }, [
-      h('input', {
-        type: 'color',
-        class: 'canvas-inspector-swatch',
-        value: value.hex,
-        ref: (el) => { swatchInput = el; },
-        onInput: (e) => {
-          const next = e.target.value;
-          if (textInput) textInput.value = next;
-          onChange(next);
-        },
-      }),
-      Input({
-        value: value.hex,
-        onInput: (e) => {
-          const next = e.target.value.trim();
-          if (swatchInput && /^#[0-9a-fA-F]{6}$/.test(next)) swatchInput.value = next;
-          onChange(next);
-        },
-        ref: (el) => { textInput = el; },
-      }),
-    ]),
+    h('div', { class: 'canvas-inspector-color-input' }, [input]),
   ]);
   return row;
 }

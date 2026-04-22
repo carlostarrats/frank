@@ -371,6 +371,7 @@ What this means in practice:
 Frank bundles or depends on the following third-party software. All are permissive (MIT, 0BSD, Apache-2.0). Full copyright notices in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md), which must accompany any redistribution.
 
 - [Konva](https://konvajs.org/) — MIT (CDN at runtime)
+- [Coloris](https://github.com/mdbassit/Coloris) — MIT (CDN at runtime; canvas inspector color picker)
 - [ws](https://github.com/websockets/ws) — MIT (daemon)
 - [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) — MIT (MCP server)
 - [pdfmake](http://pdfmake.org/) — MIT (project report PDF)
