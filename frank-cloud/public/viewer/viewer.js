@@ -43,7 +43,8 @@ function renderViewer(app, data) {
       <div class="v-sidebar" id="v-sidebar">
         <div class="v-sidebar-header">
           <h3>Comments (${comments.length})</h3>
-          <button class="v-btn" id="v-add-comment">+ Comment</button>
+          <button class="v-btn v-hide-mobile" id="v-add-comment">+ Comment</button>
+          <span class="v-mobile-only v-mobile-hint">Open on desktop to comment</span>
         </div>
         <div class="v-comments" id="v-comments"></div>
         <div class="v-comment-form" id="v-comment-form" style="display:none">
@@ -232,6 +233,78 @@ async function renderCanvas(payload) {
         y: pointer.y - mousePt.y * clamped,
       });
     });
+
+    // Touch pan + pinch zoom for mobile reviewers. One finger pans; two
+    // fingers pinch-zoom around the midpoint. Without this the canvas is
+    // frozen on phones — wheel events never fire.
+    let __touchLastDist = 0;
+    let __touchLastCenter = null;
+    let __touchPanStart = null;
+    const stageContainer = __canvasStage.container();
+    stageContainer.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        __touchPanStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, stageX: __canvasStage.x(), stageY: __canvasStage.y() };
+      } else if (e.touches.length === 2) {
+        __touchPanStart = null;
+        const [a, b] = e.touches;
+        __touchLastDist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+        __touchLastCenter = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+      }
+    }, { passive: true });
+    stageContainer.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1 && __touchPanStart) {
+        e.preventDefault();
+        const t = e.touches[0];
+        __canvasStage.position({
+          x: __touchPanStart.stageX + (t.clientX - __touchPanStart.x),
+          y: __touchPanStart.stageY + (t.clientY - __touchPanStart.y),
+        });
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        const [a, b] = e.touches;
+        const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+        const center = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+        if (__touchLastDist > 0) {
+          const oldScale = __canvasStage.scaleX();
+          const rect = stageContainer.getBoundingClientRect();
+          const local = { x: center.x - rect.left, y: center.y - rect.top };
+          const worldPt = { x: (local.x - __canvasStage.x()) / oldScale, y: (local.y - __canvasStage.y()) / oldScale };
+          const newScale = Math.max(0.1, Math.min(8, oldScale * (dist / __touchLastDist)));
+          __canvasStage.scale({ x: newScale, y: newScale });
+          __canvasStage.position({
+            x: local.x - worldPt.x * newScale,
+            y: local.y - worldPt.y * newScale,
+          });
+        }
+        __touchLastDist = dist;
+        __touchLastCenter = center;
+      }
+    }, { passive: false });
+    stageContainer.addEventListener('touchend', (e) => {
+      if (e.touches.length === 0) {
+        __touchPanStart = null;
+        __touchLastDist = 0;
+        __touchLastCenter = null;
+      } else if (e.touches.length === 1) {
+        __touchLastDist = 0;
+        __touchLastCenter = null;
+        __touchPanStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, stageX: __canvasStage.x(), stageY: __canvasStage.y() };
+      }
+    }, { passive: true });
+
+    // Keep the stage sized to its container on viewport changes (rotation,
+    // browser chrome show/hide, sidebar toggle). Without this, the stage
+    // stays at its initial dimensions and content gets clipped.
+    const resizeStage = () => {
+      const w = stageContainer.clientWidth;
+      const h = stageContainer.clientHeight;
+      if (w > 0 && h > 0) {
+        __canvasStage.size({ width: w, height: h });
+        __canvasStage.batchDraw();
+      }
+    };
+    window.addEventListener('resize', resizeStage);
+    if (window.ResizeObserver) new ResizeObserver(resizeStage).observe(stageContainer);
   } else {
     // Reuse existing stage: destroy existing layer children and replace layer.
     __canvasStage.destroyChildren();

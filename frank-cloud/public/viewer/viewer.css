@@ -284,14 +284,75 @@ body {
 }
 .v-btn-ghost:hover { background: var(--accent); color: var(--accent-foreground); }
 
+/* Mobile view-only mode: suppress add-comment affordance + comment form.
+ * Reviewers can still read comments and pan/zoom; authoring moves to
+ * desktop where the flow is actually comfortable. */
+.v-mobile-only { display: none; }
+
 @media (max-width: 768px) {
   .v-main { flex-direction: column; }
   .v-sidebar {
     width: 100%;
-    height: 40vh;
+    height: 38vh;
+    min-height: 180px;
     border-left: none;
     border-top: 1px solid var(--border);
+    padding: var(--space-3);
   }
+  .v-sidebar-header { margin-bottom: var(--space-3); }
+
+  /* Comment form: touch-friendly row heights and button sizing. */
+  .v-btn { min-height: 44px; padding: 0 var(--space-3); }
+  .v-input { height: 2.75rem; }
+  .v-textarea { min-height: 88px; height: auto; }
+  .v-prompt { min-height: 32px; padding: var(--space-1) var(--space-3); }
+
+  /* View-only mode on mobile. */
+  .v-hide-mobile { display: none !important; }
+  .v-mobile-only { display: inline; }
+  .v-mobile-hint {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+  .v-comment-form { display: none !important; }
+
+  /* Ambient pills — smaller and out of the way of content/headers. */
+  .frank-presence,
+  .frank-author-status {
+    font-size: 10px;
+    padding: 2px var(--space-2);
+  }
+  .frank-presence {
+    top: var(--space-2);
+    right: var(--space-2);
+  }
+  .frank-author-status {
+    top: calc(var(--space-2) + 1.6rem);
+    right: var(--space-2);
+  }
+  .frank-reconnect,
+  .frank-updates-disabled {
+    left: var(--space-2);
+    right: var(--space-2);
+    text-align: center;
+  }
+
+  /* Cover-note banner wraps cleanly on narrow viewports. */
+  .v-toast { padding: var(--space-2) var(--space-3); }
+  .v-toast-inner {
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+}
+
+@media (max-width: 480px) {
+  .v-sidebar {
+    height: 34vh;
+    padding: var(--space-2) var(--space-3);
+  }
+  .v-sidebar-header h3 { font-size: var(--text-sm); }
+  .v-comment { padding: var(--space-2) var(--space-3); }
+  .v-comment-head { font-size: var(--text-xs); }
 }
 
 /* Ambient status pills, positioned over the viewer. */
