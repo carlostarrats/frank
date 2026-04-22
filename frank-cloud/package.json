@@ -5,7 +5,7 @@
   "type": "module",
   "license": "SEE LICENSE IN ../LICENSE",
   "dependencies": {
-    "@vercel/blob": "^0.27.0",
+    "@vercel/blob": "^1.1.1",
     "@upstash/redis": "^1.37.0"
   },
   "devDependencies": {
