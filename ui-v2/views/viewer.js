@@ -10,6 +10,7 @@ import { captureSnapshot, detectSensitiveContent, buildMediaFileSnapshot } from 
 import { updateSharePopover } from '../components/share-popover.js';
 import { renderErrorCard } from '../components/error-card.js';
 import { toastError, toastInfo } from '../components/toast.js';
+import { mountZoomMenu } from '../components/zoom-menu.js';
 
 export function renderViewer(container, { onBack }) {
   const project = projectManager.get();
@@ -376,18 +377,7 @@ function loadImageContent(container, filePath, mountPins) {
   let fitW = 0;
   let fitH = 0;
 
-  const renderZoomBadge = () => {
-    if (!zoomEl) return;
-    zoomEl.innerHTML = '';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-ghost canvas-zoom-reset';
-    btn.title = 'Reset view';
-    btn.textContent = `${Math.round(zoom * 100)}%`;
-    btn.addEventListener('click', resetZoom);
-    zoomEl.appendChild(btn);
-  };
-
+  let zoomMenu = null;
   const applyZoom = () => {
     if (zoom === 1 || fitW === 0 || fitH === 0) {
       img.style.removeProperty('width');
@@ -400,13 +390,24 @@ function loadImageContent(container, filePath, mountPins) {
       img.style.width = `${fitW * zoom}px`;
       img.style.height = `${fitH * zoom}px`;
     }
-    renderZoomBadge();
+    if (zoomMenu) zoomMenu.update();
     // Poke the pin renderer (listens for window resize) so pins reposition
     // to the new image bounds.
     window.dispatchEvent(new Event('resize'));
   };
 
   function resetZoom() { zoom = 1; applyZoom(); }
+
+  if (zoomEl) {
+    zoomMenu = mountZoomMenu(zoomEl, {
+      getZoom: () => zoom,
+      setZoom: (level) => {
+        zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, level));
+        applyZoom();
+      },
+      onReset: resetZoom,
+    });
+  }
 
   const onWheel = (e) => {
     e.preventDefault();
@@ -426,8 +427,6 @@ function loadImageContent(container, filePath, mountPins) {
   };
   img.addEventListener('load', onLoad, { once: true });
   if (img.complete) onLoad();
-
-  renderZoomBadge();
 }
 
 function autoAddScreen(newUrl) {

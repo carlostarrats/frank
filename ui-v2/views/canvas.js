@@ -32,6 +32,7 @@ import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js
 import { toastError, toastInfo } from '../components/toast.js';
 import { iconCommentPlus, iconCamera, iconLink, iconDownload, iconUndo, iconTimeline, syncToolbarLiveBadge } from '../components/toolbar.js';
 import { mountIntentButton } from '../components/intent-button.js';
+import { mountZoomMenu } from '../components/zoom-menu.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -431,18 +432,33 @@ export function renderCanvas(container, { onBack }) {
 
   mountIntentButton(container.querySelector('#canvas-intent-host'));
 
+  // Zoom dropdown with presets (25/50/75/100/125/150/200 + Reset). Wheel
+  // still zooms continuously; the dropdown is just a jump-to-fixed-level
+  // shortcut. setZoomTo scales around the visible stage center so the
+  // content doesn't leap off-screen.
+  function setZoomTo(scale) {
+    const width = stage.width();
+    const height = stage.height();
+    const cx = width / 2;
+    const cy = height / 2;
+    const oldScale = stage.scaleX() || 1;
+    const worldCenter = {
+      x: (cx - stage.x()) / oldScale,
+      y: (cy - stage.y()) / oldScale,
+    };
+    stage.scale({ x: scale, y: scale });
+    stage.position({
+      x: cx - worldCenter.x * scale,
+      y: cy - worldCenter.y * scale,
+    });
+  }
   const zoomEl = container.querySelector('#canvas-zoom');
-  const updateZoom = () => {
-    zoomEl.innerHTML = '';
-    const btn = document.createElement('button');
-    btn.className = 'btn-ghost canvas-zoom-reset';
-    btn.title = 'Reset view';
-    btn.textContent = `${Math.round(stage.scaleX() * 100)}%`;
-    btn.addEventListener('click', () => { resetView(); updateZoom(); });
-    zoomEl.appendChild(btn);
-  };
-  updateZoom();
-  stage.on('wheel', () => updateZoom());
+  const zoomMenu = mountZoomMenu(zoomEl, {
+    getZoom: () => stage.scaleX(),
+    setZoom: setZoomTo,
+    onReset: resetView,
+  });
+  stage.on('wheel', () => zoomMenu.update());
 
   sync.loadCanvasState().then((msg) => {
     if (msg && msg.state) {
