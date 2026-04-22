@@ -204,8 +204,8 @@ export interface McpAddCommentRequest {
   type: 'mcp-add-comment';
   projectId: string;
   shapeId?: string;          // when anchoring to a canvas shape
-  x: number;
-  y: number;
+  x?: number;                // optional when shapeId is set (defaults to shape centre)
+  y?: number;
   text: string;
   author?: string;
   requestId?: number;

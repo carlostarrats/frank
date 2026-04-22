@@ -28,7 +28,7 @@ import { exportProject } from './export.js';
 import { exportReport } from './report.js';
 import { buildBundle } from './bundle.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
-import { addShape, addText, addPath, addConnector } from './canvas-writes.js';
+import { addShape, addText, addPath, addConnector, findNode, nodeCenter } from './canvas-writes.js';
 import {
   getClaudeApiKey, setClaudeApiKey, clearClaudeApiKey,
 } from './cloud.js';
@@ -1063,11 +1063,39 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
 
     case 'mcp-add-comment': {
       try {
+        const project = loadProject(msg.projectId);
+        // screenId depends on project type — canvas projects use a synthetic
+        // 'canvas' screen; URL/PDF/image projects use the first screen key
+        // the user has actually navigated to, falling back to 'default' (the
+        // same key the viewer uses when no screens have been captured yet).
+        const screenId = project.contentType === 'canvas'
+          ? 'canvas'
+          : (Object.keys(project.screens || {})[0] || 'default');
+
+        // Resolve x/y. For shape-anchored comments, default to the shape's
+        // centre when the caller omits them — x/y for shape anchors is only
+        // the pin's visual fallback if the shape gets deleted.
+        let x = msg.x;
+        let y = msg.y;
+        if (msg.shapeId && (x == null || y == null)) {
+          try {
+            const state = loadCanvasState(msg.projectId);
+            if (state) {
+              const doc = typeof state === 'string' ? JSON.parse(state) : state;
+              for (const layer of (doc.children || [])) {
+                const node = findNode(layer.children || [], msg.shapeId);
+                if (node) { const c = nodeCenter(node); x ??= c.x; y ??= c.y; break; }
+              }
+            }
+          } catch { /* fall through to 0,0 */ }
+          x ??= 0; y ??= 0;
+        }
+
         const anchor = msg.shapeId
-          ? { type: 'shape' as const, shapeId: msg.shapeId, x: msg.x, y: msg.y, shapeLastKnown: { x: msg.x, y: msg.y } }
-          : { type: 'pin' as const, x: msg.x, y: msg.y };
+          ? { type: 'shape' as const, shapeId: msg.shapeId, x: x!, y: y!, shapeLastKnown: { x: x!, y: y! } }
+          : { type: 'pin' as const, x: x!, y: y! };
         const comment = addComment(msg.projectId, {
-          screenId: 'canvas',  // canvas projects use this screen id
+          screenId,
           anchor,
           author: msg.author || 'AI',
           text: msg.text,

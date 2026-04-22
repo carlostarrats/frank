@@ -142,7 +142,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
 
   tools.push({
     name: 'add_shape',
-    description: 'Append a shape to a canvas project. The shape is placed in world coordinates (x, y = top-left of the bounding box). Kinds: rectangle, circle, ellipse, triangle, diamond, hexagon, star, sticky, parallelogram, document, cylinder, cloud, speech. Optional text is placed as a centered label on the shape (ignored for sticky — sticky\'s fill carries the note; put the text in a separate add_text if you need it). Returns the new shape id, which you can use with add_connector.',
+    description: 'Append a shape to a canvas project. The shape is placed in world coordinates (x, y = top-left of the bounding box). Kinds: rectangle, circle, ellipse, triangle, diamond, hexagon, star, sticky, parallelogram, document, cylinder, cloud, speech. Optional text is placed as a centered label on the shape (ignored for sticky — sticky\'s fill carries the note; put the text in a separate add_text if you need it). Returns { id } — pass that id to add_connector to link shapes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -178,7 +178,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
 
   tools.push({
     name: 'add_text',
-    description: 'Append a standalone text node to a canvas project at (x, y). For labeling a shape, prefer add_shape with a `text` argument so the label sticks to the shape\'s center.',
+    description: 'Append a standalone text node to a canvas project at (x, y). For labeling a shape, prefer add_shape with a `text` argument so the label sticks to the shape\'s center. Returns { id }.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -206,7 +206,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
 
   tools.push({
     name: 'add_path',
-    description: 'Append a freehand path (pen tool). Points is a flat array alternating x and y world coordinates: [x1,y1,x2,y2,...]. Needs at least 2 points (4 numbers). Rarely the right tool for AI — prefer structured shapes + connectors. Exposed for parity with the canvas toolbar.',
+    description: 'Append a freehand path (pen tool). Points is a flat array alternating x and y world coordinates: [x1,y1,x2,y2,...]. Needs at least 2 points (4 numbers). Rarely the right tool for AI — prefer structured shapes + connectors. Exposed for parity with the canvas toolbar. Returns { id }.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -231,7 +231,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
 
   tools.push({
     name: 'add_connector',
-    description: 'Draw a connector between two shapes. Kind is "arrow" (straight line with arrowhead) or "elbow" (right-angle path). fromId and toId are shape ids returned by add_shape. Note: AI-authored connectors are positional snapshots — they don\'t follow the shapes if the user drags them afterward. That\'s a known v1 tradeoff; rebuild the connector if endpoints move.',
+    description: 'Draw a connector between two shapes. Kind is "arrow" (straight line with arrowhead) or "elbow" (right-angle path). fromId and toId are shape ids returned by add_shape. Note: AI-authored connectors are positional snapshots — they don\'t follow the shapes if the user drags them afterward. That\'s a known v1 tradeoff; rebuild the connector if endpoints move. Returns { id }.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -258,7 +258,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
 
   tools.push({
     name: 'add_comment',
-    description: 'Add a comment to a project. On canvas projects, pass shapeId to anchor to a specific shape (comment pin will follow it). On URL / PDF / image projects, pass only x, y — they\'re percentages of the viewport (0–100). author defaults to "AI" if unset. Comments added here appear in the user\'s feedback panel like any other.',
+    description: 'Add a comment to a project. On canvas projects, pass shapeId to anchor to a specific shape — the pin will follow it, and x/y default to the shape\'s centre if omitted. On URL / PDF / image projects, pass x and y as percentages of the viewport (0–100). author defaults to "AI" if unset. Comments added here appear in the user\'s feedback panel like any other. Returns { id }.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -269,7 +269,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
         text: { type: 'string' },
         author: { type: 'string' },
       },
-      required: ['projectId', 'x', 'y', 'text'],
+      required: ['projectId', 'text'],
       additionalProperties: false,
     },
     async handler(args) {
@@ -277,7 +277,8 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
         type: 'mcp-add-comment',
         projectId: String(args.projectId),
         shapeId: args.shapeId != null ? String(args.shapeId) : undefined,
-        x: Number(args.x), y: Number(args.y),
+        x: args.x != null ? Number(args.x) : undefined,
+        y: args.y != null ? Number(args.y) : undefined,
         text: String(args.text),
         author: args.author != null ? String(args.author) : undefined,
       });
@@ -314,7 +315,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
 
   tools.push({
     name: 'create_share',
-    description: 'Create a new share link for a canvas project. Uploads a snapshot of the current canvas to the user\'s configured Frank cloud and returns the public URL, revoke token, and expiry. v1 is canvas-only — URL / PDF / image projects need the share modal in the Frank UI because their snapshot builder runs in the browser. Optional coverNote shows on the reviewer\'s landing page. expiryDays defaults to 7.',
+    description: 'Create a new share link for a canvas project. Uploads a snapshot of the current canvas to the user\'s configured Frank cloud. v1 is canvas-only — URL / PDF / image projects need the share modal in the Frank UI because their snapshot builder runs in the browser. The author\'s own comments stay local by design; the share starts empty and fills as reviewers add comments. Optional coverNote shows on the reviewer\'s landing page. expiryDays defaults to 7. Returns { shareId, url, revokeToken, expiresAt }.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -340,7 +341,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
 
   tools.push({
     name: 'export_bundle',
-    description: 'Produce a complete project archive (a zip file) containing project.json, report.md, report.pdf, canvas-state.json, every snapshot folder, the source file (if any), and canvas assets. Returns the bundle as base64-encoded zip bytes plus the suggested filename. Use this when the user asks to "hand off everything" to an AI or stakeholder.',
+    description: 'Produce a complete project archive (a zip file) containing project.json, report.md, report.pdf, canvas-state.json, every snapshot folder, the source file (if any), and canvas assets. Returns { data, filename, mimeType } where data is base64-encoded zip bytes. Use this when the user asks to "hand off everything" to an AI or stakeholder.',
     inputSchema: {
       type: 'object',
       properties: { projectId: { type: 'string' } },

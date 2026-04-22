@@ -253,7 +253,7 @@ export function addConnector(projectId: string, fromId: string, toId: string, ki
   return { id };
 }
 
-function findNode(children: CanvasNode[], id: string): CanvasNode | null {
+export function findNode(children: CanvasNode[], id: string): CanvasNode | null {
   for (const n of children) {
     if ((n.attrs as { id?: string }).id === id) return n;
     if (n.children) {
@@ -264,7 +264,7 @@ function findNode(children: CanvasNode[], id: string): CanvasNode | null {
   return null;
 }
 
-function nodeCenter(node: CanvasNode): { x: number; y: number } {
+export function nodeCenter(node: CanvasNode): { x: number; y: number } {
   const a = node.attrs as { x?: number; y?: number; width?: number; height?: number; radiusX?: number; radiusY?: number; radius?: number };
   const x = a.x ?? 0;
   const y = a.y ?? 0;
