@@ -36,7 +36,7 @@ function showAiRoutingModal(commentIds, comments, combined) {
       </div>
       <div class="ai-routing-instruction">
         <div class="ai-routing-label">Your instruction to the AI (edit freely)</div>
-        <textarea class="input ai-routing-textarea" id="ai-instruction" rows="5">${esc(combined)}</textarea>
+        <textarea class="input ai-routing-textarea" id="ai-instruction" rows="5" aria-label="Your instruction to the AI">${esc(combined)}</textarea>
       </div>
       <div class="ai-routing-actions">
         <button class="btn-ghost" id="ai-cancel">Cancel</button>

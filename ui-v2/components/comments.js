@@ -32,7 +32,7 @@ export function renderComments(container, { screenId, onCommentModeToggle }) {
           }
         </div>
         <div class="comment-input-area" id="comment-input-area" style="display:none">
-          <textarea class="input comment-textarea" id="comment-text" placeholder="Add a comment..." rows="3"></textarea>
+          <textarea class="input comment-textarea" id="comment-text" placeholder="Add a comment..." rows="3" aria-label="New comment"></textarea>
           <div class="comment-input-actions">
             <button class="btn-ghost" id="cancel-comment">Cancel</button>
             <button class="btn-primary" id="submit-comment">Comment</button>

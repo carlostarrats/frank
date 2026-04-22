@@ -1933,6 +1933,18 @@ a.home-icon-btn { text-decoration: none; }
 }
 
 @media (max-width: 480px) {
-  /* Hide the title outright — the back arrow + icons keep context. */
-  .toolbar-title { display: none; }
+  /* Visually hide the title (there's no room) but keep it in the
+   * accessibility tree so screen readers still announce the project
+   * name. Same sr-only pattern used elsewhere. */
+  .toolbar-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }

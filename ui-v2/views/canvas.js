@@ -104,12 +104,12 @@ export function renderCanvas(container, { onBack }) {
         <button class="toolbar-btn toolbar-icon-btn canvas-snapshot-btn" id="canvas-snapshot-btn" title="Bookmark this moment in the timeline" aria-label="Bookmark moment">${iconCamera()}</button>
         <button class="toolbar-btn toolbar-icon-btn" id="canvas-share-btn" title="Share canvas" aria-label="Share canvas">${iconLink()}</button>
         <div class="canvas-export-wrapper">
-          <button class="toolbar-btn toolbar-icon-btn canvas-export-btn" id="canvas-export-btn" title="Export" aria-label="Export">${iconDownload()}</button>
-          <div class="canvas-export-menu" id="canvas-export-menu" hidden>
-            <button data-format="png" class="canvas-export-item">Export PNG</button>
-            <button data-format="svg" class="canvas-export-item">Export SVG (vector)</button>
-            <button data-format="pdf" class="canvas-export-item">Export PDF (vector)</button>
-            <button data-format="json" class="canvas-export-item">Export JSON</button>
+          <button class="toolbar-btn toolbar-icon-btn canvas-export-btn" id="canvas-export-btn" title="Export" aria-label="Export" aria-haspopup="menu" aria-expanded="false">${iconDownload()}</button>
+          <div class="canvas-export-menu" id="canvas-export-menu" role="menu" hidden>
+            <button data-format="png" class="canvas-export-item" role="menuitem">Export PNG</button>
+            <button data-format="svg" class="canvas-export-item" role="menuitem">Export SVG (vector)</button>
+            <button data-format="pdf" class="canvas-export-item" role="menuitem">Export PDF (vector)</button>
+            <button data-format="json" class="canvas-export-item" role="menuitem">Export JSON</button>
           </div>
         </div>
         </div>
@@ -345,19 +345,30 @@ export function renderCanvas(container, { onBack }) {
     }
   });
 
-  // Export dropdown: PNG / PDF / JSON. Click-outside closes.
+  // Export dropdown: PNG / PDF / JSON. Click-outside + Escape close.
   const exportBtn = container.querySelector('#canvas-export-btn');
   const exportMenu = container.querySelector('#canvas-export-menu');
-  const closeExportMenu = () => exportMenu.setAttribute('hidden', '');
+  const closeExportMenu = () => {
+    exportMenu.setAttribute('hidden', '');
+    exportBtn.setAttribute('aria-expanded', 'false');
+  };
   exportBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (exportMenu.hasAttribute('hidden')) exportMenu.removeAttribute('hidden');
-    else closeExportMenu();
+    if (exportMenu.hasAttribute('hidden')) {
+      exportMenu.removeAttribute('hidden');
+      exportBtn.setAttribute('aria-expanded', 'true');
+    } else {
+      closeExportMenu();
+    }
   });
   const onExportClickOutside = (e) => {
     if (!exportMenu.contains(e.target) && e.target !== exportBtn) closeExportMenu();
   };
   document.addEventListener('click', onExportClickOutside);
+  const onExportKeydown = (e) => {
+    if (e.key === 'Escape' && !exportMenu.hasAttribute('hidden')) closeExportMenu();
+  };
+  document.addEventListener('keydown', onExportKeydown);
   exportMenu.querySelectorAll('.canvas-export-item').forEach((item) => {
     item.addEventListener('click', async (e) => {
       e.stopPropagation();

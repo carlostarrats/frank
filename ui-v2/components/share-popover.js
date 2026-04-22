@@ -125,7 +125,7 @@ export function showSharePopover(anchorEl, { onClose }) {
       <div class="share-popover-inner">
         ${activeShare ? `
           <div class="share-popover-url">
-            <input type="text" class="v-input" id="share-url" value="${esc(activeShare.id)}" readonly>
+            <input type="text" class="v-input" id="share-url" value="${esc(activeShare.id)}" readonly aria-label="Share link ID">
             <button class="v-btn v-btn-primary" id="share-copy">Copy</button>
           </div>
           <div class="share-revoke-row">
@@ -134,6 +134,7 @@ export function showSharePopover(anchorEl, { onClose }) {
           </div>
         ` : ''}
         <textarea class="v-input v-textarea" id="share-note" placeholder="Cover note (optional)... e.g. 'Focus on the signup flow'"
+          aria-label="Cover note for reviewers (optional)"
           rows="2">${esc(activeShare?.coverNote || '')}</textarea>
         <label class="share-expiry-label">Expires after</label>
         <div class="share-expiry-wrapper">
@@ -316,7 +317,7 @@ export function updateSharePopover(result) {
   const urlSection = modal.querySelector('.share-popover-url') || document.createElement('div');
   urlSection.className = 'share-popover-url';
   urlSection.innerHTML = `
-    <input type="text" class="v-input" id="share-url" value="${esc(result.url)}" readonly>
+    <input type="text" class="v-input" id="share-url" value="${esc(result.url)}" readonly aria-label="Share link URL">
     <button class="v-btn v-btn-primary" id="share-copy">Copy</button>
   `;
   if (!modal.querySelector('.share-popover-url')) {

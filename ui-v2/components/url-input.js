@@ -13,6 +13,7 @@ export function renderUrlInput(container, { onSubmit, onFileSubmit }) {
           type="text"
           class="input url-input-field"
           placeholder="https://localhost:3000 or any URL..."
+          aria-label="URL to wrap with Frank"
           id="url-field"
           autofocus
         >
@@ -20,6 +21,7 @@ export function renderUrlInput(container, { onSubmit, onFileSubmit }) {
           type="text"
           class="input url-input-name"
           placeholder="Project name"
+          aria-label="Project name"
           id="name-field"
         >
         <button class="btn-primary" id="url-submit">Open</button>
@@ -27,7 +29,7 @@ export function renderUrlInput(container, { onSubmit, onFileSubmit }) {
       <div class="url-input-hint">
         <span>Supports: URLs (localhost, staging, production), PDFs, and images.</span>
         <button class="url-input-browse" id="url-browse">Select files…</button>
-        <input type="file" id="url-file-picker" accept="${ACCEPTED_ATTR}" hidden>
+        <input type="file" id="url-file-picker" accept="${ACCEPTED_ATTR}" hidden aria-label="Upload PDF or image">
       </div>
       <div class="url-input-error" id="url-error" style="display:none"></div>
       <div class="url-input-drop-hint" id="url-input-drop-hint">Drop to upload</div>

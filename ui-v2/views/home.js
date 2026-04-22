@@ -196,11 +196,12 @@ function renderProjects(host, projects, { onOpenProject, refresh }) {
 
 function renderTabs(recentCount, archivedCount, trashedCount) {
   const tab = (id, label, count) => {
-    const active = uiState.tab === id ? ' active' : '';
-    return `<button class="home-tab${active}" data-tab="${id}">${label}<span class="home-tab-count">${count}</span></button>`;
+    const isActive = uiState.tab === id;
+    const active = isActive ? ' active' : '';
+    return `<button class="home-tab${active}" data-tab="${id}" role="tab" aria-selected="${isActive}" aria-controls="list-current">${label}<span class="home-tab-count">${count}</span></button>`;
   };
   return `
-    <div class="home-tabs" role="tablist">
+    <div class="home-tabs" role="tablist" aria-label="Project lists">
       ${tab('recent', 'Recent', recentCount)}
       ${tab('archived', 'Archived', archivedCount)}
       ${tab('trash', 'Deleted', trashedCount)}
@@ -234,6 +235,7 @@ function renderToolbar(activeProjects) {
         type="search"
         class="input home-search"
         placeholder="Search projects…"
+        aria-label="Search projects"
         value="${escapeHtml(uiState.search)}"
         id="home-search-input"
       >
@@ -499,8 +501,9 @@ function openCardMenu(anchorBtn, project, variant, refresh) {
   const items = menuItemsForVariant(project, variant, refresh);
   const menu = document.createElement('div');
   menu.className = 'project-menu';
+  menu.setAttribute('role', 'menu');
   menu.innerHTML = items.map(it => `
-    <button class="project-menu-item ${it.danger ? 'project-menu-item-danger' : ''}" data-key="${it.key}">
+    <button class="project-menu-item ${it.danger ? 'project-menu-item-danger' : ''}" data-key="${it.key}" role="menuitem">
       ${it.label}
     </button>
   `).join('');

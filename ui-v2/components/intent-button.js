@@ -64,6 +64,7 @@ function openIntentModal() {
         rows="5"
         maxlength="2000"
         placeholder="What are you building, and what does success look like?"
+        aria-label="Project brief — what you're building and what success looks like"
       >${esc(project.intent || '')}</textarea>
       <div class="intent-modal-actions">
         <button class="btn-ghost" data-intent-close>Cancel</button>

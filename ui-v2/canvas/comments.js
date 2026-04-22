@@ -203,7 +203,7 @@ export function createCommentController({ stage, contentLayer, uiLayer, onCommit
     input.style.left = `${containerRect.left + screenPt.x}px`;
     input.style.top = `${containerRect.top + screenPt.y + 12}px`;
     input.innerHTML = `
-      <textarea class="canvas-comment-input-textarea" rows="2" placeholder="Add a comment…"></textarea>
+      <textarea class="canvas-comment-input-textarea" rows="2" placeholder="Add a comment…" aria-label="New comment on shape"></textarea>
       <div class="canvas-comment-input-actions">
         <button class="btn-ghost canvas-comment-cancel">Cancel</button>
         <button class="btn-primary canvas-comment-submit">Post</button>

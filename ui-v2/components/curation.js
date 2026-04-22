@@ -61,7 +61,7 @@ export function renderCuration(container, { screenId }) {
                     <span class="curation-time">${timeAgo(c.ts)}</span>
                   </div>
                   ${isEditing
-                    ? `<textarea class="input curation-text-edit" data-id="${c.id}" rows="3">${esc(c.text)}</textarea>`
+                    ? `<textarea class="input curation-text-edit" data-id="${c.id}" rows="3" aria-label="Edit comment text">${esc(c.text)}</textarea>`
                     : `<p class="curation-text">${esc(c.text)}</p>`}
                   ${c.anchor?.cssSelector ? `<span class="curation-anchor">${esc(c.anchor.cssSelector)}</span>` : ''}
                   <div class="curation-actions">
@@ -99,7 +99,7 @@ export function renderCuration(container, { screenId }) {
         `;
         })()}
         <div class="comment-input-area" id="comment-input-area" style="display:none">
-          <textarea class="input comment-textarea" id="comment-text" placeholder="Add a comment..." rows="3"></textarea>
+          <textarea class="input comment-textarea" id="comment-text" placeholder="Add a comment..." rows="3" aria-label="New comment"></textarea>
           <div class="comment-input-actions">
             <button class="btn-ghost" id="cancel-comment">Cancel</button>
             <button class="btn-primary" id="submit-comment">Comment</button>

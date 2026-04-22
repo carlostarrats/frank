@@ -266,6 +266,14 @@ Both paths write to `~/.frank/config.json` (mode 0600). Until a backend is confi
 
 ---
 
+## Accessibility
+
+Frank's home, viewer (URL / PDF / image), timeline, and settings UI target keyboard + screen-reader use: modals trap focus, icon-only buttons carry `aria-label`, custom dropdowns use `role="menu"` + `aria-expanded`, and the palette sits at ~7:1 contrast against the dark background. `prefers-reduced-motion` is honored.
+
+**The canvas view is inherently visual** — shapes, connectors, and their spatial relationships don't translate to a non-visual medium. Shape-anchored comment pins have `aria-label`s with the author and text, but navigating the canvas itself with a screen reader is not supported. Reviewers who need a non-visual surface should stick to URL / PDF / image projects, or review a canvas project via its exported Markdown / PDF report (Timeline → Export → Markdown).
+
+---
+
 ## Development
 
 Frontend has no build step — plain JS files served by the daemon. Konva loads via `<script>` tag. jsPDF and svg2pdf are loaded from CDN on first export.

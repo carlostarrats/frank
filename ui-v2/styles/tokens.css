@@ -207,3 +207,29 @@ input, textarea, select { font-family: inherit; }
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+/* Reduce non-essential motion for users who request it. Zeroing duration
+ * rather than nuking the properties keeps visual state transitions (open/
+ * closed, active/inactive) intact — they just snap instead of animating. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Screen-reader-only utility. Renders invisibly but is still in the
+ * accessibility tree so assistive tech announces it. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
