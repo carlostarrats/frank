@@ -999,11 +999,12 @@ a.home-icon-btn { text-decoration: none; }
 }
 /* During rename, name + save button sit side-by-side inside the column
  * layout of .project-card-info. The wrapper is inserted by startRename
- * and removed when editing finishes. align-items: stretch so the save
- * button matches the name input's height. */
+ * and removed when editing finishes. Square button sized to match the
+ * input's visible height (input's line-height + 2px padding + 2px ring
+ * on each side ≈ 28px). */
 .project-card-name-edit-row {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 10px;
   min-width: 0;
 }
@@ -1011,7 +1012,9 @@ a.home-icon-btn { text-decoration: none; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 10px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
