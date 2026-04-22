@@ -758,11 +758,15 @@ a.home-icon-btn { text-decoration: none; }
 /* Toasts */
 .toast-host {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1200;
   display: flex;
-  flex-direction: column;
+  /* column-reverse so the newest toast stacks nearest the bottom and
+   * older ones float upward — natural reading order when anchored low. */
+  flex-direction: column-reverse;
+  align-items: center;
   gap: 8px;
   pointer-events: none;
   max-width: min(420px, calc(100vw - 32px));
@@ -781,10 +785,10 @@ a.home-icon-btn { text-decoration: none; }
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
   animation: toast-enter 0.18s ease-out;
 }
-.toast.toast-leaving { opacity: 0; transform: translateX(8px); transition: opacity 0.15s, transform 0.15s; }
+.toast.toast-leaving { opacity: 0; transform: translateY(8px); transition: opacity 0.15s, transform 0.15s; }
 @keyframes toast-enter {
-  from { opacity: 0; transform: translateX(12px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .toast-icon {
   flex: 0 0 auto;
