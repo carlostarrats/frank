@@ -38,7 +38,7 @@ Add a project brief (optional) — tells AI what you're trying to build
        |
 Comment on elements or shapes (click to anchor)
        |
-Curate feedback — approve, dismiss, or remix each one
+Curate feedback — approve or dismiss each one
        |
 Route to AI — Copy as prompt / JSON or MD/PDF export / MCP server
        |
@@ -78,7 +78,7 @@ Every comment, every curation decision, every bookmark, every AI handoff is capt
 - **Vector export** — PNG (2×), SVG, PDF (vector via svg2pdf), JSON (serialized Konva)
 
 ### Feedback curation
-- **Approve / dismiss / remix** — and reset back to pending. Two-way toggles sync to both sidebar and canvas pins.
+- **Approve / dismiss** — and reset back to pending. Two-way toggles sync to both sidebar and canvas pins.
 - **Project brief ("Intent")** — set a short description of what you're building; Frank prepends it to every AI handoff so the AI sees your goal, not just the comments.
 - **Download** — one-click zip bundle: project JSON + Markdown report + PDF report + all bookmarked snapshots + source files + assets. Ready to hand off or archive.
 
@@ -333,7 +333,7 @@ frank/
 |   +-- src/projects.ts       # Project CRUD + intent + lifecycle (archive/trash/restore/purge)
 |   +-- src/assets.ts         # Content-addressed asset storage (sha256)
 |   +-- src/snapshots.ts      # Bookmark + canvas snapshot storage (with thumbnail)
-|   +-- src/curation.ts       # Curation log (approve/dismiss/remix/reset)
+|   +-- src/curation.ts       # Curation log (approve/dismiss/reset)
 |   +-- src/canvas.ts         # Canvas state I/O
 |   +-- src/canvas-writes.ts  # Programmatic canvas writes (used by MCP)
 |   +-- src/bundle.ts         # One-click download: zip of JSON + reports + snapshots + assets
