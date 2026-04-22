@@ -1793,3 +1793,107 @@ a.home-icon-btn { text-decoration: none; }
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
+
+/* ============================================================
+ * Mobile responsive — Phase 1: home + modals.
+ * Frank's author UI lives at localhost so phones can't reach it
+ * directly, but these rules keep tablet / split-screen / narrow-
+ * window use sane and set the baseline for the mobile share-
+ * viewer work that lands next.
+ * ============================================================ */
+
+/* Tablet-down (≤720px): stack layouts, tighten spacing, collapse
+ * masthead buttons to icon-only, enlarge touch targets. */
+@media (max-width: 720px) {
+  /* Shell */
+  .home {
+    padding: var(--space-5) var(--space-4);
+  }
+  .home-masthead {
+    margin-bottom: var(--space-6);
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .home-logo { height: 44px; }
+  .home-grid { gap: var(--space-6); }
+  .home-panel { padding: var(--space-4); }
+
+  /* Masthead buttons collapse to icon-only. Keep the spacer but shrink it
+   * so icons hug the right edge. */
+  .home-icon-btn > span { display: none; }
+  .home-icon-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .home-icon-btn svg { width: 16px; height: 16px; }
+
+  /* Project cards — touch targets. Actions stay visible (no hover on
+   * touch devices), and the ⋯ button gets a proper tap area. */
+  .project-card {
+    padding: 14px 12px;
+    min-height: 52px;
+  }
+  .project-card-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .project-card-actions { opacity: 1; }
+  .project-menu-btn {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Tabs: allow horizontal scroll if they overflow instead of wrapping. */
+  .home-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .home-tabs::-webkit-scrollbar { display: none; }
+  .home-tab {
+    flex-shrink: 0;
+    min-height: 40px;
+  }
+
+  /* Toolbar chips + sort button: bigger tap targets and breathing room. */
+  .home-filter-row { gap: 8px; }
+  .chip, .home-sort-btn { height: 32px; }
+
+  /* Help + Settings modals — fit viewport. */
+  .help-overlay { padding: 12px; }
+  .help-modal {
+    padding: 16px;
+    max-width: 100%;
+  }
+  .settings-modal { max-width: 100%; }
+
+  /* Share modal — the min-width: 400px would overflow on ~375px phones. */
+  .share-modal {
+    min-width: 0;
+    max-width: calc(100vw - 24px);
+    width: calc(100vw - 24px);
+    padding: var(--space-5);
+  }
+  .share-popover-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+  .share-popover-actions > * { flex: 1 1 auto; }
+}
+
+/* Phone portrait (≤480px): most aggressive tightening. */
+@media (max-width: 480px) {
+  .home { padding: var(--space-4) var(--space-3); }
+  .home-masthead { margin-bottom: var(--space-5); }
+  .home-panel { padding: var(--space-3); }
+  .help-modal, .settings-modal { padding: 12px; }
+  .share-modal { padding: var(--space-4); }
+}
