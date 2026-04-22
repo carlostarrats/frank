@@ -11,12 +11,15 @@
   <link rel="stylesheet" href="/viewer/viewer.css">
 </head>
 <body>
-  <div id="frank-presence" class="frank-presence" hidden></div>
-  <div id="frank-author-status" class="frank-author-status" hidden></div>
-  <div id="frank-reconnect" class="frank-reconnect" hidden>Reconnecting…</div>
-  <div id="frank-updates-disabled" class="frank-updates-disabled" hidden>Live updates unavailable. Polling every 5s.</div>
+  <!-- Ambient status pills. aria-live="polite" so screen readers announce
+       changes (presence count, author online/offline) without interrupting. -->
+  <div id="frank-presence" class="frank-presence" role="status" aria-live="polite" aria-label="Live session presence" hidden></div>
+  <div id="frank-author-status" class="frank-author-status" role="status" aria-live="polite" aria-label="Author status" hidden></div>
+  <!-- Connection issues use role="alert" so they cut through. -->
+  <div id="frank-reconnect" class="frank-reconnect" role="alert" aria-live="assertive" hidden>Reconnecting…</div>
+  <div id="frank-updates-disabled" class="frank-updates-disabled" role="alert" aria-live="polite" hidden>Live updates unavailable. Polling every 5s.</div>
   <div id="viewer-app">
-    <div class="viewer-loading">Loading...</div>
+    <div class="viewer-loading" role="status" aria-live="polite">Loading...</div>
   </div>
   <!-- Konva is loaded lazily by viewer.js when the share is a canvas snapshot. -->
   <script type="module" src="/viewer/viewer.js"></script>

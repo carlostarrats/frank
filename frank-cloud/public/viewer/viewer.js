@@ -5,7 +5,7 @@ const shareId = window.location.pathname.split('/s/')[1] || new URLSearchParams(
 async function init() {
   const app = document.getElementById('viewer-app');
   if (!shareId) {
-    app.innerHTML = '<div class="v-error"><h2>No share ID</h2><p>Check the URL and try again.</p></div>';
+    app.innerHTML = '<div class="v-error" role="alert"><h2>No share ID</h2><p>Check the URL and try again.</p></div>';
     return;
   }
 
@@ -16,13 +16,13 @@ async function init() {
     if (data.error) {
       const title = data.error === 'expired' ? 'Link Expired' : 'Not Found';
       const msg = data.message || "This link doesn't exist.";
-      app.innerHTML = `<div class="v-error"><h2>${title}</h2><p>${esc(msg)}</p></div>`;
+      app.innerHTML = `<div class="v-error" role="alert"><h2>${title}</h2><p>${esc(msg)}</p></div>`;
       return;
     }
 
     renderViewer(app, data);
   } catch (e) {
-    app.innerHTML = '<div class="v-error"><h2>Unable to load</h2><p>Check your connection and refresh.</p></div>';
+    app.innerHTML = '<div class="v-error" role="alert"><h2>Unable to load</h2><p>Check your connection and refresh.</p></div>';
   }
 }
 
@@ -31,26 +31,26 @@ function renderViewer(app, data) {
 
   app.innerHTML = `
     ${coverNote ? `
-      <div class="v-toast" id="v-toast">
+      <div class="v-toast" id="v-toast" role="note">
         <div class="v-toast-inner">
           <span>${esc(coverNote)}</span>
-          <button class="v-toast-close" id="toast-close">&times;</button>
+          <button class="v-toast-close" id="toast-close" aria-label="Dismiss cover note">&times;</button>
         </div>
       </div>
     ` : ''}
-    <div class="v-main">
+    <main class="v-main">
       <div class="v-content" id="v-content"></div>
-      <div class="v-sidebar" id="v-sidebar">
+      <aside class="v-sidebar" id="v-sidebar" aria-label="Comments">
         <div class="v-sidebar-header">
-          <h3>Comments (${comments.length})</h3>
+          <h3 id="v-comments-heading" aria-live="polite">Comments (${comments.length})</h3>
           <button class="v-btn v-hide-mobile" id="v-add-comment">+ Comment</button>
           <span class="v-mobile-only v-mobile-hint">Open on desktop to comment</span>
         </div>
-        <div class="v-comments" id="v-comments"></div>
-        <div class="v-comment-form" id="v-comment-form" style="display:none">
-          <input type="text" class="v-input" id="v-author" placeholder="Your name" value="${getAuthor()}">
-          <textarea class="v-input v-textarea" id="v-comment-text" placeholder="Add a comment..." rows="3"></textarea>
-          <div class="v-prompts">
+        <div class="v-comments" id="v-comments" role="list" aria-labelledby="v-comments-heading"></div>
+        <div class="v-comment-form" id="v-comment-form" style="display:none" role="form" aria-label="Add a comment">
+          <input type="text" class="v-input" id="v-author" placeholder="Your name" aria-label="Your name" value="${getAuthor()}">
+          <textarea class="v-input v-textarea" id="v-comment-text" placeholder="Add a comment..." aria-label="Comment text" rows="3"></textarea>
+          <div class="v-prompts" role="group" aria-label="Suggested prompts">
             <button class="v-prompt" data-text="How does this feel?">How does this feel?</button>
             <button class="v-prompt" data-text="What's missing?">What's missing?</button>
             <button class="v-prompt" data-text="What would you change?">What would you change?</button>
@@ -60,8 +60,8 @@ function renderViewer(app, data) {
             <button class="v-btn v-btn-primary" id="v-submit">Comment</button>
           </div>
         </div>
-      </div>
-    </div>
+      </aside>
+    </main>
   `;
 
   // Render content — branch on snapshot shape.
@@ -83,10 +83,10 @@ function renderViewer(app, data) {
       contentEl.innerHTML = `<iframe src="${esc(snapshot.fileDataUrl)}" class="v-iframe"></iframe>`;
       __pdfCache = { fileDataUrl: snapshot.fileDataUrl, mimeType: snapshot.mimeType };
     } else {
-      contentEl.innerHTML = '<div class="v-error"><p>Unsupported content type</p></div>';
+      contentEl.innerHTML = '<div class="v-error" role="alert"><p>Unsupported content type</p></div>';
     }
   } else {
-    contentEl.innerHTML = '<div class="v-error"><p>No content in this share</p></div>';
+    contentEl.innerHTML = '<div class="v-error" role="alert"><p>No content in this share</p></div>';
   }
 
   // Render comments
@@ -142,18 +142,21 @@ function renderViewer(app, data) {
 function renderCommentList(comments) {
   const el = document.getElementById('v-comments');
   if (!el) return;
+  // Keep the heading count in sync for the aria-live announcement.
+  const heading = document.getElementById('v-comments-heading');
+  if (heading) heading.textContent = `Comments (${comments.length})`;
   if (comments.length === 0) {
     el.innerHTML = '<p class="v-empty">No comments yet</p>';
     return;
   }
   el.innerHTML = comments.map(c => `
-    <div class="v-comment">
-      <div class="v-comment-head">
+    <article class="v-comment" role="listitem">
+      <header class="v-comment-head">
         <strong>${esc(c.author)}</strong>
         <span class="v-comment-time">${timeAgo(c.ts)}</span>
-      </div>
+      </header>
       <p>${esc(c.text)}</p>
-    </div>
+    </article>
   `).join('');
 }
 
@@ -194,7 +197,7 @@ async function renderCanvas(payload) {
     await loadKonvaOnce();
   } catch {
     const host = document.getElementById('v-content');
-    if (host) host.innerHTML = '<div class="v-error"><p>Could not load canvas renderer.</p></div>';
+    if (host) host.innerHTML = '<div class="v-error" role="alert"><p>Could not load canvas renderer.</p></div>';
     return;
   }
 
