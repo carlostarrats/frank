@@ -227,11 +227,16 @@ export function addConnector(projectId: string, fromId: string, toId: string, ki
   const to = findNode(doc.children!, toId);
   if (!from) throw new Error(`from shape not found: ${fromId}`);
   if (!to) throw new Error(`to shape not found: ${toId}`);
-  const a = nodeCenter(from);
-  const b = nodeCenter(to);
+  const fromCenter = nodeCenter(from);
+  const toCenter = nodeCenter(to);
+  // Clip both endpoints to the shape edge along the line between centers,
+  // so the arrowhead lands on the target shape's edge instead of overlapping
+  // its interior. Without this, arrows between close shapes get crushed.
+  const a = clipCenterToEdge(fromCenter, toCenter, nodeBounds(from));
+  const b = clipCenterToEdge(toCenter, fromCenter, nodeBounds(to));
   const id = newId('c');
-  // Simple straight-line arrow. Elbow adds a midpoint; full connector
-  // follow-shape logic lives in the browser (ui-v2/canvas/connectors.js).
+  // Simple straight-line arrow. Elbow routes with a midpoint. Full live
+  // follow-shape logic lives in the browser (ui-v2/canvas/connectors.js);
   // AI-authored connectors are snapshotted, not live-following — if the user
   // moves the endpoints, the connector won't chase. That's a v1 tradeoff.
   const points = kind === 'elbow'
@@ -251,6 +256,54 @@ export function addConnector(projectId: string, fromId: string, toId: string, ki
   });
   save(projectId, doc);
   return { id };
+}
+
+// Axis-aligned bounding box for a shape. For rectangular shapes this is
+// exact; for circles/ellipses/polygons we approximate with their enclosing
+// rect, which is good enough for connector routing.
+function nodeBounds(node: CanvasNode): { x: number; y: number; width: number; height: number } {
+  const a = node.attrs as { x?: number; y?: number; width?: number; height?: number; radiusX?: number; radiusY?: number; radius?: number };
+  const x = a.x ?? 0;
+  const y = a.y ?? 0;
+  if (typeof a.width === 'number' && typeof a.height === 'number') {
+    return { x, y, width: a.width, height: a.height };
+  }
+  const rx = a.radiusX ?? a.radius ?? 0;
+  const ry = a.radiusY ?? a.radius ?? 0;
+  return { x: x - rx, y: y - ry, width: rx * 2, height: ry * 2 };
+}
+
+// Project a ray from `from` toward `target`, return the point where it
+// exits the bounding box. Used to clip arrow endpoints to shape edges.
+function clipCenterToEdge(
+  from: { x: number; y: number },
+  target: { x: number; y: number },
+  bounds: { x: number; y: number; width: number; height: number },
+): { x: number; y: number } {
+  const dx = target.x - from.x;
+  const dy = target.y - from.y;
+  if (dx === 0 && dy === 0) return from;
+  // Parametric form: p = from + t * (dx, dy). Find smallest positive t
+  // where p lies on one of the four edges, inside the other axis's range.
+  const ts: number[] = [];
+  if (dx !== 0) {
+    ts.push((bounds.x + bounds.width - from.x) / dx);
+    ts.push((bounds.x - from.x) / dx);
+  }
+  if (dy !== 0) {
+    ts.push((bounds.y + bounds.height - from.y) / dy);
+    ts.push((bounds.y - from.y) / dy);
+  }
+  const epsilon = 0.01;
+  const valid = ts
+    .filter((t) => t > epsilon)
+    .map((t) => ({ t, x: from.x + t * dx, y: from.y + t * dy }))
+    .filter((p) =>
+      p.x >= bounds.x - epsilon && p.x <= bounds.x + bounds.width + epsilon &&
+      p.y >= bounds.y - epsilon && p.y <= bounds.y + bounds.height + epsilon,
+    )
+    .sort((a, b) => a.t - b.t);
+  return valid[0] ? { x: valid[0].x, y: valid[0].y } : from;
 }
 
 export function findNode(children: CanvasNode[], id: string): CanvasNode | null {

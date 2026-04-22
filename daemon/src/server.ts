@@ -976,6 +976,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           width: msg.width, height: msg.height, text: msg.text,
           fill: msg.fill, stroke: msg.stroke,
         });
+        touchProjectModified(msg.projectId);
         pushCanvasStateChanged(msg.projectId);
         reply({ type: 'mcp-write-ack', id });
       } catch (e: any) { reply({ type: 'error', error: e.message }); }
@@ -984,6 +985,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'mcp-add-text': {
       try {
         const { id } = addText(msg.projectId, { x: msg.x, y: msg.y, text: msg.text, fontSize: msg.fontSize });
+        touchProjectModified(msg.projectId);
         pushCanvasStateChanged(msg.projectId);
         reply({ type: 'mcp-write-ack', id });
       } catch (e: any) { reply({ type: 'error', error: e.message }); }
@@ -992,6 +994,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'mcp-add-path': {
       try {
         const { id } = addPath(msg.projectId, msg.points, msg.stroke);
+        touchProjectModified(msg.projectId);
         pushCanvasStateChanged(msg.projectId);
         reply({ type: 'mcp-write-ack', id });
       } catch (e: any) { reply({ type: 'error', error: e.message }); }
@@ -1000,6 +1003,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'mcp-add-connector': {
       try {
         const { id } = addConnector(msg.projectId, msg.fromId, msg.toId, msg.kind);
+        touchProjectModified(msg.projectId);
         pushCanvasStateChanged(msg.projectId);
         reply({ type: 'mcp-write-ack', id });
       } catch (e: any) { reply({ type: 'error', error: e.message }); }
@@ -1100,6 +1104,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           author: msg.author || 'AI',
           text: msg.text,
         });
+        touchProjectModified(msg.projectId);
         // Let every tab re-render comments + pins.
         broadcast({ type: 'project-loaded', projectId: msg.projectId, project: loadProject(msg.projectId), comments: loadComments(msg.projectId) } as any);
         reply({ type: 'mcp-write-ack', id: comment.id });
@@ -1300,6 +1305,18 @@ function pushCanvasStateChanged(projectId: string): void {
   const state = loadCanvasState(projectId);
   if (!state) return;
   broadcast({ type: 'canvas-state-changed', projectId, state, source: 'ai' });
+}
+
+// Bump project.modified so the home-page sort + "Xm ago" timestamp
+// reflect writes made through MCP (and any other path that writes to
+// canvas-state or comments without going through saveProject).
+function touchProjectModified(projectId: string): void {
+  try {
+    const project = loadProject(projectId);
+    saveProject(projectId, project);
+  } catch {
+    // Project missing or unreadable — swallow; the write already happened.
+  }
 }
 
 function broadcast(message: DaemonMessage): void {

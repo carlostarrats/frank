@@ -915,8 +915,14 @@ a.home-icon-btn { text-decoration: none; }
   color: var(--muted-foreground);
   flex-wrap: wrap;
 }
+/* The helper text expands to fill available space, so the browse button
+ * sits to the right on a single line. When the text wraps, the button
+ * drops to the next line at the left (flex-wrap's default start). */
+.url-input-hint > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .url-input-browse {
-  margin-left: auto;
   background: var(--secondary);
   border: 1px solid var(--border);
   color: var(--secondary-foreground);

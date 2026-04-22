@@ -96,10 +96,62 @@ export function createSelection({ stage, contentLayer, uiLayer, getTool, getComm
   stage.on('mousedown.marquee', (e) => {
     if (getTool() !== 'select') return;
     if (isInCommentMode()) return; // marquee + selection off while commenting
-    // Normal mode: marquee only starts from empty stage. Crowded-canvas
-    // escape hatch: Alt/Option-drag forces a marquee regardless of what
-    // shape is under the cursor. Matches Figma / Sketch.
     const force = !!(e.evt && e.evt.altKey);
+
+    // Alt-drag on a node in the current selection: Figma-style duplicate-
+    // and-drag. Clones each selected node in place, swaps the selection to
+    // the clones, and starts drag on the clone that corresponds to the
+    // clicked node — so the user's pointer moves the copy and the original
+    // stays put. We defer the actual clone to the first real mousemove so a
+    // pure alt-click (no drag) still falls through to the selection-cycle
+    // click handler below, which is the existing alt-click behavior.
+    if (force && e.target !== stage) {
+      const selected = tr.nodes();
+      const selAncestor = findSelectedAncestor(e.target, selected, stage);
+      if (selAncestor && selected.length) {
+        const origin = pointerContent();
+        const targetNode = e.target;
+        // Keep the original still until we decide whether this is a drag.
+        if (typeof targetNode.stopDrag === 'function') targetNode.stopDrag();
+        const onPreMove = () => {
+          const p = pointerContent();
+          if (Math.hypot(p.x - origin.x, p.y - origin.y) < 3) return;
+          stage.off('mousemove.altdup mouseup.altdup');
+
+          const clones = [];
+          for (const n of selected) {
+            try {
+              const clone = Konva.Node.create(JSON.stringify(n.toObject()));
+              if (!clone) continue;
+              clone.id('shape-' + Math.random().toString(36).slice(2, 10));
+              clone.draggable(true);
+              contentLayer.add(clone);
+              clones.push(clone);
+            } catch (err) {
+              console.warn('[canvas] alt-drag duplicate failed', err);
+            }
+          }
+          if (!clones.length) return;
+          contentLayer.batchDraw();
+          setSelection(clones);
+          const idx = selected.indexOf(selAncestor);
+          const dragClone = clones[idx] || clones[0];
+          if (dragClone && typeof dragClone.startDrag === 'function') dragClone.startDrag();
+          if (onCommit) onCommit();
+        };
+        const onPreUp = () => {
+          stage.off('mousemove.altdup mouseup.altdup');
+        };
+        stage.on('mousemove.altdup', onPreMove);
+        stage.on('mouseup.altdup', onPreUp);
+        if (e.evt.preventDefault) e.evt.preventDefault();
+        return; // don't start a marquee; either duplicate-drag or cycle-click will resolve
+      }
+    }
+
+    // Normal mode: marquee only starts from empty stage. Crowded-canvas
+    // escape hatch: Alt/Option-drag over an UNSELECTED shape forces a
+    // marquee regardless of what's under the cursor.
     if (e.target !== stage && !force) return;
 
     // If we're forcing a marquee over a shape, cancel any shape-drag Konva
@@ -339,4 +391,19 @@ function isTypingTarget(el) {
   if (!el) return false;
   const tag = (el.tagName || '').toLowerCase();
   return tag === 'input' || tag === 'textarea' || el.isContentEditable;
+}
+
+// Walk up the parent chain from `target` until we hit a node that's in the
+// current selection list. Returns it, or null if the click was outside the
+// selection entirely. Used by alt-drag-duplicate: we only want to duplicate
+// when the user is grabbing a shape they already have selected.
+function findSelectedAncestor(target, selectedList, stage) {
+  if (!target || !selectedList.length) return null;
+  let n = target;
+  while (n && n !== stage) {
+    if (selectedList.includes(n)) return n;
+    if (typeof n.getParent === 'function') n = n.getParent();
+    else break;
+  }
+  return null;
 }
