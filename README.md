@@ -1,8 +1,16 @@
 # Frank
 
-> Runs on your machine. Point Frank at a URL, drop in a file, or start a canvas — then comment, curate, and route feedback to AI. Every decision captured. Nothing leaves your computer unless you share.
+**Share unfinished work without deploying it.**
+
+Runs on your machine. Point Frank at a URL, drop in a file, or start a canvas — then comment, curate, and route feedback to AI. Every decision captured. Nothing leaves your computer unless you share.
 
 Frank is a local-first collaboration layer for things that aren't on the internet yet. It wraps whatever you're building — a localhost dev server, a staging URL, a PDF, an image, or a blank canvas — with a commenting overlay, feedback curation, and structured handoff to the AI tools you already use.
+
+### What Frank isn't
+
+- **Not a whiteboard** — canvas is one of four surfaces. Wrap a URL or PDF and you never open the canvas.
+- **Not a design tool** — Frank reviews what you're building; it doesn't help you build it.
+- **Not a SaaS app** — runs on your machine. The sharing backend, when you need one, is self-hosted.
 
 Most review tools assume the thing being reviewed is already deployed somewhere. Frank assumes it's still private, still evolving, still on your machine.
 
@@ -371,6 +379,7 @@ Frank bundles or depends on the following third-party software. All are permissi
 - [jsPDF](https://github.com/parallax/jsPDF) — MIT (canvas PDF, on demand)
 - [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) — MIT (canvas PDF, on demand)
 - [Roboto fonts](https://fonts.google.com/specimen/Roboto) — Apache-2.0 (bundled inside pdfmake)
+- [Geist Mono](https://vercel.com/font) — OFL-1.1 (loaded from Google Fonts at runtime; not redistributed)
 - [Vitest](https://vitest.dev/) — MIT (dev-only)
 - [@vercel/blob](https://github.com/vercel/storage) — Apache-2.0 (Frank Cloud only)
 - [@upstash/redis](https://github.com/upstash/upstash-redis) — MIT (Frank Cloud only)
