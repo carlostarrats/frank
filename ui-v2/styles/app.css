@@ -680,48 +680,79 @@ a.home-icon-btn { text-decoration: none; }
   margin: 0 0 20px;
 }
 
-.help-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+/* Stacked-disclosure help modal. Pins the header + subtitle; the list
+ * scrolls inside the modal when content exceeds viewport height. Same
+ * flex-column + overflow trick the settings modal uses. */
+.help-modal-stack {
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.help-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  background: color-mix(in oklch, var(--bg-surface), transparent 20%);
+.help-modal-stack .help-modal-header,
+.help-modal-stack .help-modal-subtitle { flex-shrink: 0; }
+.help-list {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
 }
-.help-card-icon {
+
+.help-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--bg-surface), transparent 20%);
+}
+.help-item > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+}
+.help-item > summary::-webkit-details-marker { display: none; }
+.help-item > summary::after {
+  content: '▸';
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 11px;
+  transition: transform 150ms ease;
+}
+.help-item[open] > summary::after { transform: rotate(90deg); }
+.help-item > summary:hover { background: color-mix(in oklch, var(--ring), transparent 90%); }
+.help-item-icon {
   color: var(--text);
   opacity: 0.85;
+  flex-shrink: 0;
+  display: inline-flex;
 }
-.help-card-title {
+.help-item-title {
   font-size: 14px;
   font-weight: 600;
-  margin: 0;
+  color: var(--text);
 }
-.help-card-blurb {
-  font-size: 12.5px;
+.help-item-body {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.help-item-body p {
+  margin: 0;
+  font-size: 13px;
   color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.45;
-  flex: 1;
+  line-height: 1.5;
+  white-space: pre-line;
 }
-.help-card-cta {
+.help-item-cta {
   align-self: flex-start;
   font-size: 12px;
   padding: 4px 10px;
-}
-.help-card-detail {
-  font-size: 12px;
-  color: var(--text-secondary);
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-  margin-top: 4px;
-  line-height: 1.5;
 }
 
 /* Toasts */
