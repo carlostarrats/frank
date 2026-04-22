@@ -994,6 +994,39 @@ a.home-icon-btn { text-decoration: none; }
   background: var(--bg-surface);
   box-shadow: 0 0 0 2px var(--ring);
   cursor: text;
+  flex: 1;
+  min-width: 0;
+}
+/* During rename, name + save button sit side-by-side inside the column
+ * layout of .project-card-info. The wrapper is inserted by startRename
+ * and removed when editing finishes. */
+.project-card-name-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.project-card-name-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--duration-fast) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.project-card-name-save:hover {
+  color: var(--foreground);
+  background: var(--muted);
+  border-color: var(--ring);
 }
 .project-card-meta {
   font-size: var(--text-xs);

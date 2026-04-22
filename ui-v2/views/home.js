@@ -462,6 +462,32 @@ function startRename(nameEl, project, refresh) {
   const original = project.name;
   nameEl.setAttribute('contenteditable', 'plaintext-only');
   nameEl.classList.add('editing');
+
+  // Inline save button sits to the right of the name, visible only while
+  // editing. Enter and click-outside already commit; this is the explicit
+  // "I'm done" target so you don't have to leave the input to save.
+  // We wrap name + button in a flex row so they sit side-by-side inside
+  // the column-layout .project-card-info. Wrap BEFORE focusing so focus
+  // + selection land correctly in the final DOM position.
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'project-card-name-save';
+  saveBtn.setAttribute('aria-label', 'Save name');
+  saveBtn.title = 'Save (Enter)';
+  saveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg>';
+  // mousedown keeps focus on the contenteditable span so the blur-commit
+  // flow below runs in the right order (name stays focused, we trigger
+  // the commit ourselves via click).
+  saveBtn.addEventListener('mousedown', (e) => { e.preventDefault(); });
+  saveBtn.addEventListener('click', (e) => { e.stopPropagation(); nameEl.blur(); });
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'project-card-name-edit-row';
+  const parent = nameEl.parentElement;
+  parent.insertBefore(wrapper, nameEl);
+  wrapper.appendChild(nameEl);
+  wrapper.appendChild(saveBtn);
+
   nameEl.focus();
   // Select all text.
   const range = document.createRange();
@@ -470,10 +496,18 @@ function startRename(nameEl, project, refresh) {
   sel.removeAllRanges();
   sel.addRange(range);
 
+  let done = false;
   const finish = (commit) => {
+    if (done) return;
+    done = true;
     nameEl.removeAttribute('contenteditable');
     nameEl.classList.remove('editing');
     delete nameEl.dataset.editing;
+    // Unwrap: put nameEl back in its original place, drop wrapper + button.
+    if (wrapper.parentElement) {
+      wrapper.parentElement.insertBefore(nameEl, wrapper);
+      wrapper.remove();
+    }
     const trimmed = nameEl.textContent.trim();
     if (commit && trimmed && trimmed !== original) {
       sync.renameProject(project.projectId, trimmed).then(refresh);
