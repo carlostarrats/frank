@@ -1897,3 +1897,42 @@ a.home-icon-btn { text-decoration: none; }
   .help-modal, .settings-modal { padding: 12px; }
   .share-modal { padding: var(--space-4); }
 }
+
+/* ============================================================
+ * Mobile responsive — Phase 3: viewer layout + shared toolbar
+ * ============================================================
+ * Viewer body stacks content over sidebar on narrow viewports
+ * so the iframe/image has priority space. Sidebar slides up as
+ * a bottom drawer when opened, capped at 55vh so the content
+ * stays visible. Shared app-chrome toolbar also tightens up. */
+@media (max-width: 720px) {
+  .viewer-body { flex-direction: column; }
+  .viewer-sidebar {
+    width: 100%;
+    height: 0;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    transition: height 0.2s;
+  }
+  .viewer-sidebar.open {
+    width: 100%;
+    height: 55vh;
+    max-height: 55vh;
+  }
+
+  /* Shared app-chrome toolbar: tighter spacing, smaller title. */
+  .toolbar {
+    gap: var(--space-2);
+    padding: 0 var(--space-2);
+  }
+  .toolbar-title {
+    max-width: 150px;
+    font-size: var(--text-xs);
+  }
+  .toolbar-actions { gap: 4px; }
+}
+
+@media (max-width: 480px) {
+  /* Hide the title outright — the back arrow + icons keep context. */
+  .toolbar-title { display: none; }
+}

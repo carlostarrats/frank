@@ -552,3 +552,40 @@
   z-index: 100;
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 70%);
 }
+
+/* ============================================================
+ * Mobile responsive — Phase 3: canvas read-only
+ * ============================================================
+ * Local frank UI lives at localhost, not phone-reachable — so
+ * these rules matter for tablet split-screen + narrow-window
+ * use. Editing tools disappear; a banner explains; the stage
+ * stays so someone can scroll/zoom the content. */
+@media (max-width: 720px) {
+  .canvas-drawer,
+  .canvas-inspector-host,
+  .canvas-curation-host {
+    display: none !important;
+  }
+  .canvas-body {
+    position: relative;
+  }
+  .canvas-body::before {
+    content: 'Canvas editing requires desktop. Open this project on a computer to edit.';
+    position: absolute;
+    top: var(--space-2);
+    left: var(--space-2);
+    right: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: color-mix(in oklch, var(--card), transparent 10%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+    text-align: center;
+    z-index: 5;
+    backdrop-filter: blur(4px);
+  }
+  /* Toolbar buttons on canvas topbar: icon-only on narrow widths so
+   * the title + intent pill have room. */
+  .canvas-intent { margin-left: 0; }
+}
