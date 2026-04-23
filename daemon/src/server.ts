@@ -38,6 +38,12 @@ import { runPreflight } from './share/preflight.js';
 import { readEnvShare } from './share/env-share.js';
 import { generateEncoderEnv } from './share/encoder-registry.js';
 import { createShare, revokeShare as revokeUrlShare } from './share/share-create.js';
+import {
+  writeShareRecord,
+  listShareRecords,
+  markRecordRevoked,
+  purgeExpiredRecords,
+} from './share/share-records.js';
 import { verifyVercelToken } from './share/vercel-api.js';
 import { uploadUrlShareRecord } from './cloud.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
@@ -200,6 +206,12 @@ export function startServer(): void {
     if (purged.length > 0) console.log(`[frank] purged ${purged.length} expired trashed project(s)`);
   } catch (e: any) {
     console.warn(`[frank] trash purge failed:`, e.message);
+  }
+  try {
+    const droppedShares = purgeExpiredRecords();
+    if (droppedShares > 0) console.log(`[frank] purged ${droppedShares} expired share record(s)`);
+  } catch (e: any) {
+    console.warn(`[frank] share-records purge failed:`, e.message);
   }
   startWebSocketServer();
   startHttpServer();
@@ -578,6 +590,33 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             return;
           }
 
+          // Persist to ~/.frank/share-records.json so the user can revoke
+          // this share after the popover that created it has closed (Item 3
+          // from url-share-followups.md). Best-effort: if the write fails
+          // for some reason, the share itself still works — the user just
+          // can't list/revoke it from the UI until the next Create-share.
+          try {
+            if (msg.projectId) {
+              writeShareRecord({
+                shareId: cloudRecord.shareId,
+                revokeToken: cloudRecord.revokeToken,
+                vercelDeploymentId: shareResult.deployment.id,
+                vercelTeamId: vercelConfig.teamId ?? undefined,
+                // Non-null assertions are safe here: we've already returned
+                // on shareResult.status === 'fail' || !shareResult.deployment
+                // upstream, so both fields are guaranteed present at this point.
+                deploymentUrl: shareResult.deploymentUrl!,
+                shareUrl: cloudRecord.url,
+                projectId: msg.projectId,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + ((msg.expiryDays ?? 7) * 86400000)).toISOString(),
+                projectDir: msg.projectDir,
+              });
+            }
+          } catch (err: any) {
+            console.warn('[frank] failed to persist share record:', err.message);
+          }
+
           reply({
             type: 'share-create-result',
             status: 'ok',
@@ -591,6 +630,16 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           reply({ type: 'error', error: e.message });
         }
       })();
+      break;
+    }
+
+    case 'list-url-shares': {
+      try {
+        const records = listShareRecords({ projectId: msg.projectId });
+        reply({ type: 'url-shares-list', records });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
       break;
     }
 
@@ -615,6 +664,17 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
               return out;
             },
           });
+          // Mark the local record so the list UI can hide/grey the row.
+          try {
+            markRecordRevoked(msg.shareId, {
+              linkInvalidated: result.linkInvalidated,
+              vercelDeleted: result.vercelDeleted,
+              vercelError: result.vercelError,
+              cloudError: result.cloudError,
+            });
+          } catch (err: any) {
+            console.warn('[frank] failed to mark share record revoked:', err.message);
+          }
           reply({ type: 'share-revoke-result', ...result, outcome: result.status === 'complete' ? 'ok' : 'partial' });
         } catch (e: any) {
           reply({ type: 'error', error: e.message });

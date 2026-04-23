@@ -1,7 +1,8 @@
 # URL share auto-deploy — follow-up work
 
-Status: **v1 code-complete and UI-verified through Settings → Share Preview.**
-First real test needs a Vercel token.
+Status: **Shipped end-to-end via the viewer toolbar as of dev-v3.10 (2026-04-23).** Items 1 (cloud viewer), 2 (toolbar Share flow), 3 (share list + revoke after session), and 4 (live deploy test) are done. Static-HTML support added alongside; `engines.node` downgraded to warning; SSO/password-protection auto-disabled on the deployed project.
+
+Remaining pre-v1-wide item: 5 (Safari/Firefox cross-browser spot-check — user task, ~30 min).
 
 This doc captures what's NOT done, grouped by urgency. Use it to pick up where
 the build left off — each item has a rough effort estimate so the next session
@@ -13,24 +14,19 @@ can plan a realistic chunk. Design doc of record: [`url-share-auto-deploy-design
 
 These are the gaps between "code-complete" and "reviewable end-to-end."
 
-### 1. URL-share viewer page on frank-cloud (~2-3h)
+### 1. URL-share viewer page on frank-cloud (~2-3h) — ✅ DONE (dev-v3.10, 2026-04-23)
 
-`frank-cloud/api/share.ts` now stores `contentType: 'url-share'` records
-with a `deployment: { vercelId, url, readyState }` object. GET returns this
-alongside the snapshot (or null). But no frontend serves the viewer yet.
+`frank-cloud/public/viewer/viewer.js` now probes `metadata.contentType === 'url-share'` (or `deployment?.url`) at the top of `renderViewer` and delegates to a new `renderUrlShare` path — a full-viewport iframe pointed at `deployment.url` with a dismissible cover-note banner and no sidebar (overlay handles commenting inside the deployment). `vercel.json` gained `frame-src 'self' https://*.vercel.app` in the viewer CSP to allow the iframe. Revoked → 410 handling falls through the existing `{ error: 'expired' }` path in `init()`; nothing extra needed.
 
-**Build:** new file `frank-cloud/public/viewer/url-share/index.html` that:
-1. Reads `shareId` from the URL (e.g., `/s/<id>`).
-2. Fetches `/api/share?id=<id>` to get `deployment.url`.
-3. Iframes the deployment URL with overlay script tag on top (shadow DOM).
-4. Handles the revoked → 410 state with a polite "this share has expired" page.
+The single-viewer-branches-on-meta approach was chosen over a separate `/viewer/url-share/` route — simpler, keeps the `/s/:id` rewrite intact.
 
-Caveat: the existing `frank-cloud/public/viewer/` is for snapshot shares
-(static HTML blobs). URL shares need their own route. `vercel.json` route
-config needs a pattern that distinguishes `/s/<id>` with a URL-share meta
-vs. a snapshot meta, OR the single viewer probes the meta and branches.
+### 2. Share flow in the viewer toolbar (~4-6h) — ✅ DONE (dev-v3.9, 2026-04-23)
 
-### 2. Share flow in the viewer toolbar (~4-6h)
+`showSharePopover` now detects localhost URL projects via a new `isLocalhostUrl()` helper and delegates to a URL-share popover that runs the Vercel-token gate + sourceDir gate + one-click "Create share." `ProjectV2.sourceDir` was added to the protocol + `set-project-source-dir` handler + sync wrapper so the path is remembered per project. Result renders via the shared `renderShareCreateResult` helper with revoke-in-session.
+
+Progress events were fixed simultaneously: `share-create-progress` messages stamped with the request's `requestId` were resolving the pending promise early in `sync.js` and making every share look like it failed at "unknown." They now broadcast only, letting the final `share-create-result` resolve the promise as intended.
+
+**Original description kept below for context:**
 
 Today URL share is only reachable from Settings → Share Preview. Real UX:
 user opens a URL project pointing at `localhost:3000`, hits Share in the
@@ -52,25 +48,24 @@ auto-deploy flow.
 - Pre-flight gate: if envelope fails, show refusal UI in the popover
   (also reusable from the panel component).
 
-### 3. Share list UI + revoke flow (~3-4h)
+### 3. Share list UI + revoke flow (~3-4h) — ✅ DONE (dev-v3.10, 2026-04-23)
 
-After a user creates a share and closes the diagnostics panel, they lose
-the ability to revoke it. Revoke currently only works in the same session,
-while the create-result is still on screen.
+Picked the local-file approach from the two options in the original plan — `daemon/src/share/share-records.ts` writes to `~/.frank/share-records.json` at mode 0600, atomic (.tmp → rename), filters by projectId / revoked / expired, with a 30-day retention purge on daemon startup. 16 unit tests cover write / read / mark-revoked / purge.
 
-**Build:**
-- Daemon: `list-url-shares` WebSocket handler. Reads active shares from
-  frank-cloud (`GET /api/share?owner=<something>`) or from a local
-  `~/.frank/share-records.json` that the daemon writes at share-create
-  time. Latter is simpler + works offline.
-- UI: per-project "Shares" panel (probably inside the viewer or a
-  dedicated tab in Settings). Shows `{ shareId, createdAt, expiresAt,
-  deploymentUrl, revokeStatus }`.
-- Per-row "Revoke" button that calls `share-revoke-url` with the stored
-  `{ shareId, revokeToken, vercelDeploymentId }`.
-- Per-row "Copy link" button.
+Protocol: `ListUrlSharesRequest`; `ShareCreateRequest` gained `projectId?` so the persistence hook can bind records to the right project. Server writes on share-create success and marks on share-revoke-url.
 
-### 4. Live Vercel deploy test (~15 min for user)
+UI: the URL-share popover now renders an "Active shares (N)" section above the Source row. Each row: clickable shareUrl, "Expires in 3 days · Vercel: <host>" meta, Copy + Revoke buttons. Revoke fires the confirm dialog + `shareRevokeUrl` + refreshes the list in place. Freshly-created shares surface immediately — no close+reopen needed.
+
+Revoke is still same-project only — a dedicated "Shares" tab in Settings that crosses projects is v1.1 polish if real users want it.
+
+### 4. Live Vercel deploy test (~15 min for user) — ✅ DONE (2026-04-23)
+
+Validated end-to-end against AdaptiveShop and a scaffolded static-HTML test site. Findings fed back into three in-flight fixes:
+- AdaptiveShop surfaced the expected Supabase `getSession()` spinner (documented pattern from `share-guards.md`); docs + in-app copy were hardened so future users see the gotcha before hitting it.
+- Frank-cloud deployed version was stale (rejected URL-share records with "Missing snapshot"); redeployed.
+- Vercel's default SSO protection returned 401 to anonymous reviewers; new `disableDeploymentProtection` PATCH wired into `share-create.ts` + documented in design doc §6.4 as P0.
+
+**Original description kept below for context:**
 
 Code-complete but never run against a real Vercel account. User needs to:
 

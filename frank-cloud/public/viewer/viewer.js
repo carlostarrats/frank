@@ -27,7 +27,16 @@ async function init() {
 }
 
 function renderViewer(app, data) {
-  const { snapshot, comments, coverNote, metadata } = data;
+  const { snapshot, comments, coverNote, metadata, deployment } = data;
+
+  // URL-share auto-deploy — the share IS a running Vercel preview with the
+  // Frank overlay bundled inside it. The overlay handles comments directly
+  // (same-origin SSE to frank-cloud), so this viewer is a thin wrapper:
+  // a minimal cover-note banner + the iframe filling the rest of the
+  // viewport. No sidebar, no duplicate comments panel.
+  if (metadata?.contentType === 'url-share' || deployment?.url) {
+    return renderUrlShare(app, { coverNote, deployment });
+  }
 
   app.innerHTML = `
     ${coverNote ? `
@@ -362,6 +371,53 @@ async function renderCanvas(payload) {
   }
 
   contentLayer.draw();
+}
+
+// URL-share viewer: a full-viewport iframe pointing at the Vercel preview
+// deployment. The overlay is bundled into the deployment itself (§1.5 of
+// the design doc), so commenting + presence happen inside the iframe with
+// no participation from this wrapper.
+//
+// Cover note (if any) sits above the iframe as a thin dismissible banner.
+// Revocation state (410 Gone / { error: 'expired' }) is handled upstream
+// in init() — by the time we get here we know the share is live.
+//
+// Safari note: sandbox="allow-same-origin allow-scripts allow-forms
+// allow-popups" is deliberately permissive; the deployed preview is the
+// author's own code that Frank already vetted at share time.
+function renderUrlShare(app, { coverNote, deployment }) {
+  if (!deployment?.url) {
+    app.innerHTML = '<div class="v-error" role="alert"><h2>Share is live but missing deployment URL</h2><p>Contact the person who shared this link.</p></div>';
+    return;
+  }
+  // Vercel's deployment.url field is "host.vercel.app" (no scheme). Our
+  // daemon's createDeployment result already stores the bare host; the
+  // cloud record preserves it verbatim.
+  const hasScheme = /^https?:\/\//i.test(deployment.url);
+  const src = hasScheme ? deployment.url : `https://${deployment.url}`;
+
+  app.innerHTML = `
+    ${coverNote ? `
+      <div class="v-toast v-toast-url-share" id="v-toast" role="note">
+        <div class="v-toast-inner">
+          <span>${esc(coverNote)}</span>
+          <button class="v-toast-close" id="toast-close" aria-label="Dismiss cover note">&times;</button>
+        </div>
+      </div>
+    ` : ''}
+    <main class="v-url-share-main">
+      <iframe
+        class="v-url-share-iframe"
+        src="${esc(src)}"
+        title="Shared app preview"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+        referrerpolicy="no-referrer-when-downgrade"
+      ></iframe>
+    </main>
+  `;
+  document.getElementById('toast-close')?.addEventListener('click', () => {
+    document.getElementById('v-toast')?.remove();
+  });
 }
 
 // Called by renderViewer for the initial snapshot render. `host` is always

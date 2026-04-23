@@ -181,8 +181,8 @@ const sync = {
   sharePreflight(projectDir) {
     return send({ type: 'share-preflight', projectDir, _timeoutMs: 5 * 60 * 1000 });
   },
-  shareCreate(projectDir, projectName, expiryDays) {
-    return send({ type: 'share-create', projectDir, projectName, expiryDays, _timeoutMs: 15 * 60 * 1000 });
+  shareCreate(projectDir, projectName, expiryDays, projectId) {
+    return send({ type: 'share-create', projectDir, projectName, expiryDays, projectId, _timeoutMs: 15 * 60 * 1000 });
   },
   shareRevokeUrl(shareId, revokeToken, vercelDeploymentId, vercelTeamId) {
     return send({
@@ -190,6 +190,7 @@ const sync = {
       _timeoutMs: 60 * 1000,
     });
   },
+  listUrlShares(projectId) { return send({ type: 'list-url-shares', projectId }); },
   getVercelDeployConfig() { return send({ type: 'get-vercel-deploy-config' }); },
   setVercelDeployConfig(token, teamId) { return send({ type: 'set-vercel-deploy-config', token, teamId }); },
   clearVercelDeployConfig() { return send({ type: 'clear-vercel-deploy-config' }); },

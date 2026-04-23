@@ -374,6 +374,24 @@ function esc(text) {
   return d.innerHTML;
 }
 
+// Human-readable "expires in 3 days" / "expired 2 hours ago" for the active-
+// shares list. Intentionally fuzzy — users don't care about exact minutes, and
+// an exact timestamp is already on the record if they want to hover.
+function formatRelative(iso) {
+  const target = new Date(iso).getTime();
+  if (Number.isNaN(target)) return '—';
+  const diff = target - Date.now();
+  const abs = Math.abs(diff);
+  const sign = diff >= 0 ? 'in ' : '';
+  const past = diff < 0 ? ' ago' : '';
+  const DAY = 86400000, HOUR = 3600000, MIN = 60000;
+  const pick = (v, unit) => `${sign}${v} ${unit}${v === 1 ? '' : 's'}${past}`;
+  if (abs >= DAY) return pick(Math.round(abs / DAY), 'day');
+  if (abs >= HOUR) return pick(Math.round(abs / HOUR), 'hour');
+  if (abs >= MIN) return pick(Math.round(abs / MIN), 'min');
+  return diff >= 0 ? 'soon' : 'just now';
+}
+
 // ─── URL-share popover (localhost → auto-deploy to Vercel) ─────────────────
 //
 // Simpler UX than Settings → Share Preview's diagnostics panel: just one
@@ -412,6 +430,7 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
         <p class="share-url-intro">Frank auto-deploys your running app to a preview on your own Vercel account. Reviewers get an interactive copy — not a screenshot.</p>
         <div class="share-url-gate-vercel" id="share-url-gate-vercel"></div>
         <div class="share-url-gate-sourcedir" id="share-url-gate-sourcedir"></div>
+        <div class="share-url-existing" id="share-url-existing"></div>
         <div class="share-url-ready" id="share-url-ready" hidden>
           <div class="share-url-source-row">
             <span class="share-url-source-label">Source:</span>
@@ -436,6 +455,7 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
   const sourcePathEl = modal.querySelector('#share-url-source-path');
   const progressEl = modal.querySelector('#share-url-progress');
   const resultEl = modal.querySelector('#share-url-result');
+  const existingEl = modal.querySelector('#share-url-existing');
 
   let vercelConfigured = false;
   let sourceDir = project.sourceDir || '';
@@ -453,6 +473,85 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
     renderVercelGate();
     renderSourceGate();
     renderReady();
+    refreshExisting();
+  }
+
+  // Existing shares for this project — populated by list-url-shares. Kept
+  // in sync after Revoke / Create so the list reflects reality without a
+  // full popover refresh.
+  async function refreshExisting() {
+    // Only fetch when both gates are cleared — a user who hasn't configured
+    // Vercel hasn't created any shares yet, no point in surfacing an empty
+    // "Active shares" block above a warning they need to handle first.
+    if (!vercelConfigured) { existingEl.innerHTML = ''; return; }
+    try {
+      const reply = await sync.listUrlShares(projectId);
+      renderExistingList(reply?.records || []);
+    } catch {
+      existingEl.innerHTML = '';
+    }
+  }
+
+  function renderExistingList(records) {
+    if (!records.length) { existingEl.innerHTML = ''; return; }
+    existingEl.innerHTML = `
+      <div class="share-url-existing-section">
+        <div class="share-url-existing-title">Active shares (${records.length})</div>
+        <ul class="share-url-existing-list">
+          ${records.map((r) => `
+            <li class="share-url-existing-item" data-share-id="${esc(r.shareId)}">
+              <div class="share-url-existing-urls">
+                <a href="${esc(r.shareUrl)}" target="_blank" rel="noopener" class="share-url-existing-link">${esc(r.shareUrl)}</a>
+                <div class="share-url-existing-meta">Expires ${esc(formatRelative(r.expiresAt))} · Vercel: <code>${esc(r.deploymentUrl.replace(/^https?:\/\//, ''))}</code></div>
+              </div>
+              <div class="share-url-existing-actions">
+                <button type="button" class="share-url-existing-copy" data-copy="${esc(r.shareUrl)}">Copy</button>
+                <button type="button" class="share-url-existing-revoke" data-revoke="${esc(r.shareId)}">Revoke</button>
+              </div>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `;
+    // Wire per-row Copy + Revoke.
+    existingEl.querySelectorAll('.share-url-existing-copy').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.copy || '');
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        } catch {
+          btn.textContent = 'Copy failed';
+        }
+      });
+    });
+    existingEl.querySelectorAll('.share-url-existing-revoke').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const shareId = btn.dataset.revoke;
+        const record = records.find((r) => r.shareId === shareId);
+        if (!record) return;
+        if (!confirm(
+          'Revoke this share?\n\n' +
+          'The share link will stop working for all current viewers and the Vercel deployment will be deleted. This cannot be undone.'
+        )) return;
+        btn.disabled = true;
+        btn.textContent = 'Revoking…';
+        try {
+          await sync.shareRevokeUrl(
+            record.shareId,
+            record.revokeToken,
+            record.vercelDeploymentId,
+            record.vercelTeamId,
+          );
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Revoke';
+          alert(`Revoke failed: ${err?.message || err}`);
+          return;
+        }
+        refreshExisting();
+      });
+    });
   }
 
   function renderVercelGate() {
@@ -527,7 +626,9 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
     progressEl.innerHTML = `<span class="share-live-spinner" aria-hidden="true"></span>Running envelope → pre-flight → deploy. This can take several minutes.`;
     resultEl.innerHTML = '';
     try {
-      const reply = await sync.shareCreate(sourceDir);
+      // Pass projectId so the daemon can persist a share-record — Item 3:
+      // enables the "active shares" list + revoke-after-session.
+      const reply = await sync.shareCreate(sourceDir, undefined, undefined, projectId);
       progressEl.textContent = '';
       if (reply?.type === 'error') {
         resultEl.innerHTML = `<div class="share-url-gate share-url-gate-warn"><div class="share-url-gate-title">Share failed</div><div class="share-url-gate-body">${esc(reply.error)}</div></div>`;
@@ -541,11 +642,15 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
           try {
             const r = await sync.shareRevokeUrl(reply.shareId, reply.revokeToken, reply.vercelDeploymentId);
             renderShareCreateResult(resultEl, reply, { revokeResult: r });
+            refreshExisting();
           } catch (err) {
             resultEl.innerHTML = `<div class="share-url-gate share-url-gate-warn"><div class="share-url-gate-title">Revoke failed</div><div class="share-url-gate-body">${esc(err?.message ?? String(err))}</div></div>`;
           }
         },
       });
+      // Pull the freshly-persisted record into the active-shares list so
+      // the user sees it immediately, without closing+reopening the popover.
+      if (reply?.status === 'ok') refreshExisting();
     } catch (err) {
       progressEl.textContent = '';
       resultEl.innerHTML = `<div class="share-url-gate share-url-gate-warn"><div class="share-url-gate-title">Share failed</div><div class="share-url-gate-body">${esc(err?.message ?? String(err))}</div></div>`;

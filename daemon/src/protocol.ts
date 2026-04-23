@@ -138,8 +138,9 @@ export interface SetCloudConfigRequest { type: 'set-cloud-config'; cloudUrl: str
 export interface TestCloudConnectionRequest { type: 'test-cloud-connection'; requestId?: number; }
 export interface ShareCheckEnvelopeRequest { type: 'share-check-envelope'; projectDir: string; requestId?: number; }
 export interface SharePreflightRequest { type: 'share-preflight'; projectDir: string; requestId?: number; }
-export interface ShareCreateRequest { type: 'share-create'; projectDir: string; projectName?: string; expiryDays?: number; requestId?: number; }
+export interface ShareCreateRequest { type: 'share-create'; projectDir: string; projectName?: string; expiryDays?: number; projectId?: string; requestId?: number; }
 export interface ShareRevokeUrlRequest { type: 'share-revoke-url'; shareId: string; revokeToken: string; vercelDeploymentId: string; vercelTeamId?: string; requestId?: number; }
+export interface ListUrlSharesRequest { type: 'list-url-shares'; projectId?: string; requestId?: number; }
 export interface GetVercelDeployConfigRequest { type: 'get-vercel-deploy-config'; requestId?: number; }
 export interface SetVercelDeployConfigRequest { type: 'set-vercel-deploy-config'; token: string; teamId?: string; requestId?: number; }
 export interface ClearVercelDeployConfigRequest { type: 'clear-vercel-deploy-config'; requestId?: number; }
@@ -280,6 +281,7 @@ export type AppMessage =
   | SharePreflightRequest
   | ShareCreateRequest
   | ShareRevokeUrlRequest
+  | ListUrlSharesRequest
   | GetVercelDeployConfigRequest
   | SetVercelDeployConfigRequest
   | ClearVercelDeployConfigRequest

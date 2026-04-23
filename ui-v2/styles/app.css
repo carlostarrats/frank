@@ -1753,6 +1753,90 @@ a.home-icon-btn { text-decoration: none; }
 }
 .share-url-source-change:hover { color: var(--foreground); }
 .share-url-actions { display: flex; justify-content: flex-end; }
+
+/* v3.10 — active-share list inside the URL-share popover. Each row shows
+ * the canonical share URL + the Vercel preview URL, plus Copy / Revoke
+ * per row. Populated by list-url-shares from ~/.frank/share-records.json. */
+.share-url-existing-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.share-url-existing-title {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.share-url-existing-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.share-url-existing-item {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: 8px 10px;
+  background: color-mix(in oklch, var(--muted-foreground), transparent 94%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.share-url-existing-urls {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.share-url-existing-link {
+  color: var(--foreground);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  text-decoration: underline;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.share-url-existing-meta {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.share-url-existing-meta code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.92em;
+}
+.share-url-existing-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.share-url-existing-copy,
+.share-url-existing-revoke {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.share-url-existing-copy:hover { background: var(--accent); }
+.share-url-existing-revoke {
+  color: color-mix(in oklch, var(--destructive), var(--foreground) 40%);
+  border-color: color-mix(in oklch, var(--destructive), transparent 60%);
+}
+.share-url-existing-revoke:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--destructive), transparent 88%);
+}
+.share-url-existing-revoke:disabled { opacity: 0.5; cursor: not-allowed; }
 .share-url-progress {
   font-size: var(--text-xs);
   line-height: 1.4;
