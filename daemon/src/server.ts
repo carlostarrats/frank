@@ -11,7 +11,7 @@ import {
 import {
   listProjects, loadProject, createProject, createProjectFromFile, deleteProject,
   addScreen, loadComments, addComment, deleteComment, saveProject,
-  renameProject, setProjectIntent, archiveProject, unarchiveProject,
+  renameProject, setProjectIntent, setProjectSourceDir, archiveProject, unarchiveProject,
   trashProject, restoreProject, purgeExpiredTrash,
 } from './projects.js';
 import { saveAsset, ALLOWED_MIME_TYPES } from './assets.js';
@@ -666,6 +666,17 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
         const project = setProjectIntent(msg.projectId, msg.intent);
         // Reply with the full project so the UI can refresh its state without
         // a second round-trip. Matches the shape of `project-loaded`.
+        const comments = loadComments(msg.projectId);
+        reply({ type: 'project-loaded', projectId: msg.projectId, project, comments });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'set-project-source-dir': {
+      try {
+        const project = setProjectSourceDir(msg.projectId, msg.sourceDir);
         const comments = loadComments(msg.projectId);
         reply({ type: 'project-loaded', projectId: msg.projectId, project, comments });
       } catch (e: any) {

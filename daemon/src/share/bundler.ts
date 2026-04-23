@@ -89,6 +89,9 @@ const FRAMEWORK_SOURCE_DIRS: Record<FrameworkId, string[]> = {
   'sveltekit': ['src', 'static'],
   'astro': ['src'],
   'remix': ['app'],
+  // Static HTML uses a different (denylist) bundler path — this entry is
+  // a placeholder so the type's exhaustiveness stays happy.
+  'static-html': [],
 };
 
 /** public/ ships for all frameworks. */
@@ -102,6 +105,11 @@ export async function buildBundle(
   projectDir: string,
   opts: BundleOptions,
 ): Promise<BundleResult> {
+  // Static HTML takes a denylist path — see buildStaticHtmlBundle for why.
+  if (opts.framework === 'static-html') {
+    return buildStaticHtmlBundle(projectDir);
+  }
+
   const allowedDirs = new Set([
     ...FRAMEWORK_SOURCE_DIRS[opts.framework],
     ...COMMON_SOURCE_DIRS,
@@ -295,6 +303,101 @@ async function walkDirectory(absDir: string, relDir: string): Promise<WalkResult
 
   await recurse(absDir, relDir);
   return { files, rejected };
+}
+
+// ─── Static-HTML bundler (denylist) ───────────────────────────────────────
+//
+// Framework projects use an allowlist because a forgotten .env.staging ships
+// real credentials to a public Vercel URL — the cost of "fail open" is too
+// high. Static HTML sites don't have that failure mode: there's no server
+// reading env files, no module-scope SDK init, no .env.local pattern. A
+// static site is content files — refusing content you forgot to list is
+// the exact "fail closed makes the tool annoying" problem. So: same denylist
+// (env files, .git, node_modules, secret extensions, secret-ish filenames),
+// allow everything else.
+
+/** Filenames that hint at secrets even without a recognized extension. */
+const SECRET_NAME_PATTERN = /(?:^|[-_./])(?:secret|credential|private)(?:s?)(?:[-_./]|$)/i;
+
+async function buildStaticHtmlBundle(projectDir: string): Promise<BundleResult> {
+  const files: BundleFile[] = [];
+  const rejected: BundleRejection[] = [];
+  const failures: EnvelopeFailure[] = [];
+  let totalSize = 0;
+
+  async function recurse(absDir: string, relDir: string): Promise<void> {
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const childRel = relDir ? `${relDir}/${entry.name}` : entry.name;
+      const childAbs = path.join(absDir, entry.name);
+
+      if (entry.isDirectory()) {
+        if (DENYLIST_DIRS.has(entry.name)) {
+          rejected.push({ relPath: childRel, reason: 'denylist-dir' });
+          continue;
+        }
+        await recurse(childAbs, childRel);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      // Same env-file refusal as the framework bundler. .env.share is the
+      // one exception for framework projects; static sites have no reason
+      // to ship any .env file so refuse them all.
+      if (ENV_FILE_PATTERN.test(entry.name)) {
+        rejected.push({ relPath: childRel, reason: 'env-file-forbidden' });
+        continue;
+      }
+      if (SECRET_EXT_PATTERN.test(entry.name) || ID_RSA_PATTERN.test(entry.name)) {
+        rejected.push({ relPath: childRel, reason: 'secret-extension' });
+        continue;
+      }
+      // Secret-ish filenames ship with a warning rather than a flat refusal —
+      // users name real files "secrets.css" all the time (rare but not
+      // impossible). Right call is to ship + surface so the human can
+      // veto if needed. v1: refuse to stay safe-by-default.
+      if (SECRET_NAME_PATTERN.test(entry.name)) {
+        rejected.push({ relPath: childRel, reason: 'secret-extension' });
+        continue;
+      }
+
+      let size: number;
+      try {
+        const stat = await fs.promises.stat(childAbs);
+        size = stat.size;
+      } catch {
+        continue;
+      }
+      if (size > FILE_SIZE_CAP) {
+        rejected.push({ relPath: childRel, reason: 'over-size-cap', size });
+        failures.push({
+          code: 'source-too-large',
+          message: `${childRel} is ${formatBytes(size)}, over the 50 MB per-file cap.`,
+          hint: `Move heavy media to a CDN or trim the file before Share.`,
+          detail: { relPath: childRel, size },
+        });
+        continue;
+      }
+      files.push({ relPath: childRel, absPath: childAbs, size });
+      totalSize += size;
+    }
+  }
+
+  await recurse(projectDir, '');
+
+  return {
+    status: failures.length > 0 ? 'fail' : 'ok',
+    projectDir,
+    files,
+    rejected,
+    totalSize,
+    failures,
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────

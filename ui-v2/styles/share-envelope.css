@@ -11,12 +11,12 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--foreground);
 }
 
 .share-diagnostics-hint {
   margin: 0;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
   font-size: 0.85rem;
   line-height: 1.5;
 }
@@ -29,22 +29,22 @@
 
 .share-diagnostics-form label {
   font-size: 0.8rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
 }
 
 .share-diagnostics-form input[type="text"] {
   padding: 8px 10px;
   font-family: var(--font-mono);
   font-size: 0.85rem;
-  color: var(--color-text);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  color: var(--foreground);
+  background: var(--input-bg);
+  border: 1px solid var(--border);
   border-radius: 6px;
   outline: none;
 }
 
 .share-diagnostics-form input[type="text"]:focus-visible {
-  border-color: var(--color-accent);
+  border-color: var(--foreground);
 }
 
 .share-diagnostics-form button {
@@ -53,7 +53,7 @@
 
 .share-diagnostics-status {
   font-size: 0.85rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
   min-height: 1.2em;
 }
 
@@ -68,8 +68,8 @@
 .share-envelope-verdict {
   padding: 12px 14px;
   border-radius: 8px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-elevated);
+  border: 1px solid var(--border);
+  background: var(--input-bg);
 }
 .share-envelope-verdict-pass {
   border-color: #2ea34b;
@@ -83,11 +83,11 @@
   font-weight: 600;
   font-size: 0.95rem;
   margin-bottom: 4px;
-  color: var(--color-text);
+  color: var(--foreground);
 }
 .share-envelope-verdict-sub {
   font-size: 0.82rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
   font-family: var(--font-mono);
 }
 
@@ -101,7 +101,7 @@
   margin: 0;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--foreground);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -136,13 +136,13 @@
   font-weight: 600;
   font-size: 0.88rem;
   margin-bottom: 2px;
-  color: var(--color-text);
+  color: var(--foreground);
 }
 
 .share-envelope-failure-message,
 .share-envelope-warning-message {
   font-size: 0.85rem;
-  color: var(--color-text);
+  color: var(--foreground);
   line-height: 1.4;
 }
 
@@ -150,7 +150,7 @@
 .share-envelope-warning-hint {
   margin-top: 4px;
   font-size: 0.8rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
   line-height: 1.4;
 }
 
@@ -161,17 +161,17 @@
   gap: 8px;
   padding: 6px 10px;
   font-size: 0.82rem;
-  background: var(--color-bg-elevated);
+  background: var(--input-bg);
   border-radius: 6px;
 }
 
 .share-envelope-sdk-name {
   font-family: var(--font-mono);
-  color: var(--color-text);
+  color: var(--foreground);
 }
 .share-envelope-sdk-version {
   font-family: var(--font-mono);
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
   flex: 1;
 }
 
@@ -201,10 +201,10 @@
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  background: var(--color-bg-elevated);
+  background: var(--input-bg);
   border-radius: 6px;
   font-size: 0.85rem;
-  color: var(--color-text);
+  color: var(--foreground);
 }
 
 .share-envelope-rejection-list > li {
@@ -212,14 +212,14 @@
   align-items: baseline;
   gap: 8px;
   font-size: 0.8rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
 }
 .share-envelope-rejection-reason {
   font-family: var(--font-mono);
-  color: var(--color-text);
+  color: var(--foreground);
 }
 .share-envelope-rejection-count {
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
 }
 
 /* ── Pre-flight additions ──────────────────────────────────────────── */
@@ -237,16 +237,16 @@
 
 .share-envelope-preflight-pending {
   padding: 10px 12px;
-  border: 1px dashed var(--color-border);
+  border: 1px dashed var(--border);
   border-radius: 6px;
   font-size: 0.82rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
 }
 
 .share-envelope-preflight-note {
   padding: 8px 10px;
   font-size: 0.82rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
 }
 
 .share-envelope-preflight {
@@ -259,12 +259,12 @@
 .share-envelope-log {
   margin: 8px 0 0 0;
   padding: 10px 12px;
-  background: var(--color-bg-elevated);
-  border-left: 3px solid var(--color-border);
+  background: var(--input-bg);
+  border-left: 3px solid var(--border);
   border-radius: 0 6px 6px 0;
   font-family: var(--font-mono);
   font-size: 0.76rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
   max-height: 240px;
   overflow: auto;
   white-space: pre-wrap;
@@ -287,15 +287,15 @@
   padding: 4px 10px;
   font-size: 0.82rem;
   font-family: var(--font-mono);
-  background: var(--color-bg-elevated);
+  background: var(--input-bg);
   border-radius: 4px;
 }
 
 .share-envelope-route-path {
-  color: var(--color-text);
+  color: var(--foreground);
 }
 .share-envelope-route-status {
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
 }
 
 /* ── Vercel config + share-create result ────────────────────────────── */
@@ -317,16 +317,24 @@
   padding: 8px 10px;
   font-family: var(--font-mono);
   font-size: 0.85rem;
-  color: var(--color-text);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  color: var(--foreground);
+  background: var(--input-bg);
+  border: 1px solid var(--input);
   border-radius: 6px;
   outline: none;
 }
+.share-vercel-token-input:focus-visible,
+.share-vercel-team-input:focus-visible {
+  border-color: var(--ring, var(--foreground));
+  outline: 2px solid color-mix(in oklch, var(--foreground), transparent 80%);
+  outline-offset: 1px;
+}
+.share-vercel-token-input::placeholder,
+.share-vercel-team-input::placeholder { color: var(--muted-foreground); }
 
 .share-vercel-status {
   font-size: 0.82rem;
-  color: var(--color-text-muted);
+  color: var(--muted-foreground);
   min-height: 1.2em;
 }
 

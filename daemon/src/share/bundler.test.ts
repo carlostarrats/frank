@@ -205,3 +205,85 @@ describe('buildBundle — size caps', () => {
     expect(result.files.find((f) => f.relPath === 'public/big.bin')).toBeUndefined();
   });
 });
+
+describe('buildBundle — static HTML (denylist path)', () => {
+  it('admits every file in a simple static site', async () => {
+    touch('index.html', '<!doctype html><html></html>');
+    touch('about.html', '<!doctype html><html></html>');
+    touch('style.css', 'body{}');
+    touch('script.js', '//');
+    touch('images/logo.png', 'PNG');
+    touch('images/hero.webp', 'WEBP');
+    touch('fonts/brand.woff2', 'WOFF2');
+    touch('favicon.ico', 'ICO');
+    touch('robots.txt', 'allow');
+    touch('assets/resume.pdf', 'PDF');
+
+    const result = await buildBundle(tmp, { framework: 'static-html' });
+    expect(result.status).toBe('ok');
+    const admitted = relPaths(result.files);
+    expect(admitted).toContain('index.html');
+    expect(admitted).toContain('about.html');
+    expect(admitted).toContain('style.css');
+    expect(admitted).toContain('script.js');
+    expect(admitted).toContain('images/logo.png');
+    expect(admitted).toContain('images/hero.webp');
+    expect(admitted).toContain('fonts/brand.woff2');
+    expect(admitted).toContain('favicon.ico');
+    expect(admitted).toContain('robots.txt');
+    expect(admitted).toContain('assets/resume.pdf');
+  });
+
+  it('refuses .env files even at the root', async () => {
+    touch('index.html', '<!doctype html>');
+    touch('.env', 'SECRET=hi');
+    touch('.env.local', 'X=Y');
+    touch('.env.share', 'OK=1');
+    const result = await buildBundle(tmp, { framework: 'static-html' });
+    const refused = result.rejected.map((r) => r.relPath);
+    expect(refused).toContain('.env');
+    expect(refused).toContain('.env.local');
+    // Even .env.share is refused for static sites — no reason to ship any
+    // env file when nothing on the server reads them.
+    expect(refused).toContain('.env.share');
+    expect(result.files.find((f) => f.relPath.startsWith('.env'))).toBeUndefined();
+  });
+
+  it('refuses .git, node_modules, build artefact dirs', async () => {
+    touch('index.html', '<!doctype html>');
+    touch('.git/HEAD', 'ref:');
+    touch('node_modules/react/package.json', '{}');
+    touch('dist/bundle.js', '/**/');
+    const result = await buildBundle(tmp, { framework: 'static-html' });
+    const admitted = relPaths(result.files);
+    expect(admitted).toContain('index.html');
+    expect(admitted.find((p) => p.startsWith('.git/'))).toBeUndefined();
+    expect(admitted.find((p) => p.startsWith('node_modules/'))).toBeUndefined();
+    expect(admitted.find((p) => p.startsWith('dist/'))).toBeUndefined();
+  });
+
+  it('refuses credential-extension files', async () => {
+    touch('index.html', '<!doctype html>');
+    touch('keys/server.pem', 'PRIV');
+    touch('keys/id_rsa', 'SSH');
+    touch('certs/api.crt', 'CERT');
+    const result = await buildBundle(tmp, { framework: 'static-html' });
+    const refused = result.rejected.map((r) => r.relPath);
+    expect(refused).toContain('keys/server.pem');
+    expect(refused).toContain('keys/id_rsa');
+    expect(refused).toContain('certs/api.crt');
+    expect(result.files.find((f) => f.relPath === 'keys/server.pem')).toBeUndefined();
+  });
+
+  it('refuses secret-ish filenames', async () => {
+    touch('index.html', '<!doctype html>');
+    touch('secrets.css', 'body{}');          // "secret" in name → refused
+    touch('credentials.json', '{}');          // "credentials" in name → refused
+    touch('private.js', '//');                // "private" in name → refused
+    const result = await buildBundle(tmp, { framework: 'static-html' });
+    const refused = result.rejected.map((r) => r.relPath);
+    expect(refused).toContain('secrets.css');
+    expect(refused).toContain('credentials.json');
+    expect(refused).toContain('private.js');
+  });
+});

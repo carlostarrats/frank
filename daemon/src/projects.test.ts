@@ -29,6 +29,7 @@ import {
   deleteComment,
   mergeCloudComments,
   renameProject,
+  setProjectSourceDir,
   archiveProject,
   unarchiveProject,
   trashProject,
@@ -366,6 +367,45 @@ describe('renameProject', () => {
     fs.writeFileSync(path.join(tmpDir, projectId, 'project.json'), JSON.stringify(saved, null, 2));
     renameProject(projectId, 'Different');
     expect(loadProject(projectId).modified >= before).toBe(true);
+  });
+});
+
+// ─── setProjectSourceDir ────────────────────────────────────────────────────
+
+describe('setProjectSourceDir', () => {
+  it('stores an absolute path on the project', () => {
+    const { projectId } = createProject('src dir', 'url', 'http://localhost:3000');
+    const updated = setProjectSourceDir(projectId, '/Users/test/app');
+    expect(updated.sourceDir).toBe('/Users/test/app');
+    expect(loadProject(projectId).sourceDir).toBe('/Users/test/app');
+  });
+
+  it('trims surrounding whitespace', () => {
+    const { projectId } = createProject('trim', 'url', 'http://localhost:3000');
+    const updated = setProjectSourceDir(projectId, '   /Users/test/app   ');
+    expect(updated.sourceDir).toBe('/Users/test/app');
+  });
+
+  it('empty string clears the field', () => {
+    const { projectId } = createProject('clear', 'url', 'http://localhost:3000');
+    setProjectSourceDir(projectId, '/Users/test/app');
+    const cleared = setProjectSourceDir(projectId, '');
+    expect(cleared.sourceDir).toBeUndefined();
+    expect(loadProject(projectId).sourceDir).toBeUndefined();
+  });
+
+  it('whitespace-only also clears the field', () => {
+    const { projectId } = createProject('ws', 'url', 'http://localhost:3000');
+    setProjectSourceDir(projectId, '/Users/test/app');
+    const cleared = setProjectSourceDir(projectId, '   ');
+    expect(cleared.sourceDir).toBeUndefined();
+  });
+
+  it('overwrites a previous value', () => {
+    const { projectId } = createProject('overwrite', 'url', 'http://localhost:3000');
+    setProjectSourceDir(projectId, '/Users/old/path');
+    const updated = setProjectSourceDir(projectId, '/Users/new/path');
+    expect(updated.sourceDir).toBe('/Users/new/path');
   });
 });
 

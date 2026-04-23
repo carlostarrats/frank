@@ -5,6 +5,7 @@ import {
   countErrorLines,
   buildStartCommand,
   findFreePort,
+  runPreflight,
 } from './preflight.js';
 
 describe('extractSameOriginLinks', () => {
@@ -150,5 +151,21 @@ describe('findFreePort', () => {
     // Not strictly guaranteed by the OS, but practically always true.
     const unique = new Set([a, b, c]);
     expect(unique.size).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('runPreflight — static-html skip', () => {
+  it('returns a trivially-passing result without spawning a build', async () => {
+    // projectDir doesn't even need to exist — static-html bypasses fs entirely.
+    const result = await runPreflight({
+      projectDir: '/definitely/does/not/exist',
+      framework: 'static-html',
+    });
+    expect(result.status).toBe('pass');
+    expect(result.build.status).toBe('pass');
+    expect(result.build.durationMs).toBe(0);
+    expect(result.smoke?.status).toBe('skipped');
+    expect(result.smoke?.readiness).toBe('green');
+    expect(result.failures).toEqual([]);
   });
 });

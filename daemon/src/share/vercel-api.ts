@@ -73,8 +73,9 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const EXPECTED_ZONE_END_MS = 90 * 1000;
 
-/** Framework IDs → Vercel framework slugs. */
-const FRAMEWORK_SLUGS: Record<FrameworkId, string> = {
+/** Framework IDs → Vercel framework slugs. `null` means "no framework" —
+ *  Vercel deploys the files as a static site with no build step. */
+const FRAMEWORK_SLUGS: Record<FrameworkId, string | null> = {
   'next-app': 'nextjs',
   'next-pages': 'nextjs',
   'next-hybrid': 'nextjs',
@@ -84,6 +85,7 @@ const FRAMEWORK_SLUGS: Record<FrameworkId, string> = {
   'sveltekit': 'sveltekit',
   'astro': 'astro',
   'remix': 'remix',
+  'static-html': null,
 };
 
 // ─── Public API ────────────────────────────────────────────────────────────
@@ -224,6 +226,61 @@ function appendTeam(url: string, teamId: string | undefined): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+export interface DisableProtectionOptions {
+  token: string;
+  /** Project name or id. createDeployment auto-creates the project on first
+   *  deploy with this name, so either identifier resolves server-side. */
+  projectIdOrName: string;
+  teamId?: string;
+}
+
+/**
+ * Turn OFF Vercel Authentication (SSO Protection) and Password Protection on
+ * the Frank-owned preview project so anonymous reviewers can open the share
+ * link without hitting a login wall.
+ *
+ * Why this exists: Vercel's Hobby + Pro accounts default new projects to
+ * "Vercel Authentication — Standard Protection," which returns HTTP 401 SSO
+ * to any visitor that isn't logged into the project's team. The design doc §6
+ * didn't cover this originally. Without this call, every Frank share link
+ * shows Vercel's auth page, which breaks the core promise of URL share —
+ * reviewer should open the link in a private window with no Vercel account
+ * and interact with the running app.
+ *
+ * The PATCH is best-effort: if Vercel rejects (permission, missing project),
+ * we return an error but do NOT fail the whole share — the user still gets
+ * a working deployment URL, they just need to turn protection off manually
+ * in the Vercel dashboard. That degradation is visible to the caller so the
+ * UI can surface a hint.
+ */
+export async function disableDeploymentProtection(
+  opts: DisableProtectionOptions,
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const url = appendTeam(
+      `${VERCEL_API_BASE}/v9/projects/${encodeURIComponent(opts.projectIdOrName)}`,
+      opts.teamId,
+    );
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${opts.token}`,
+        'Content-Type': 'application/json',
+      },
+      // Both keys set to null: clears Vercel Authentication (SSO) and
+      // Password Protection. Either would block reviewers; clearing both
+      // is the only state that matches "reviewer opens preview in private
+      // window, sees app."
+      body: JSON.stringify({ ssoProtection: null, passwordProtection: null }),
+    });
+    if (res.ok) return { ok: true };
+    const text = await res.text().catch(() => '');
+    return { ok: false, message: `Vercel disableProtection ${res.status}: ${text.slice(0, 300)}` };
+  } catch (err) {
+    return { ok: false, message: `Couldn't reach Vercel: ${(err as Error).message}` };
+  }
 }
 
 /**

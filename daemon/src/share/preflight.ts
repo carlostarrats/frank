@@ -96,6 +96,39 @@ const YELLOW_MAX = 50;
 // ─── Public entry ─────────────────────────────────────────────────────────
 
 export async function runPreflight(opts: PreflightOptions): Promise<PreflightResult> {
+  // Static HTML has no build step and no server to probe — Vercel serves
+  // the files statically. Return a trivially-passing result so share-create
+  // can continue to bundle + deploy. We still surface a real duration (0ms)
+  // so the UI shows the stage as "skipped" rather than pretending the build
+  // happened.
+  if (opts.framework === 'static-html') {
+    const build: BuildStage = {
+      status: 'pass',
+      durationMs: 0,
+      exitCode: 0,
+      stdoutTail: 'Static HTML — no build step.',
+      stderrTail: '',
+    };
+    const smoke: SmokeStage = {
+      status: 'skipped',
+      readiness: 'green',
+      routes: [],
+      errorLineCount: 0,
+      errorSamples: [],
+      port: null,
+      startupMs: 0,
+      usedFallbackRoutes: false,
+    };
+    return {
+      status: 'pass',
+      projectDir: opts.projectDir,
+      framework: opts.framework,
+      build,
+      smoke,
+      failures: [],
+    };
+  }
+
   const build = await runBuild(opts);
   if (build.status === 'fail') {
     return {

@@ -34,6 +34,17 @@ function connect() {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
+      // share-create-progress events stream in during the multi-minute
+      // share-create pipeline, all stamped with the originating request's
+      // requestId. They are NOT the final reply — resolving the pending
+      // promise on the first one short-circuits and misses the real
+      // share-create-result, making every share look like it failed at
+      // "unknown". Broadcast to listeners and exit early so the pending
+      // promise keeps waiting for the final share-create-result message.
+      if (msg.type === 'share-create-progress') {
+        window.dispatchEvent(new CustomEvent('frank:share-create-progress', { detail: msg }));
+        return;
+      }
       // Fire broadcast events for state-change types FIRST, regardless of
       // whether the message also carries a requestId. Without this the initial
       // reply to start/pause/resume-live-share would resolve the pending
@@ -124,6 +135,7 @@ const sync = {
   deleteProject(projectId) { return send({ type: 'delete-project', projectId }); },
   renameProject(projectId, name) { return send({ type: 'rename-project', projectId, name }); },
   setProjectIntent(projectId, intent) { return send({ type: 'set-project-intent', projectId, intent }); },
+  setProjectSourceDir(projectId, sourceDir) { return send({ type: 'set-project-source-dir', projectId, sourceDir }); },
   archiveProject(projectId) { return send({ type: 'archive-project', projectId }); },
   unarchiveProject(projectId) { return send({ type: 'unarchive-project', projectId }); },
   trashProject(projectId) { return send({ type: 'trash-project', projectId }); },

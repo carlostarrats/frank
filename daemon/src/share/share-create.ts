@@ -21,6 +21,7 @@ import {
   createDeployment,
   pollDeployment,
   deleteDeployment,
+  disableDeploymentProtection,
   type CreateDeploymentResult,
   type PollDeploymentResult,
   type BuildZone,
@@ -231,6 +232,20 @@ export async function createShare(opts: ShareCreateOptions): Promise<ShareCreate
       workingDir: prepared.workingDir,
       failure: { stage: 'vercel-upload', message: (err as Error).message },
     };
+  }
+
+  // Disable Vercel Authentication + Password Protection on the newly-created
+  // project so reviewers can open the share link without a Vercel login.
+  // Best-effort: if it fails, the deployment still works — the user just
+  // needs to flip protection off manually in the Vercel dashboard. We report
+  // the state via progress so the UI can surface a hint.
+  const protection = await disableDeploymentProtection({
+    token: opts.vercelToken,
+    teamId: opts.vercelTeamId,
+    projectIdOrName: projectName,
+  });
+  if (!protection.ok) {
+    report('vercel-building', `Couldn't auto-disable deployment protection: ${protection.message ?? 'unknown'}. Reviewer may see a Vercel login page — disable protection manually in the Vercel dashboard.`);
   }
 
   // ── Stage 5: poll until READY ────────────────────────────────────────

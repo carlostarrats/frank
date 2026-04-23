@@ -1677,6 +1677,90 @@ a.home-icon-btn { text-decoration: none; }
   color: var(--muted-foreground);
 }
 
+/* v3.9: URL-share (auto-deploy) popover. Distinct layout from the snapshot
+ * share flow — two gates (Vercel token + sourceDir) appear in sequence before
+ * the Create-share button reveals. */
+.share-url-popover { gap: 10px; }
+.share-url-intro {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.share-url-gate {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--muted-foreground), transparent 94%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.share-url-gate-warn {
+  background: color-mix(in oklch, var(--destructive), transparent 88%);
+  border-color: color-mix(in oklch, var(--destructive), transparent 60%);
+}
+.share-url-gate-title {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--foreground);
+}
+.share-url-gate-body {
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.share-url-gate-body code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.92em;
+  padding: 0 4px;
+  background: color-mix(in oklch, var(--muted-foreground), transparent 86%);
+  border-radius: 4px;
+}
+.share-url-gate-actions { display: flex; gap: var(--space-2); }
+.share-url-source-form { display: flex; gap: var(--space-2); }
+.share-url-source-form .v-input { flex: 1; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px; }
+.share-url-source-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in oklch, var(--muted-foreground), transparent 94%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+.share-url-source-label { color: var(--muted-foreground); flex-shrink: 0; }
+.share-url-source-path {
+  flex: 1;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.share-url-source-change {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 0;
+  text-decoration: underline;
+}
+.share-url-source-change:hover { color: var(--foreground); }
+.share-url-actions { display: flex; justify-content: flex-end; }
+.share-url-progress {
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  min-height: 1.4em;
+}
+.share-url-result:empty { display: none; }
+
 /* v3 Phase 5: expiration picker + revoke button */
 .share-expiry-label {
   display: block;

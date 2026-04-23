@@ -165,6 +165,19 @@ export function setProjectIntent(projectId: string, intent: string): ProjectV2 {
   return project;
 }
 
+// Empty string clears the sourceDir (field removed). Stored verbatim — not
+// validated against the filesystem here; the share flow checks existence at
+// deploy time. Only URL projects use this today, but no contentType gate so
+// future content types (e.g. local-served PDF) can reuse the field.
+export function setProjectSourceDir(projectId: string, sourceDir: string): ProjectV2 {
+  const trimmed = (sourceDir || '').trim();
+  const project = loadProject(projectId);
+  if (trimmed) project.sourceDir = trimmed;
+  else delete project.sourceDir;
+  saveProject(projectId, project);
+  return project;
+}
+
 export function archiveProject(projectId: string): ProjectV2 {
   const project = loadProject(projectId);
   project.archived = new Date().toISOString();

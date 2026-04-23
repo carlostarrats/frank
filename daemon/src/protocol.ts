@@ -23,6 +23,10 @@ export interface ProjectV2 {
   // looks like. Rides along with every AI handoff so feedback is read against
   // the goal. Absence = not set; UI nudges the user in amber.
   intent?: string;
+  // v3.9: absolute path to the local source directory for URL projects that
+  // want to use URL-share auto-deploy. Remembered per project so users don't
+  // re-type it every share. Absence = prompt on first share.
+  sourceDir?: string;
 }
 
 export interface ScreenV2 {
@@ -92,6 +96,7 @@ export interface SendAiMessageRequest {
 export interface DeleteProjectRequest { type: 'delete-project'; projectId: string; requestId?: number; }
 export interface RenameProjectRequest { type: 'rename-project'; projectId: string; name: string; requestId?: number; }
 export interface SetProjectIntentRequest { type: 'set-project-intent'; projectId: string; intent: string; requestId?: number; }
+export interface SetProjectSourceDirRequest { type: 'set-project-source-dir'; projectId: string; sourceDir: string; requestId?: number; }
 export interface ArchiveProjectRequest { type: 'archive-project'; projectId: string; requestId?: number; }
 export interface UnarchiveProjectRequest { type: 'unarchive-project'; projectId: string; requestId?: number; }
 export interface TrashProjectRequest { type: 'trash-project'; projectId: string; requestId?: number; }
@@ -254,6 +259,7 @@ export type AppMessage =
   | DeleteProjectRequest
   | RenameProjectRequest
   | SetProjectIntentRequest
+  | SetProjectSourceDirRequest
   | ArchiveProjectRequest
   | UnarchiveProjectRequest
   | TrashProjectRequest

@@ -262,3 +262,51 @@ describe('prepareBundle', () => {
     }
   });
 });
+
+describe('detectLayoutFile — static HTML', () => {
+  it('detects root index.html', () => {
+    write('index.html', '<!doctype html><html><head></head><body></body></html>');
+    const r = detectLayoutFile(tmp, 'static-html');
+    if ('code' in r) throw new Error(`unexpected failure: ${r.message}`);
+    expect(r.relPath).toBe('index.html');
+    expect(r.framework).toBe('static-html');
+  });
+
+  it('fails gracefully when index.html is absent', () => {
+    write('about.html', '<html></html>');
+    const r = detectLayoutFile(tmp, 'static-html');
+    if (!('code' in r)) throw new Error('expected failure, got success');
+    expect(r.code).toBe('layout-not-found');
+  });
+});
+
+describe('prepareBundle — static HTML', () => {
+  it('drops frank-overlay.js at the root (not in public/)', async () => {
+    write('index.html', '<!doctype html><html><head></head><body></body></html>');
+    write('style.css', 'body{}');
+    const workingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'frank-bundle-static-'));
+    try {
+      const r = await prepareBundle({
+        projectDir: tmp,
+        framework: 'static-html',
+        shareId: 's1',
+        cloudUrl: 'https://c',
+        files: [
+          { relPath: 'index.html', absPath: path.join(tmp, 'index.html') },
+          { relPath: 'style.css', absPath: path.join(tmp, 'style.css') },
+        ],
+        workingDir,
+      });
+      // Overlay lives at <workingDir>/frank-overlay.js — NOT public/.
+      expect(r.overlayDestPath).toBe(path.join(workingDir, 'frank-overlay.js'));
+      expect(fs.existsSync(r.overlayDestPath)).toBe(true);
+      expect(fs.existsSync(path.join(workingDir, 'public', 'frank-overlay.js'))).toBe(false);
+      // Overlay script tag got injected into the copied index.html.
+      const injected = fs.readFileSync(path.join(workingDir, 'index.html'), 'utf-8');
+      expect(injected).toContain('data-frank-share-overlay');
+      expect(injected).toContain('src="/frank-overlay.js"');
+    } finally {
+      fs.rmSync(workingDir, { recursive: true, force: true });
+    }
+  });
+});

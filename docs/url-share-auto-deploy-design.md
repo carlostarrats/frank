@@ -392,10 +392,23 @@ This is the same token that already has access to frank-cloud's storage backend 
    - Bundle as multipart.
    - `env` = encoder outputs + `.env.share` overrides + `NEXT_PUBLIC_FRANK_SHARE=1`.
    - `target: "preview"` (never production).
-   - `projectSettings.framework` autodetected.
-5. Poll `GET /v13/deployments/:id` every 2 seconds until `readyState: "READY"`, or timeout after 5 minutes.
-6. On READY: returns `https://<deployment-id>.vercel.app`.
-7. Share record written to frank-cloud with deployment ID, URL, expiry, revoke token.
+   - `projectSettings.framework` autodetected (`null` for static-HTML).
+5. **Immediately** PATCH `https://api.vercel.com/v9/projects/<projectName>` with `{ ssoProtection: null, passwordProtection: null }` to turn OFF Vercel Authentication + Password Protection. See §6.4 for why this is non-negotiable.
+6. Poll `GET /v13/deployments/:id` every 2 seconds until `readyState: "READY"`, or timeout after 5 minutes.
+7. On READY: returns `https://<deployment-id>.vercel.app`.
+8. Share record written to frank-cloud with deployment ID, URL, expiry, revoke token.
+
+### 6.4 Deployment Protection — must be off (P0)
+
+Vercel's Hobby + Pro accounts default new projects to **Vercel Authentication — Standard Protection**, which returns HTTP 401 SSO to any visitor who isn't logged into the project's team. Without intervention, *every Frank share link shows Vercel's login page*. That breaks the core promise of URL share — a reviewer opens the link in a private window, with no Vercel account, and sees your app.
+
+The design doc missed this originally. It's not optional — Frank MUST PATCH the project after creation to clear both `ssoProtection` and `passwordProtection`. Implementation: `daemon/src/share/vercel-api.ts#disableDeploymentProtection`, called from `share-create.ts` immediately after `createDeployment` succeeds and before polling.
+
+Failure mode: if the PATCH returns non-2xx (rate-limited, token lacks project:write, etc.), the share pipeline **continues** and surfaces the error via progress so the UI can show a hint: "Couldn't auto-disable deployment protection — reviewer may see a Vercel login page. Disable manually in the Vercel dashboard." That degradation is visible, not silent.
+
+Why best-effort rather than hard-fail: the Vercel deployment itself still works. Blocking the whole share on a protection-PATCH failure would be worse than shipping with a warning — the user at least gets a deployment URL they can fix manually.
+
+**Do not revert this call.** A future session reading §6.2 without §6.4 might notice the PATCH looks defensive and trim it. It's not defensive — it's load-bearing.
 
 ### 6.3 Build-pending UX — three time states
 

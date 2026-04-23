@@ -1,6 +1,32 @@
 // share-popover.js — Share popover with cover note and link management
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
+import { renderShareCreateResult } from './share-envelope-panel.js';
+import { showSettingsPanel } from './settings-panel.js';
+
+// Localhost / private-network hostnames that route to the URL-share
+// auto-deploy flow. Keep the set conservative — a public URL should use
+// the snapshot flow because auto-deploy doesn't apply to something that
+// already lives on the internet. Matches what a reviewer couldn't reach
+// from outside the author's machine.
+const LOCALHOST_HOSTNAMES = new Set([
+  'localhost', '127.0.0.1', '0.0.0.0', '::1', 'host.docker.internal',
+]);
+export function isLocalhostUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return false;
+  try {
+    const u = new URL(rawUrl);
+    const host = u.hostname;
+    if (LOCALHOST_HOSTNAMES.has(host)) return true;
+    // RFC1918 private ranges. Strict regex so public IPs like 17.17.17.17 don't match.
+    if (/^10\./.test(host)) return true;
+    if (/^192\.168\./.test(host)) return true;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 // Tracks the current "Capturing snapshot..." state. `captureInProgress` is
 // a flag (not a string comparison on textContent — that would break if any
@@ -105,6 +131,14 @@ export function showSharePopover(anchorEl, { onClose }) {
 
   const project = projectManager.get();
   const projectId = projectManager.getId();
+
+  // Localhost URL projects branch to auto-deploy share instead of snapshot.
+  // Snapshot-based share (canvas/image/pdf/remote-URL) stays on the original
+  // frank:capture-snapshot pipeline below.
+  if (project?.contentType === 'url' && isLocalhostUrl(project?.url)) {
+    return showUrlSharePopover(anchorEl, { onClose });
+  }
+
   const activeShare = project?.activeShare;
 
   const overlay = document.createElement('div');
@@ -338,4 +372,187 @@ function esc(text) {
   const d = document.createElement('div');
   d.textContent = text || '';
   return d.innerHTML;
+}
+
+// ─── URL-share popover (localhost → auto-deploy to Vercel) ─────────────────
+//
+// Simpler UX than Settings → Share Preview's diagnostics panel: just one
+// "Create share" button. Daemon's share-create handler runs envelope +
+// preflight + bundle + deploy internally and surfaces a single result via
+// renderShareCreateResult. Diagnostics panel in Settings stays available for
+// users who want to see each step.
+//
+// Two gates block the main flow: (1) Vercel deploy token configured in
+// Settings, (2) sourceDir remembered on the project. Until both are cleared
+// the "Create share" button is hidden — flips into reveal mode once both
+// conditions are met.
+
+export function showUrlSharePopover(anchorEl, { onClose }) {
+  document.querySelector('.share-overlay')?.remove();
+
+  const project = projectManager.get();
+  const projectId = projectManager.getId();
+  if (!project || !projectId) return null;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'share-overlay';
+  overlay.innerHTML = `
+    <div class="share-modal" data-project-id="${esc(projectId)}">
+      <div class="share-modal-header">
+        <h3>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:6px">
+            <path d="M10.5 13.5 a4 4 0 0 1 0-5.66 l2.5-2.5 a4 4 0 0 1 5.66 5.66 l-1.5 1.5"/>
+            <path d="M13.5 10.5 a4 4 0 0 1 0 5.66 l-2.5 2.5 a4 4 0 0 1-5.66-5.66 l1.5-1.5"/>
+          </svg>
+          Share localhost app
+        </h3>
+        <button class="share-modal-close" id="share-close">✕</button>
+      </div>
+      <div class="share-popover-inner share-url-popover">
+        <p class="share-url-intro">Frank auto-deploys your running app to a preview on your own Vercel account. Reviewers get an interactive copy — not a screenshot.</p>
+        <div class="share-url-gate-vercel" id="share-url-gate-vercel"></div>
+        <div class="share-url-gate-sourcedir" id="share-url-gate-sourcedir"></div>
+        <div class="share-url-ready" id="share-url-ready" hidden>
+          <div class="share-url-source-row">
+            <span class="share-url-source-label">Source:</span>
+            <code class="share-url-source-path" id="share-url-source-path"></code>
+            <button type="button" class="share-url-source-change" id="share-url-source-change">Change</button>
+          </div>
+          <div class="share-url-actions">
+            <button type="button" class="v-btn v-btn-primary" id="share-url-create">Create share</button>
+          </div>
+        </div>
+        <div class="share-url-progress" id="share-url-progress" aria-live="polite"></div>
+        <div class="share-url-result" id="share-url-result"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const modal = overlay.querySelector('.share-modal');
+  const vercelGate = modal.querySelector('#share-url-gate-vercel');
+  const sourceGate = modal.querySelector('#share-url-gate-sourcedir');
+  const ready = modal.querySelector('#share-url-ready');
+  const sourcePathEl = modal.querySelector('#share-url-source-path');
+  const progressEl = modal.querySelector('#share-url-progress');
+  const resultEl = modal.querySelector('#share-url-result');
+
+  let vercelConfigured = false;
+  let sourceDir = project.sourceDir || '';
+
+  const close = () => { overlay.remove(); onClose?.(); };
+  modal.querySelector('#share-close').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  async function refreshGates() {
+    // Vercel gate
+    try {
+      const cfg = await sync.getVercelDeployConfig();
+      vercelConfigured = !!cfg?.configured;
+    } catch { vercelConfigured = false; }
+    renderVercelGate();
+    renderSourceGate();
+    renderReady();
+  }
+
+  function renderVercelGate() {
+    if (vercelConfigured) { vercelGate.innerHTML = ''; return; }
+    vercelGate.innerHTML = `
+      <div class="share-url-gate share-url-gate-warn">
+        <div class="share-url-gate-title">Vercel deploy token not configured</div>
+        <div class="share-url-gate-body">Frank needs a Vercel personal access token to deploy your app. Configure it once in Settings.</div>
+        <div class="share-url-gate-actions">
+          <button type="button" class="v-btn v-btn-primary" id="share-url-open-settings">Open Settings</button>
+        </div>
+      </div>
+    `;
+    vercelGate.querySelector('#share-url-open-settings').addEventListener('click', () => {
+      close();
+      showSettingsPanel({ initialTopTab: 'share-diag' });
+    });
+  }
+
+  function renderSourceGate() {
+    // Only surface the source-dir prompt after Vercel is configured — less
+    // noisy first impression. User clears one gate at a time.
+    if (!vercelConfigured) { sourceGate.innerHTML = ''; return; }
+    if (sourceDir) { sourceGate.innerHTML = ''; return; }
+    sourceGate.innerHTML = `
+      <div class="share-url-gate">
+        <div class="share-url-gate-title">Absolute path to your project</div>
+        <div class="share-url-gate-body">Browsers can't pick directories, so paste the full path. Example: <code>/Users/you/code/my-app</code></div>
+        <form class="share-url-source-form" id="share-url-source-form">
+          <input type="text" class="v-input" id="share-url-source-input" placeholder="/Users/you/code/my-app" autocomplete="off" spellcheck="false" />
+          <button type="submit" class="v-btn v-btn-primary">Save path</button>
+        </form>
+      </div>
+    `;
+    const form = sourceGate.querySelector('#share-url-source-form');
+    const input = sourceGate.querySelector('#share-url-source-input');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const trimmed = input.value.trim();
+      if (!trimmed) return;
+      try {
+        await sync.setProjectSourceDir(projectId, trimmed);
+        sourceDir = trimmed;
+        renderSourceGate();
+        renderReady();
+      } catch (err) {
+        progressEl.textContent = `Could not save: ${err?.message ?? String(err)}`;
+      }
+    });
+  }
+
+  function renderReady() {
+    const canCreate = vercelConfigured && sourceDir;
+    ready.hidden = !canCreate;
+    if (canCreate) sourcePathEl.textContent = sourceDir;
+  }
+
+  modal.querySelector('#share-url-source-change').addEventListener('click', async () => {
+    try {
+      await sync.setProjectSourceDir(projectId, '');
+      sourceDir = '';
+      renderSourceGate();
+      renderReady();
+    } catch (err) {
+      progressEl.textContent = `Could not clear: ${err?.message ?? String(err)}`;
+    }
+  });
+
+  modal.querySelector('#share-url-create').addEventListener('click', async () => {
+    const createBtn = modal.querySelector('#share-url-create');
+    createBtn.disabled = true;
+    progressEl.innerHTML = `<span class="share-live-spinner" aria-hidden="true"></span>Running envelope → pre-flight → deploy. This can take several minutes.`;
+    resultEl.innerHTML = '';
+    try {
+      const reply = await sync.shareCreate(sourceDir);
+      progressEl.textContent = '';
+      if (reply?.type === 'error') {
+        resultEl.innerHTML = `<div class="share-url-gate share-url-gate-warn"><div class="share-url-gate-title">Share failed</div><div class="share-url-gate-body">${esc(reply.error)}</div></div>`;
+        createBtn.disabled = false;
+        return;
+      }
+      renderShareCreateResult(resultEl, reply, {
+        onRevoke: async () => {
+          if (reply.status !== 'ok' || !reply.shareId) return;
+          resultEl.innerHTML = `<div class="share-url-progress"><span class="share-live-spinner" aria-hidden="true"></span>Revoking…</div>`;
+          try {
+            const r = await sync.shareRevokeUrl(reply.shareId, reply.revokeToken, reply.vercelDeploymentId);
+            renderShareCreateResult(resultEl, reply, { revokeResult: r });
+          } catch (err) {
+            resultEl.innerHTML = `<div class="share-url-gate share-url-gate-warn"><div class="share-url-gate-title">Revoke failed</div><div class="share-url-gate-body">${esc(err?.message ?? String(err))}</div></div>`;
+          }
+        },
+      });
+    } catch (err) {
+      progressEl.textContent = '';
+      resultEl.innerHTML = `<div class="share-url-gate share-url-gate-warn"><div class="share-url-gate-title">Share failed</div><div class="share-url-gate-body">${esc(err?.message ?? String(err))}</div></div>`;
+      createBtn.disabled = false;
+    }
+  });
+
+  refreshGates();
+  return overlay;
 }

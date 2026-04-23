@@ -13,7 +13,8 @@ export type FrameworkId =
   | 'vite-vue'
   | 'sveltekit'
   | 'astro'
-  | 'remix';
+  | 'remix'
+  | 'static-html'; // Plain HTML/CSS/JS directory — no build, no package.json required
 
 export interface DetectedFramework {
   id: FrameworkId;

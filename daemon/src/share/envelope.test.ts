@@ -54,10 +54,44 @@ describe('isEnginesNodeCompatible', () => {
 });
 
 describe('checkEnvelope — package.json', () => {
-  it('fails fast when package.json is missing', async () => {
+  it('fails fast when neither package.json nor index.html is present', async () => {
     const result = await checkEnvelope(tmp);
     expect(result.status).toBe('fail');
     expect(result.failures.map((f) => f.code)).toContain('no-package-json');
+  });
+});
+
+describe('checkEnvelope — static HTML', () => {
+  it('passes when no package.json but index.html exists at root', async () => {
+    fs.writeFileSync(path.join(tmp, 'index.html'),
+      '<!doctype html><html><head><title>t</title></head><body><h1>hi</h1></body></html>');
+    fs.writeFileSync(path.join(tmp, 'style.css'), 'body { color: red; }');
+    fs.writeFileSync(path.join(tmp, 'script.js'), 'console.log("hi");');
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('pass');
+    expect(result.framework?.id).toBe('static-html');
+    expect(result.failures).toEqual([]);
+    expect(result.detectedSdks).toEqual([]);
+  });
+
+  it('refuses .env files even for static sites', async () => {
+    fs.writeFileSync(path.join(tmp, 'index.html'), '<!doctype html><html><body></body></html>');
+    fs.writeFileSync(path.join(tmp, '.env'), 'SECRET=hi');
+    fs.writeFileSync(path.join(tmp, '.env.local'), 'X=Y');
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('pass');
+    // But bundle must exclude env files — exhaustive bundler tests cover the
+    // detail; here we just confirm envelope still passes while rejecting.
+  });
+
+  it('still allows public/ and other dirs (denylist model)', async () => {
+    fs.writeFileSync(path.join(tmp, 'index.html'), '<!doctype html><html><body></body></html>');
+    fs.mkdirSync(path.join(tmp, 'assets'));
+    fs.writeFileSync(path.join(tmp, 'assets', 'logo.svg'), '<svg></svg>');
+    fs.mkdirSync(path.join(tmp, 'docs'));
+    fs.writeFileSync(path.join(tmp, 'docs', 'resume.pdf'), 'fake pdf');
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('pass');
   });
 });
 
@@ -202,7 +236,11 @@ describe('checkEnvelope — structural rules', () => {
     expect(result.failures.map((f) => f.code)).toContain('no-build-script');
   });
 
-  it('fails when engines.node is missing', async () => {
+  it('warns (does not fail) when engines.node is missing', async () => {
+    // Downgraded from failure → warning: blocking Share on an unpinned Node
+    // version broke too many real-world Next.js starters. Vercel has a
+    // working default today; drift is a months-later concern, not a reason
+    // to refuse the Share now.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'test',
       scripts: { build: 'next build' },
@@ -210,16 +248,18 @@ describe('checkEnvelope — structural rules', () => {
     });
     fs.mkdirSync(path.join(tmp, 'app'));
     const result = await checkEnvelope(tmp);
-    expect(result.failures.map((f) => f.code)).toContain('no-engines-node');
+    expect(result.failures.map((f) => f.code)).not.toContain('no-engines-node');
+    expect(result.warnings.map((f) => f.code)).toContain('no-engines-node');
   });
 
-  it('fails engines.node ^16.0.0 as unsupported', async () => {
+  it('warns (does not fail) when engines.node range is outside Vercel support', async () => {
     writeJson(path.join(tmp, 'package.json'), {
       ...nextAppPkg({ engines: { node: '^16.0.0' } }),
     });
     fs.mkdirSync(path.join(tmp, 'app'));
     const result = await checkEnvelope(tmp);
-    expect(result.failures.map((f) => f.code)).toContain('engines-node-unsupported');
+    expect(result.failures.map((f) => f.code)).not.toContain('engines-node-unsupported');
+    expect(result.warnings.map((f) => f.code)).toContain('engines-node-unsupported');
   });
 
   it('flags private registry in .npmrc', async () => {

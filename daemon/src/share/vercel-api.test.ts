@@ -6,6 +6,7 @@ import {
   createDeployment,
   pollDeployment,
   deleteDeployment,
+  disableDeploymentProtection,
   verifyVercelToken,
   zoneForElapsed,
 } from './vercel-api.js';
@@ -230,5 +231,54 @@ describe('verifyVercelToken', () => {
     const result = await verifyVercelToken('t');
     expect(result.ok).toBe(false);
     expect(result.message).toContain('econnrefused');
+  });
+});
+
+describe('disableDeploymentProtection', () => {
+  it('PATCHes the project with ssoProtection:null and passwordProtection:null', async () => {
+    let captured: { url: string; init?: RequestInit } | null = null;
+    mockFetch((input, init) => {
+      captured = { url: String(input), init };
+      return jsonRes({ id: 'prj_123', name: 'my-project' });
+    });
+    const r = await disableDeploymentProtection({
+      token: 'tok',
+      projectIdOrName: 'frank-share-abc123',
+    });
+    expect(r.ok).toBe(true);
+    expect(captured!.url).toContain('/v9/projects/frank-share-abc123');
+    expect(captured!.init?.method).toBe('PATCH');
+    const body = JSON.parse(String(captured!.init?.body));
+    expect(body).toEqual({ ssoProtection: null, passwordProtection: null });
+    expect((captured!.init?.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+  });
+
+  it('appends teamId query when provided', async () => {
+    let captured: string = '';
+    mockFetch((input) => {
+      captured = String(input);
+      return jsonRes({ id: 'prj' });
+    });
+    await disableDeploymentProtection({
+      token: 't',
+      projectIdOrName: 'my-project',
+      teamId: 'team_xyz',
+    });
+    expect(captured).toContain('teamId=team_xyz');
+  });
+
+  it('returns ok:false with message on non-2xx', async () => {
+    mockFetch(() => new Response('forbidden', { status: 403 }));
+    const r = await disableDeploymentProtection({ token: 't', projectIdOrName: 'p' });
+    expect(r.ok).toBe(false);
+    expect(r.message).toContain('403');
+    expect(r.message).toContain('forbidden');
+  });
+
+  it('returns ok:false with the thrown error on fetch failure', async () => {
+    mockFetch(() => { throw new Error('enotfound'); });
+    const r = await disableDeploymentProtection({ token: 't', projectIdOrName: 'p' });
+    expect(r.ok).toBe(false);
+    expect(r.message).toContain('enotfound');
   });
 });

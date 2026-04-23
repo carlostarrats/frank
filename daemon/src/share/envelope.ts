@@ -44,6 +44,39 @@ export async function checkEnvelope(projectDir: string): Promise<EnvelopeResult>
   const warnings: EnvelopeFailure[] = [];
 
   const pkg = readPackageJson(projectDir);
+
+  // Static-HTML path: no package.json but an index.html at the root means
+  // the user is sharing a plain static site. Vercel deploys these natively
+  // with framework=null, no build step, no SDK surface — all the envelope
+  // rules that center on package.json become irrelevant. Static sites don't
+  // have the module-scope SDK init + .env.local leakage risk that justified
+  // the allowlist bundler either; a denylist is safer because refusing
+  // "content files you forgot to list" is the exact anti-pattern we
+  // introduced allowlists to avoid.
+  if (!pkg && hasStaticHtmlEntry(projectDir)) {
+    const framework: DetectedFramework = { id: 'static-html', versionSpec: 'static' };
+    const bundle = await buildBundle(projectDir, { framework: 'static-html' });
+    if (bundle.totalSize > SOURCE_SIZE_CAP) {
+      failures.push({
+        code: 'source-too-large',
+        message: `Bundle would be ${formatBytes(bundle.totalSize)}, over the 100 MB cap.`,
+        hint: 'Heavy media (video, large images) dominates. Move them to a CDN or trim before Share.',
+        detail: { bytes: bundle.totalSize, cap: SOURCE_SIZE_CAP },
+      });
+    }
+    for (const f of bundle.failures) {
+      if (!failures.some((existing) => existing.code === f.code)) failures.push(f);
+    }
+    return {
+      status: failures.length > 0 ? 'fail' : 'pass',
+      projectDir,
+      framework,
+      detectedSdks: [],
+      failures,
+      warnings,
+    };
+  }
+
   if (!pkg) {
     return {
       status: 'fail',
@@ -52,8 +85,8 @@ export async function checkEnvelope(projectDir: string): Promise<EnvelopeResult>
       failures: [
         {
           code: 'no-package-json',
-          message: 'No package.json found at the project root.',
-          hint: `Point Frank at the directory containing package.json, or run 'npm init' to create one.`,
+          message: 'No package.json or index.html found at the project root.',
+          hint: `Point Frank at the directory containing package.json (for a framework app) or index.html (for a static site).`,
         },
       ],
       warnings: [],
@@ -83,7 +116,9 @@ export async function checkEnvelope(projectDir: string): Promise<EnvelopeResult>
     }
   }
 
-  failures.push(...checkStructural(pkg, projectDir));
+  const structural = checkStructural(pkg, projectDir);
+  failures.push(...structural.failures);
+  warnings.push(...structural.warnings);
 
   // Source size = what the bundler would actually ship (§1.1 + §1.3 together).
   // Only meaningful if framework was detected; skip otherwise (the upstream
@@ -159,6 +194,20 @@ function readPackageJson(projectDir: string): PackageJson | null {
 
 // ─── Framework detection (§1.2) ────────────────────────────────────────────
 
+/**
+ * Static-HTML detection: a project is a static site if `index.html` exists
+ * at the root. Caller should only fall through to this check when no
+ * package.json is present — a framework project with an index.html at the
+ * root (Vite) is handled by its own detector.
+ */
+function hasStaticHtmlEntry(projectDir: string): boolean {
+  try {
+    return fs.existsSync(path.join(projectDir, 'index.html'));
+  } catch {
+    return false;
+  }
+}
+
 function detectFramework(pkg: PackageJson, projectDir: string): DetectedFramework | null {
   const deps = allDeps(pkg);
 
@@ -204,8 +253,12 @@ function detectFramework(pkg: PackageJson, projectDir: string): DetectedFramewor
 
 // ─── Structural rules (§1.3) ───────────────────────────────────────────────
 
-function checkStructural(pkg: PackageJson, projectDir: string): EnvelopeFailure[] {
+function checkStructural(
+  pkg: PackageJson,
+  projectDir: string,
+): { failures: EnvelopeFailure[]; warnings: EnvelopeFailure[] } {
   const failures: EnvelopeFailure[] = [];
+  const warnings: EnvelopeFailure[] = [];
 
   // Monorepo root markers
   const monorepoFiles = ['pnpm-workspace.yaml', 'lerna.json', 'turbo.json'];
@@ -257,19 +310,23 @@ function checkStructural(pkg: PackageJson, projectDir: string): EnvelopeFailure[
     });
   }
 
-  // engines.node
+  // engines.node — warning, not failure (§1.3). Rationale: Vercel has a
+  // working default today, so blocking Share on an unpinned Node version
+  // breaks far too many real-world starters (Next.js included). We still
+  // surface the advisory because drift over months is a real stability
+  // concern — just not a reason to refuse the Share right now.
   const nodeSpec = pkg.engines?.node;
   if (!nodeSpec) {
-    failures.push({
+    warnings.push({
       code: 'no-engines-node',
-      message: `package.json is missing engines.node.`,
-      hint: `Add { "engines": { "node": ">=20.0.0" } } to package.json so Vercel builds against a supported Node version.`,
+      message: `package.json doesn't pin a Node version.`,
+      hint: `Vercel will use its current default (Node 22 as of 2026). For reproducible builds months from now, add { "engines": { "node": ">=20.0.0" } } to package.json.`,
     });
   } else if (!isEnginesNodeCompatible(nodeSpec)) {
-    failures.push({
+    warnings.push({
       code: 'engines-node-unsupported',
       message: `engines.node="${nodeSpec}" doesn't overlap Vercel's supported range (20.x, 22.x).`,
-      hint: `Change engines.node to ">=20.0.0" or similar.`,
+      hint: `Change engines.node to ">=20.0.0" or similar. Share may still work if Vercel's default falls inside your spec, but the mismatch is a flag.`,
       detail: { spec: nodeSpec },
     });
   }
@@ -300,7 +357,7 @@ function checkStructural(pkg: PackageJson, projectDir: string): EnvelopeFailure[
     }
   }
 
-  return failures;
+  return { failures, warnings };
 }
 
 // ─── SDK detection + refuse-to-guess (§1.4) ───────────────────────────────
