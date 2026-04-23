@@ -198,15 +198,12 @@ CLAUDE.md has flagged these since pre-v3.0:
 All UI-unreachable. Clean up pass would save ~50KB of daemon dist + a few
 hundred lines.
 
-### 18. Update `CLOUD_API.md` for v3.3 additions (~30 min)
+### 18. Update `CLOUD_API.md` for v3.3 additions (~30 min) — ✅ DONE (dev-v3.10, 2026-04-23)
 
-The contract now includes:
-- POST `/api/share` body accepts `deployment: { vercelId, vercelTeamId?, url, readyState }` alongside or instead of `snapshot`.
-- GET response includes `deployment` field.
-- meta.json includes `auditLog: Event[]`.
-
-Any third-party implementing the cloud contract (Cloudflare Workers, Deno
-Deploy) would miss these without the doc update.
+POST `/api/share` body + `GET /api/share` response + `meta.json` shape all
+document the v3.3+ URL-share auto-deploy additions. Third-party implementers
+porting to Cloudflare Workers / Deno Deploy / etc. have the full contract
+now.
 
 ---
 

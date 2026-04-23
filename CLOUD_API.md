@@ -68,14 +68,29 @@ share in the same call (used when re-sharing supersedes an old link).
 
 ```json
 {
-  "snapshot": { /* see "Snapshot payload" below */ },
+  "snapshot": { /* see "Snapshot payload" below; omit for URL-share auto-deploy */ },
+  "deployment": {                        // v3.3+: URL-share auto-deploy
+    "vercelId": "dpl_...",               // Vercel deployment id
+    "vercelTeamId": "team_...",          // optional — only if the token is team-scoped
+    "url": "frank-share-abc.vercel.app", // bare host (no scheme)
+    "readyState": "READY"                // optional; diagnostic
+  },
   "coverNote": "Optional reviewer-visible message",
-  "contentType": "url" | "pdf" | "image" | "canvas",
+  "contentType": "url" | "pdf" | "image" | "canvas" | "url-share",
   "expiryDays": 7,
   "oldShareId": "optional previous shareId to revoke",
   "oldRevokeToken": "optional matching token for oldShareId"
 }
 ```
+
+**At least one of `snapshot` or `deployment` is required.** `snapshot` is
+used by static shares (canvas / image / PDF / URL-snapshot). `deployment`
+is used by URL-share auto-deploy (v3.3+), where the share link points at a
+live Vercel preview the daemon created on the user's own Vercel account.
+Reject with `400 { error: "Missing snapshot or deployment" }` if neither
+is present.
+
+When `deployment` is set, `contentType` MUST be `"url-share"`.
 
 **200 response**
 
@@ -101,7 +116,13 @@ storage failure.
 
 ```json
 {
-  "snapshot": { /* whatever the daemon uploaded */ },
+  "snapshot": { /* whatever the daemon uploaded, or null for URL-share */ },
+  "deployment": {                        // v3.3+: present on URL-share records, else null
+    "vercelId": "dpl_...",
+    "vercelTeamId": "team_..." | null,
+    "url": "frank-share-abc.vercel.app",
+    "readyState": "READY"
+  },
   "comments": [
     {
       "id": "c-...",
@@ -118,10 +139,13 @@ storage failure.
     "createdAt": "ISO",
     "expiresAt": "ISO",
     "viewCount": 12,
-    "contentType": "url"
+    "contentType": "url" | "pdf" | "image" | "canvas" | "url-share"
   }
 }
 ```
+
+Exactly one of `snapshot` or `deployment` will be set. Both present or both
+null indicate a malformed record — the viewer page should show an error.
 
 **404** if the id doesn't exist, **410** if the share has expired (set
 `expiresAt` in the past to revoke without deleting), **400** if the id format
@@ -212,10 +236,15 @@ JSON as-is and return it unchanged on `GET /api/share`.
 The reference implementation uses Vercel Blob with four objects per share:
 
 ```
-shares/<shareId>/meta.json          # revokeToken, createdAt, expiresAt, viewCount, coverNote, contentType
-shares/<shareId>/snapshot.json      # snapshot payload
+shares/<shareId>/meta.json          # revokeToken, createdAt, expiresAt, viewCount, coverNote, contentType, deployment?, auditLog?
+shares/<shareId>/snapshot.json      # snapshot payload — absent for url-share records
 shares/<shareId>/comments/<commentId>.json
 ```
+
+`meta.json` fields added in v3.3+:
+
+- **`deployment`** — set on URL-share records; `null` (or absent) on snapshot shares. Same shape as the `deployment` field in the `GET /api/share` response.
+- **`auditLog: Event[]`** — optional append-only list of lifecycle events. Each event is `{ at: ISO, kind: "created" | "revoke-requested" | "cloud-flag-flipped" | "vercel-delete-succeeded" | "vercel-delete-failed", detail?: string }`. The daemon doesn't read this — it exists so an operator debugging a broken revoke can see the history without a log-scrape. Implementations that don't want to support audit can omit the field; the daemon handles missing `auditLog` as equivalent to `[]`.
 
 Any key-value or object store with read + write is enough — S3, R2,
 Cloudflare KV, Postgres, etc. The contract doesn't care how you persist it.
