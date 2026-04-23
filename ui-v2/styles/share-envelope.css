@@ -1,0 +1,338 @@
+/* share-envelope.css — Refusal UI + bundle preview for URL share (§1.1 / §1.3 / §1.4).
+   Matches Frank's dark settings-modal aesthetic; no inline colors, all through tokens. */
+
+.share-diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.share-diagnostics h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.share-diagnostics-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.share-diagnostics-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-diagnostics-form label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.share-diagnostics-form input[type="text"] {
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-text);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.share-diagnostics-form input[type="text"]:focus-visible {
+  border-color: var(--color-accent);
+}
+
+.share-diagnostics-form button {
+  align-self: flex-start;
+}
+
+.share-diagnostics-status {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  min-height: 1.2em;
+}
+
+/* ── Result block ───────────────────────────────────────────────────── */
+
+.share-envelope-result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.share-envelope-verdict {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+}
+.share-envelope-verdict-pass {
+  border-color: #2ea34b;
+  background: rgba(46, 163, 75, 0.06);
+}
+.share-envelope-verdict-fail {
+  border-color: #c84a4a;
+  background: rgba(200, 74, 74, 0.06);
+}
+.share-envelope-verdict-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+  color: var(--color-text);
+}
+.share-envelope-verdict-sub {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.share-envelope-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-envelope-section h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.share-envelope-failure-list,
+.share-envelope-warning-list,
+.share-envelope-sdk-list,
+.share-envelope-rejection-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.share-envelope-failure-list > li {
+  padding: 10px 12px;
+  border-left: 3px solid #c84a4a;
+  background: rgba(200, 74, 74, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+
+.share-envelope-warning-list > li {
+  padding: 10px 12px;
+  border-left: 3px solid #d4a23a;
+  background: rgba(212, 162, 58, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+
+.share-envelope-failure-title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin-bottom: 2px;
+  color: var(--color-text);
+}
+
+.share-envelope-failure-message,
+.share-envelope-warning-message {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+.share-envelope-failure-hint,
+.share-envelope-warning-hint {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* SDK rows ─────────────────────────────── */
+.share-envelope-sdk-list > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  background: var(--color-bg-elevated);
+  border-radius: 6px;
+}
+
+.share-envelope-sdk-name {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+.share-envelope-sdk-version {
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  flex: 1;
+}
+
+.share-envelope-sdk-badge {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.share-envelope-sdk-badge-ok {
+  background: rgba(46, 163, 75, 0.15);
+  color: #5dc377;
+}
+.share-envelope-sdk-badge-override {
+  background: rgba(88, 140, 220, 0.15);
+  color: #7aa7e0;
+}
+.share-envelope-sdk-badge-missing {
+  background: rgba(200, 74, 74, 0.15);
+  color: #e07a7a;
+}
+
+/* Bundle preview ─────────────────────────────── */
+.share-envelope-bundle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--color-bg-elevated);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.share-envelope-rejection-list > li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+.share-envelope-rejection-reason {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+.share-envelope-rejection-count {
+  color: var(--color-text-muted);
+}
+
+/* ── Pre-flight additions ──────────────────────────────────────────── */
+
+.share-diagnostics-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.share-envelope-verdict-warn {
+  border-color: #d4a23a;
+  background: rgba(212, 162, 58, 0.06);
+}
+
+.share-envelope-preflight-pending {
+  padding: 10px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.share-envelope-preflight-note {
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.share-envelope-preflight {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.share-envelope-log {
+  margin: 8px 0 0 0;
+  padding: 10px 12px;
+  background: var(--color-bg-elevated);
+  border-left: 3px solid var(--color-border);
+  border-radius: 0 6px 6px 0;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.share-envelope-route-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.share-envelope-route-list > li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  background: var(--color-bg-elevated);
+  border-radius: 4px;
+}
+
+.share-envelope-route-path {
+  color: var(--color-text);
+}
+.share-envelope-route-status {
+  color: var(--color-text-muted);
+}
+
+/* ── Vercel config + share-create result ────────────────────────────── */
+
+.share-vercel-config-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-vercel-token-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-vercel-token-input,
+.share-vercel-team-input {
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-text);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.share-vercel-status {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  min-height: 1.2em;
+}
+
+.share-diagnostics-create {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}

@@ -89,12 +89,15 @@ function send(msg) {
     ws.send(JSON.stringify(msg));
     // 30s handles first-time PDF rendering (pdfmake + fontkit cold import
     // can take several seconds on first call). Normal ops are sub-second.
+    // Long-running ops (preflight, share-create) pass _timeoutMs to override.
+    const timeoutMs = msg._timeoutMs || 30000;
+    delete msg._timeoutMs;
     setTimeout(() => {
       if (pendingRequests.has(id)) {
         pendingRequests.delete(id);
         reject(new Error('Request timeout'));
       }
-    }, 30000);
+    }, timeoutMs);
   });
 }
 
@@ -159,6 +162,26 @@ const sync = {
   getCloudConfig() { return send({ type: 'get-cloud-config' }); },
   setCloudConfig(cloudUrl, apiKey) { return send({ type: 'set-cloud-config', cloudUrl, apiKey }); },
   testCloudConnection() { return send({ type: 'test-cloud-connection' }); },
+  shareCheckEnvelope(projectDir) { return send({ type: 'share-check-envelope', projectDir }); },
+  // Preflight runs build + 30s smoke tail; 5-minute ceiling leaves headroom
+  // for larger apps. Share-create adds Vercel build on top — 15-minute
+  // ceiling accounts for the doc's 5-minute Vercel build + client buffer.
+  sharePreflight(projectDir) {
+    return send({ type: 'share-preflight', projectDir, _timeoutMs: 5 * 60 * 1000 });
+  },
+  shareCreate(projectDir, projectName, expiryDays) {
+    return send({ type: 'share-create', projectDir, projectName, expiryDays, _timeoutMs: 15 * 60 * 1000 });
+  },
+  shareRevokeUrl(shareId, revokeToken, vercelDeploymentId, vercelTeamId) {
+    return send({
+      type: 'share-revoke-url', shareId, revokeToken, vercelDeploymentId, vercelTeamId,
+      _timeoutMs: 60 * 1000,
+    });
+  },
+  getVercelDeployConfig() { return send({ type: 'get-vercel-deploy-config' }); },
+  setVercelDeployConfig(token, teamId) { return send({ type: 'set-vercel-deploy-config', token, teamId }); },
+  clearVercelDeployConfig() { return send({ type: 'clear-vercel-deploy-config' }); },
+  testVercelToken(token) { return send({ type: 'test-vercel-token', token }); },
   loadCanvasState() { return send({ type: 'load-canvas-state' }); },
   saveCanvasState(state) { return send({ type: 'save-canvas-state', state }); },
 

@@ -81,6 +81,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       res.status(200).json({
         snapshot,
+        // v3.3: url-share returns deployment info instead of a static snapshot.
+        deployment: meta.deployment ?? null,
         comments: (comments as { ts: string }[]).sort((a, b) => a.ts.localeCompare(b.ts)),
         coverNote: meta.coverNote || '',
         metadata: {
@@ -109,8 +111,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
       const { snapshot, coverNote, contentType, expiryDays, oldShareId, oldRevokeToken } = body;
 
-      if (!snapshot) {
-        res.status(400).json({ error: 'Missing snapshot' });
+      // URL-share auto-deploy (v3.3) sends a `deployment` descriptor instead
+      // of a snapshot. Either-or — require one.
+      if (!snapshot && !body.deployment) {
+        res.status(400).json({ error: 'Missing snapshot or deployment' });
         return;
       }
 
@@ -137,7 +141,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const now = new Date();
       const days = expiryDays || 7;
 
-      const meta = {
+      // v3.3 additions for URL-share auto-deploy:
+      //   - contentType='url-share' means the reviewer navigates to a live
+      //     Vercel preview rather than a static snapshot. body.deployment
+      //     carries the Vercel deployment id + url.
+      //   - auditLog tracks revoke events over the share's lifetime.
+      const deployment = body.deployment as {
+        vercelId: string;
+        vercelTeamId?: string;
+        url: string;
+        readyState?: string;
+      } | undefined;
+
+      const meta: Record<string, unknown> = {
         shareId,
         revokeToken,
         coverNote: coverNote || '',
@@ -145,7 +161,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         createdAt: now.toISOString(),
         expiresAt: new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString(),
         viewCount: 0,
+        auditLog: [
+          { type: 'created', ts: now.toISOString() },
+        ],
       };
+
+      if (deployment) {
+        meta.contentType = 'url-share';
+        meta.deployment = {
+          vercelId: deployment.vercelId,
+          vercelTeamId: deployment.vercelTeamId ?? null,
+          url: deployment.url,
+          readyState: deployment.readyState ?? 'READY',
+        };
+      }
 
       // Upload meta
       await put(`shares/${shareId}/meta.json`, JSON.stringify(meta), {
@@ -154,12 +183,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         addRandomSuffix: false, allowOverwrite: true,
       });
 
-      // Upload snapshot
-      await put(`shares/${shareId}/snapshot.json`, JSON.stringify(snapshot), {
-        access: 'public',
-        contentType: 'application/json',
-        addRandomSuffix: false, allowOverwrite: true,
-      });
+      // Upload snapshot (only for traditional static shares)
+      if (snapshot) {
+        await put(`shares/${shareId}/snapshot.json`, JSON.stringify(snapshot), {
+          access: 'public',
+          contentType: 'application/json',
+          addRandomSuffix: false, allowOverwrite: true,
+        });
+      }
 
       res.status(200).json({
         shareId,
@@ -202,6 +233,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 1. Invalidate — flip the meta flag + expire so new requests see 410.
       meta.revoked = true;
       meta.expiresAt = new Date(0).toISOString();
+      // v3.3: audit log captures each lifecycle event per §7.2. For URL
+      // shares the Vercel deployment is cleaned up by the daemon (it holds
+      // the deploy token); frank-cloud only records that cleanup was asked.
+      meta.auditLog = Array.isArray(meta.auditLog) ? meta.auditLog : [];
+      meta.auditLog.push({ type: 'revoke_requested', ts: new Date().toISOString() });
+      meta.auditLog.push({ type: 'cloud_flag_flipped', ts: new Date().toISOString() });
       await put(`shares/${shareId}/meta.json`, JSON.stringify(meta), {
         access: 'public',
         contentType: 'application/json',

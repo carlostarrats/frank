@@ -131,6 +131,14 @@ export interface CloudStatusRequest { type: 'cloud-status'; requestId?: number; 
 export interface GetCloudConfigRequest { type: 'get-cloud-config'; requestId?: number; }
 export interface SetCloudConfigRequest { type: 'set-cloud-config'; cloudUrl: string; apiKey: string; requestId?: number; }
 export interface TestCloudConnectionRequest { type: 'test-cloud-connection'; requestId?: number; }
+export interface ShareCheckEnvelopeRequest { type: 'share-check-envelope'; projectDir: string; requestId?: number; }
+export interface SharePreflightRequest { type: 'share-preflight'; projectDir: string; requestId?: number; }
+export interface ShareCreateRequest { type: 'share-create'; projectDir: string; projectName?: string; expiryDays?: number; requestId?: number; }
+export interface ShareRevokeUrlRequest { type: 'share-revoke-url'; shareId: string; revokeToken: string; vercelDeploymentId: string; vercelTeamId?: string; requestId?: number; }
+export interface GetVercelDeployConfigRequest { type: 'get-vercel-deploy-config'; requestId?: number; }
+export interface SetVercelDeployConfigRequest { type: 'set-vercel-deploy-config'; token: string; teamId?: string; requestId?: number; }
+export interface ClearVercelDeployConfigRequest { type: 'clear-vercel-deploy-config'; requestId?: number; }
+export interface TestVercelTokenRequest { type: 'test-vercel-token'; token: string; requestId?: number; }
 export interface SaveSnapshotRequest { type: 'save-snapshot'; html: string; screenshot: string | null; trigger: 'manual' | 'share' | 'ai-applied'; triggeredBy?: string; requestId?: number; }
 export interface SaveCanvasSnapshotRequest {
   type: 'save-canvas-snapshot';
@@ -262,6 +270,14 @@ export type AppMessage =
   | GetCloudConfigRequest
   | SetCloudConfigRequest
   | TestCloudConnectionRequest
+  | ShareCheckEnvelopeRequest
+  | SharePreflightRequest
+  | ShareCreateRequest
+  | ShareRevokeUrlRequest
+  | GetVercelDeployConfigRequest
+  | SetVercelDeployConfigRequest
+  | ClearVercelDeployConfigRequest
+  | TestVercelTokenRequest
   | SaveSnapshotRequest
   | SaveCanvasSnapshotRequest
   | ListSnapshotsRequest

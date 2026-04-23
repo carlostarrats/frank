@@ -7,6 +7,7 @@
 
 import sync from '../core/sync.js';
 import { toastInfo, toastError } from './toast.js';
+import { mountShareDiagnostics } from './share-envelope-panel.js';
 
 export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
   const overlay = document.createElement('div');
@@ -28,6 +29,7 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
         <div class="settings-toptabs" role="tablist" aria-label="Settings sections">
           <button class="settings-toptab active" role="tab" data-toptab="cloud" aria-selected="true">Cloud Backend</button>
           <button class="settings-toptab" role="tab" data-toptab="mcp" aria-selected="false">MCP Setup</button>
+          <button class="settings-toptab" role="tab" data-toptab="share-diag" aria-selected="false">Share Preview</button>
         </div>
 
         <div class="settings-toptab-panel" data-toptab="cloud" role="tabpanel">
@@ -339,7 +341,7 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
               <ul class="settings-why-list">
                 <li><strong>Read</strong> — <code>list_projects</code>, <code>load_project</code>, <code>get_intent</code>, <code>get_comments</code>, <code>get_canvas_state</code>, <code>list_snapshots</code>, <code>get_timeline</code>, <code>export_bundle</code>.</li>
                 <li><strong>Write (canvas)</strong> — <code>add_shape</code> (13 kinds), <code>add_text</code>, <code>add_path</code>, <code>add_connector</code>, <code>add_comment</code>.</li>
-                <li><strong>Share</strong> — <code>create_share</code> (canvas projects only; URL / PDF / image shares stay in the Frank UI because their snapshot runs in the browser).</li>
+                <li><strong>Share</strong> — <code>create_share</code> (canvas projects only at v1). URL share auto-deploy, PDF, and image shares are human-driven in the Frank UI — URL shares because the Vercel token is sensitive and per-share intent matters; PDF/image because their snapshot runs in the browser.</li>
               </ul>
             </details>
 
@@ -364,10 +366,21 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
             </details>
           </section>
         </div>
+
+        <div class="settings-toptab-panel" data-toptab="share-diag" role="tabpanel" hidden>
+          <section class="settings-section">
+            <div id="share-diagnostics-host"></div>
+          </section>
+        </div>
       </div>
     </div>
   `;
   document.body.appendChild(overlay);
+
+  // Mount the share diagnostics harness into its host. It's lazy from the
+  // user's POV — no network traffic until they hit the Check button.
+  const diagHost = overlay.querySelector('#share-diagnostics-host');
+  if (diagHost) mountShareDiagnostics(diagHost);
 
   function close() {
     overlay.remove();

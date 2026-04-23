@@ -60,6 +60,49 @@ export function getCloudConfiguredAt(): string | null {
   return (config.cloudConfiguredAt as string) || null;
 }
 
+// ─── Vercel Deploy token (for URL share auto-deploy — separate from the
+//     frank-cloud API key; see docs/url-share-auto-deploy-design.md §6.1) ──
+
+export interface VercelDeployConfig {
+  token: string;
+  /** Optional team ID; absent means personal account. */
+  teamId?: string;
+  /** Optional project name prefix; absent means per-share generated. */
+  projectNamePrefix?: string;
+}
+
+export function getVercelDeployConfig(): VercelDeployConfig | null {
+  const config = readRawConfig();
+  const block = config.vercelDeploy as VercelDeployConfig | undefined;
+  if (!block || !block.token) return null;
+  return block;
+}
+
+export function saveVercelDeployConfig(update: Partial<VercelDeployConfig>): void {
+  const config = readRawConfig();
+  const existing = (config.vercelDeploy as VercelDeployConfig | undefined) ?? { token: '' };
+  const next: VercelDeployConfig = {
+    token: update.token ?? existing.token,
+    teamId: update.teamId ?? existing.teamId,
+    projectNamePrefix: update.projectNamePrefix ?? existing.projectNamePrefix,
+  };
+  config.vercelDeploy = next;
+  config.vercelDeployConfiguredAt = new Date().toISOString();
+  writeConfigSecure(config);
+}
+
+export function clearVercelDeployConfig(): void {
+  const config = readRawConfig();
+  delete config.vercelDeploy;
+  delete config.vercelDeployConfiguredAt;
+  writeConfigSecure(config);
+}
+
+export function getVercelDeployConfiguredAt(): string | null {
+  const config = readRawConfig();
+  return (config.vercelDeployConfiguredAt as string) || null;
+}
+
 export function getClaudeApiKey(): string | null {
   const config = readRawConfig();
   const providers = (config.aiProviders || {}) as Record<string, { apiKey?: string }>;
@@ -108,6 +151,44 @@ export async function healthCheck(): Promise<{ ok: boolean; error?: string }> {
     return data.status === 'ok' ? { ok: true } : { ok: false, error: data.message || 'Unknown error' };
   } catch (e: any) {
     return { ok: false, error: `Cannot reach ${config.url}: ${e.message}` };
+  }
+}
+
+/**
+ * Save a URL-share record to frank-cloud. URL shares don't carry a snapshot
+ * — the reviewer hits the live Vercel preview directly. Frank-cloud stores
+ * the share metadata + overlay wiring + revoke token.
+ */
+export async function uploadUrlShareRecord(
+  deployment: { vercelId: string; vercelTeamId?: string; url: string; readyState?: string },
+  coverNote: string,
+  expiryDays?: number,
+): Promise<{ shareId: string; revokeToken: string; url: string } | { error: string }> {
+  const config = loadConfig();
+  if (!config) return { error: 'Not connected to cloud' };
+  try {
+    const res = await fetch(`${config.url}/api/share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        contentType: 'url-share',
+        deployment,
+        coverNote,
+        ...(expiryDays !== undefined ? { expiryDays } : {}),
+      }),
+    });
+    const data = await res.json();
+    if (data.error) return { error: data.error };
+    return {
+      shareId: data.shareId,
+      revokeToken: data.revokeToken,
+      url: `${config.url}${data.url}`,
+    };
+  } catch (e: any) {
+    return { error: e.message };
   }
 }
 

@@ -18,7 +18,12 @@ import { saveAsset, ALLOWED_MIME_TYPES } from './assets.js';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB cap for base64-over-WS uploads
 import { proxyRequest } from './proxy.js';
-import { uploadShare, isCloudConnected, getCloudUrl, fetchShareComments, saveCloudConfig, healthCheck, getCloudConfiguredAt, revokeShare } from './cloud.js';
+import {
+  uploadShare, isCloudConnected, getCloudUrl, fetchShareComments,
+  saveCloudConfig, healthCheck, getCloudConfiguredAt, revokeShare,
+  getVercelDeployConfig, saveVercelDeployConfig, clearVercelDeployConfig,
+  getVercelDeployConfiguredAt,
+} from './cloud.js';
 import { LiveShareController } from './live-share.js';
 import { mergeCloudComments } from './projects.js';
 import { saveSnapshot, saveCanvasSnapshot, listSnapshots, starSnapshot } from './snapshots.js';
@@ -27,6 +32,14 @@ import { addAiInstruction } from './ai-chain.js';
 import { exportProject } from './export.js';
 import { exportReport } from './report.js';
 import { buildBundle } from './bundle.js';
+import { checkEnvelope } from './share/envelope.js';
+import { buildBundle as buildShareBundle } from './share/bundler.js';
+import { runPreflight } from './share/preflight.js';
+import { readEnvShare } from './share/env-share.js';
+import { generateEncoderEnv } from './share/encoder-registry.js';
+import { createShare, revokeShare as revokeUrlShare } from './share/share-create.js';
+import { verifyVercelToken } from './share/vercel-api.js';
+import { uploadUrlShareRecord } from './cloud.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
 import { addShape, addText, addPath, addConnector, findNode, nodeCenter } from './canvas-writes.js';
 import {
@@ -239,7 +252,7 @@ function startHttpServer(): void {
       }
       const remainder = '/' + parts.slice(1).join('/') + (url.search || '');
       const targetUrl = new URL(remainder, targetBase).toString();
-      proxyRequest(targetUrl, req, res);
+      proxyRequest(targetUrl, slug, req, res);
       return;
     }
 
@@ -430,6 +443,221 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
+      break;
+    }
+
+    case 'share-check-envelope': {
+      if (!msg.projectDir || typeof msg.projectDir !== 'string') {
+        reply({ type: 'error', error: 'share-check-envelope requires a projectDir string' });
+        break;
+      }
+      (async () => {
+        try {
+          const envelope = await checkEnvelope(msg.projectDir);
+          // If a framework was detected, also compute a bundle summary so the
+          // UI can show file counts + total size without a second round trip.
+          let bundleSummary: {
+            status: 'ok' | 'fail';
+            fileCount: number;
+            totalSize: number;
+            rejectedCount: number;
+            rejectedByReason: Record<string, number>;
+          } | null = null;
+          if (envelope.framework) {
+            const bundle = await buildShareBundle(msg.projectDir, { framework: envelope.framework.id });
+            const rejectedByReason: Record<string, number> = {};
+            for (const r of bundle.rejected) {
+              rejectedByReason[r.reason] = (rejectedByReason[r.reason] ?? 0) + 1;
+            }
+            bundleSummary = {
+              status: bundle.status,
+              fileCount: bundle.files.length,
+              totalSize: bundle.totalSize,
+              rejectedCount: bundle.rejected.length,
+              rejectedByReason,
+            };
+          }
+          reply({ type: 'share-envelope-result', envelope, bundleSummary });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'get-vercel-deploy-config': {
+      const cfg = getVercelDeployConfig();
+      reply({
+        type: 'vercel-deploy-config',
+        configured: !!cfg,
+        teamId: cfg?.teamId ?? null,
+        projectNamePrefix: cfg?.projectNamePrefix ?? null,
+        configuredAt: getVercelDeployConfiguredAt(),
+      });
+      break;
+    }
+
+    case 'set-vercel-deploy-config': {
+      if (!msg.token || typeof msg.token !== 'string') {
+        reply({ type: 'error', error: 'set-vercel-deploy-config requires a token' });
+        break;
+      }
+      try {
+        saveVercelDeployConfig({ token: msg.token, teamId: msg.teamId });
+        reply({ type: 'vercel-deploy-config', configured: true, teamId: msg.teamId ?? null, projectNamePrefix: null, configuredAt: getVercelDeployConfiguredAt() });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
+    case 'clear-vercel-deploy-config': {
+      clearVercelDeployConfig();
+      reply({ type: 'vercel-deploy-config', configured: false, teamId: null, projectNamePrefix: null, configuredAt: null });
+      break;
+    }
+
+    case 'test-vercel-token': {
+      if (!msg.token || typeof msg.token !== 'string') {
+        reply({ type: 'error', error: 'test-vercel-token requires a token' });
+        break;
+      }
+      (async () => {
+        const result = await verifyVercelToken(msg.token);
+        reply({ type: 'vercel-token-test-result', ok: result.ok, message: result.message ?? null });
+      })();
+      break;
+    }
+
+    case 'share-create': {
+      if (!msg.projectDir || typeof msg.projectDir !== 'string') {
+        reply({ type: 'error', error: 'share-create requires a projectDir string' });
+        break;
+      }
+      (async () => {
+        try {
+          const vercelConfig = getVercelDeployConfig();
+          if (!vercelConfig) {
+            reply({ type: 'share-create-result', status: 'fail', failure: { stage: 'envelope', message: 'Vercel deploy token not configured. Add one in Settings → Share Preview.' } });
+            return;
+          }
+          const cloudUrl = getCloudUrl();
+          if (!cloudUrl) {
+            reply({ type: 'share-create-result', status: 'fail', failure: { stage: 'envelope', message: 'Frank-cloud not configured. Configure cloud backend in Settings first.' } });
+            return;
+          }
+
+          const shareResult = await createShare({
+            projectDir: msg.projectDir,
+            vercelToken: vercelConfig.token,
+            vercelTeamId: vercelConfig.teamId,
+            cloudUrl,
+            onProgress: (info) => {
+              reply({ type: 'share-create-progress', ...info });
+            },
+          });
+
+          if (shareResult.status === 'fail' || !shareResult.deployment) {
+            reply({ type: 'share-create-result', ...shareResult, status: 'fail' });
+            return;
+          }
+
+          // Persist to frank-cloud so the share link is reachable by reviewers.
+          const cloudRecord = await uploadUrlShareRecord(
+            {
+              vercelId: shareResult.deployment.id,
+              vercelTeamId: vercelConfig.teamId,
+              url: shareResult.deployment.url,
+              readyState: shareResult.deployment.readyState,
+            },
+            '',
+            msg.expiryDays,
+          );
+          if ('error' in cloudRecord) {
+            reply({ type: 'share-create-result', ...shareResult, cloudError: cloudRecord.error, status: 'fail' });
+            return;
+          }
+
+          reply({
+            type: 'share-create-result',
+            status: 'ok',
+            shareId: cloudRecord.shareId,
+            revokeToken: cloudRecord.revokeToken,
+            shareUrl: cloudRecord.url,
+            deploymentUrl: shareResult.deploymentUrl,
+            vercelDeploymentId: shareResult.deployment.id,
+          });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'share-revoke-url': {
+      if (!msg.shareId || !msg.revokeToken || !msg.vercelDeploymentId) {
+        reply({ type: 'error', error: 'share-revoke-url requires shareId, revokeToken, vercelDeploymentId' });
+        break;
+      }
+      (async () => {
+        try {
+          const vercelConfig = getVercelDeployConfig();
+          if (!vercelConfig) {
+            reply({ type: 'share-revoke-result', status: 'fail', error: 'Vercel deploy token not configured; cannot delete the deployment.' });
+            return;
+          }
+          const result = await revokeUrlShare({
+            vercelToken: vercelConfig.token,
+            vercelTeamId: msg.vercelTeamId ?? vercelConfig.teamId,
+            vercelDeploymentId: msg.vercelDeploymentId,
+            flipCloudFlag: async () => {
+              const out = await revokeShare(msg.shareId, msg.revokeToken);
+              return out;
+            },
+          });
+          reply({ type: 'share-revoke-result', ...result, outcome: result.status === 'complete' ? 'ok' : 'partial' });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'share-preflight': {
+      if (!msg.projectDir || typeof msg.projectDir !== 'string') {
+        reply({ type: 'error', error: 'share-preflight requires a projectDir string' });
+        break;
+      }
+      (async () => {
+        try {
+          // Envelope first — preflight is only meaningful if envelope passes.
+          const envelope = await checkEnvelope(msg.projectDir);
+          if (envelope.status === 'fail' || !envelope.framework) {
+            reply({ type: 'share-preflight-result', envelope, preflight: null });
+            return;
+          }
+          const envShare = await readEnvShare(msg.projectDir);
+          // Merge order (lowest → highest priority): encoder output,
+          // .env.share user overrides, Frank-injected system vars. §3.3 says
+          // user values win over encoder; §5.1 says FRANK_SHARE is always
+          // set by Frank, not overridable.
+          const encoderEnv = generateEncoderEnv(
+            envelope.detectedSdks.map((s) => s.packageName),
+          );
+          const preflight = await runPreflight({
+            projectDir: msg.projectDir,
+            framework: envelope.framework.id,
+            env: {
+              ...encoderEnv,
+              ...envShare,
+              NEXT_PUBLIC_FRANK_SHARE: '1',
+            },
+          });
+          reply({ type: 'share-preflight-result', envelope, preflight });
+        } catch (e: any) {
+          reply({ type: 'error', error: e.message });
+        }
+      })();
       break;
     }
 

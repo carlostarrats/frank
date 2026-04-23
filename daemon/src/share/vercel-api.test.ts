@@ -1,0 +1,234 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import {
+  createDeployment,
+  pollDeployment,
+  deleteDeployment,
+  verifyVercelToken,
+  zoneForElapsed,
+} from './vercel-api.js';
+
+let tmp: string;
+
+function mockFetch(handler: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>) {
+  const fn = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => handler(input, init));
+  (globalThis as any).fetch = fn as unknown as typeof fetch;
+  return fn;
+}
+
+function jsonRes(body: unknown, init?: ResponseInit): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+    ...init,
+  });
+}
+
+beforeEach(() => {
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'frank-vercel-'));
+});
+afterEach(() => {
+  fs.rmSync(tmp, { recursive: true, force: true });
+  vi.restoreAllMocks();
+});
+
+describe('zoneForElapsed', () => {
+  it('returns expected for elapsed < 90s', () => {
+    expect(zoneForElapsed(0, 300_000)).toBe('expected');
+    expect(zoneForElapsed(89_999, 300_000)).toBe('expected');
+  });
+  it('returns taking-longer for 90s..timeout', () => {
+    expect(zoneForElapsed(90_000, 300_000)).toBe('taking-longer');
+    expect(zoneForElapsed(200_000, 300_000)).toBe('taking-longer');
+  });
+  it('returns timeout at or past timeout', () => {
+    expect(zoneForElapsed(300_000, 300_000)).toBe('timeout');
+    expect(zoneForElapsed(999_999, 300_000)).toBe('timeout');
+  });
+});
+
+describe('createDeployment', () => {
+  it('POSTs to /v13/deployments with bearer auth, base64 files, and framework slug', async () => {
+    // Write one file on disk so readFile works
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, '{"name":"demo"}');
+
+    let captured: { url: string; init?: RequestInit } | null = null;
+    mockFetch((input, init) => {
+      captured = { url: String(input), init };
+      return jsonRes({ id: 'dpl_123', url: 'dpl_123.vercel.app', readyState: 'QUEUED' });
+    });
+
+    const result = await createDeployment({
+      token: 'tok_abc',
+      projectName: 'myshare',
+      framework: 'next-app',
+      files: [{ relPath: 'package.json', absPath: pkgPath }],
+      env: { NEXT_PUBLIC_FRANK_SHARE: '1' },
+    });
+
+    expect(result.id).toBe('dpl_123');
+    expect(result.url).toBe('dpl_123.vercel.app');
+    expect(captured?.url).toBe('https://api.vercel.com/v13/deployments');
+    const headers = (captured?.init?.headers ?? {}) as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer tok_abc');
+    const body = JSON.parse(captured?.init?.body as string);
+    expect(body.name).toBe('myshare');
+    expect(body.target).toBe('preview');
+    expect(body.projectSettings.framework).toBe('nextjs');
+    expect(body.files).toHaveLength(1);
+    expect(body.files[0].file).toBe('package.json');
+    expect(body.files[0].encoding).toBe('base64');
+    expect(Buffer.from(body.files[0].data, 'base64').toString('utf-8')).toBe('{"name":"demo"}');
+    expect(body.env.NEXT_PUBLIC_FRANK_SHARE).toBe('1');
+  });
+
+  it('includes teamId query param when provided', async () => {
+    const pkgPath = path.join(tmp, 'p.json');
+    fs.writeFileSync(pkgPath, '{}');
+    let capturedUrl = '';
+    mockFetch((input) => {
+      capturedUrl = String(input);
+      return jsonRes({ id: 'd', url: 'd.vercel.app', readyState: 'QUEUED' });
+    });
+    await createDeployment({
+      token: 't',
+      projectName: 'p',
+      framework: 'vite-react',
+      files: [{ relPath: 'p.json', absPath: pkgPath }],
+      teamId: 'team_xyz',
+    });
+    expect(capturedUrl).toContain('teamId=team_xyz');
+  });
+
+  it('maps framework ids to Vercel slugs', async () => {
+    const pkgPath = path.join(tmp, 'p.json');
+    fs.writeFileSync(pkgPath, '{}');
+    const capturedBodies: any[] = [];
+    mockFetch((_input, init) => {
+      capturedBodies.push(JSON.parse(init!.body as string));
+      return jsonRes({ id: 'd', url: 'd.vercel.app', readyState: 'QUEUED' });
+    });
+
+    const pairs: Array<[any, string]> = [
+      ['next-pages', 'nextjs'],
+      ['vite-svelte', 'vite'],
+      ['sveltekit', 'sveltekit'],
+      ['astro', 'astro'],
+      ['remix', 'remix'],
+    ];
+    for (const [fw, expected] of pairs) {
+      await createDeployment({
+        token: 't',
+        projectName: 'p',
+        framework: fw,
+        files: [{ relPath: 'p.json', absPath: pkgPath }],
+      });
+    }
+    for (let i = 0; i < pairs.length; i++) {
+      expect(capturedBodies[i].projectSettings.framework).toBe(pairs[i][1]);
+    }
+  });
+
+  it('throws on non-OK response with status + body preview', async () => {
+    const pkgPath = path.join(tmp, 'p.json');
+    fs.writeFileSync(pkgPath, '{}');
+    mockFetch(() => new Response('bad token', { status: 401 }));
+    await expect(
+      createDeployment({
+        token: 'nope',
+        projectName: 'p',
+        framework: 'next-app',
+        files: [{ relPath: 'p.json', absPath: pkgPath }],
+      }),
+    ).rejects.toThrow(/401/);
+  });
+});
+
+describe('pollDeployment', () => {
+  it('returns when readyState reaches READY', async () => {
+    let call = 0;
+    mockFetch(() => {
+      call++;
+      const readyState = call >= 3 ? 'READY' : 'BUILDING';
+      return jsonRes({ id: 'd', url: 'd.vercel.app', readyState });
+    });
+    const progress: string[] = [];
+    const result = await pollDeployment({
+      token: 't',
+      deploymentId: 'd',
+      pollIntervalMs: 5,
+      timeoutMs: 5000,
+      onProgress: (i) => progress.push(i.readyState),
+    });
+    expect(result.readyState).toBe('READY');
+    expect(progress.length).toBeGreaterThan(0);
+  });
+
+  it('returns ERROR state with error message', async () => {
+    mockFetch(() => jsonRes({
+      id: 'd', url: 'd.vercel.app', readyState: 'ERROR', errorMessage: 'Build crashed',
+    }));
+    const result = await pollDeployment({
+      token: 't', deploymentId: 'd', pollIntervalMs: 5,
+    });
+    expect(result.readyState).toBe('ERROR');
+    expect(result.error).toContain('Build crashed');
+  });
+
+  it('returns TIMEOUT when deadline exceeded', async () => {
+    mockFetch(() => jsonRes({ id: 'd', url: 'd.vercel.app', readyState: 'BUILDING' }));
+    const result = await pollDeployment({
+      token: 't', deploymentId: 'd', pollIntervalMs: 5, timeoutMs: 20,
+    });
+    expect(result.readyState).toBe('TIMEOUT');
+  });
+});
+
+describe('deleteDeployment', () => {
+  it('sends DELETE with bearer auth', async () => {
+    let captured: { url: string; init?: RequestInit } | null = null;
+    mockFetch((input, init) => {
+      captured = { url: String(input), init };
+      return new Response(null, { status: 204 });
+    });
+    await deleteDeployment({ token: 't', deploymentId: 'dpl_1' });
+    expect(captured?.url).toContain('/v13/deployments/dpl_1');
+    expect((captured?.init?.headers as any).Authorization).toBe('Bearer t');
+    expect(captured?.init?.method).toBe('DELETE');
+  });
+
+  it('treats 404 as success (already deleted)', async () => {
+    mockFetch(() => new Response('not found', { status: 404 }));
+    await expect(deleteDeployment({ token: 't', deploymentId: 'dpl_1' })).resolves.toBeUndefined();
+  });
+
+  it('throws on 500', async () => {
+    mockFetch(() => new Response('boom', { status: 500 }));
+    await expect(deleteDeployment({ token: 't', deploymentId: 'dpl_1' })).rejects.toThrow(/500/);
+  });
+});
+
+describe('verifyVercelToken', () => {
+  it('returns ok:true on 200', async () => {
+    mockFetch(() => jsonRes({ user: { id: 'u' } }));
+    const result = await verifyVercelToken('t');
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns ok:false with message on 401', async () => {
+    mockFetch(() => new Response('nope', { status: 401 }));
+    const result = await verifyVercelToken('t');
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('401');
+  });
+
+  it('returns ok:false on network error', async () => {
+    mockFetch(() => { throw new Error('econnrefused'); });
+    const result = await verifyVercelToken('t');
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('econnrefused');
+  });
+});

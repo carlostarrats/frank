@@ -12,6 +12,7 @@ const ICONS = {
   comments: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
   ai: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.64 5.64l1.42 1.42M16.95 16.95l1.42 1.42M5.64 18.36l1.42-1.42M16.95 7.05l1.42-1.42"/></svg>`,
   share: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>`,
+  'url-share': `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><polyline points="12 12 12 21"/><polyline points="8 16 12 12 16 16"/></svg>`,
   live: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M17.66 6.34a9 9 0 0 1 0 11.31M6.34 17.66a9 9 0 0 1 0-11.31M19.78 4.22a12 12 0 0 1 0 15.56M4.22 19.78a12 12 0 0 1 0-15.56"/></svg>`,
 };
 
@@ -47,11 +48,22 @@ Frank deliberately doesn't bundle an in-app AI chat — that would lock you into
   {
     id: 'share',
     title: 'Share with reviewers',
-    body: `Generate a link and send a snapshot of a URL, PDF, image, or canvas. Reviewers open it in any browser with zero setup — no account, no install.
+    body: `Generate a link and send PDF, image, or canvas projects as snapshots. Reviewers open it in any browser with zero setup — no account, no install.
 
 Async by default: reviewers see the snapshot as it was when you shared; comments they add sync back to you. For canvas projects, you can flip the share into live mode — see Live collaboration below.
 
 Share backend is a Vercel project you deploy to your own account (or any host implementing Frank's Cloud API). Click the ⚙ Settings cog on the home page to configure it. Nothing leaves your infrastructure unless you opt in.`,
+  },
+  {
+    id: 'url-share',
+    title: 'Share a localhost app (URL auto-deploy)',
+    body: `Point Frank at a local project directory (Next.js, Vite + React/Svelte/Vue, SvelteKit, Astro, Remix). Frank runs a pre-flight check, auto-generates safe-dummy env for common SDKs (Supabase / Clerk / Stripe / Sentry / Auth0 / PostHog), injects a same-origin comment overlay, and deploys a preview to your own Vercel account.
+
+Reviewers open the preview URL and interact with the real running app — hovers, modals, client state all work. Not a screenshot.
+
+Configure a Vercel deploy token once in Settings → Share Preview, point at your project directory, click Check envelope → Run pre-flight → Create share. Revoke flips the share link immediately and tears down the Vercel deployment.
+
+Apps that depend on a live backend may need small FRANK_SHARE guards — Frank surfaces the pattern when the pre-flight detects trouble. See docs/share-guards.md for copy-pasteable patterns.`,
   },
   {
     id: 'live',
@@ -60,7 +72,7 @@ Share backend is a Vercel project you deploy to your own account (or any host im
 
 Create a canvas share, click "Start live share" in the share popover, and the toolbar icon picks up a LIVE · N badge (N = viewers currently watching). Sessions auto-pause after 2 hours so you do not accidentally leave one open; click Resume to continue. You can Revoke the link at any time; revoked links go cold immediately.
 
-URL, PDF, and image shares stay on the async path — for those, screen-sharing (Google Meet, Zoom, etc.) is the better real-time tool; Frank's snapshot + comment flow covers the async case.`,
+For URL shares, the auto-deploy approach (above) gives reviewers the real interactive app without needing a live session. PDF and image shares stay on the async snapshot path — for those, screen-sharing (Google Meet, Zoom, etc.) is the better real-time tool.`,
   },
 ];
 

@@ -92,6 +92,7 @@ Frank deliberately does not bundle an in-app AI chat. That would lock you into o
 ### Self-hosted sharing
 - **Async share** — URL, PDF, image, or canvas: create a link, reviewer opens it, both sides comment asynchronously
 - **Live canvas share** — flip a live toggle on a canvas share and every shape edit, drop, move, and comment propagates to open viewers in near real time over SSE. Presence counter, revocation, optional expiration (1 day to 1 year or custom), 2-hour session auto-pause with resume
+- **URL share auto-deploy** — point Frank at a local project directory (Next.js / Vite+React/Svelte/Vue / SvelteKit / Astro / Remix). Frank runs an envelope check, a pre-flight build + 30s smoke, generates safe-dummy env values for Supabase / Clerk / Stripe / Sentry / Auth0 / PostHog, injects a same-origin comment overlay, and deploys to a preview on your own Vercel account. Reviewer opens the preview URL and interacts with the real running app — not a screenshot. Design details in [`docs/url-share-auto-deploy-design.md`](docs/url-share-auto-deploy-design.md); optional `FRANK_SHARE=1` guard patterns in [`docs/share-guards.md`](docs/share-guards.md).
 - **You host the backend** — `frank-cloud/` is a one-click Vercel reference implementation. Share payloads live in YOUR Blob storage; live presence lives in YOUR Upstash Redis. Or swap the backend for Cloudflare Workers, Deno Deploy, anything implementing the [Cloud API contract](CLOUD_API.md)
 
 ### Project management (home view)
@@ -121,18 +122,25 @@ LOCAL (your machine)                         CLOUD (your Vercel account, optiona
 | - Asset store (sha256)    |                | - Share viewer page       |
 | - Canvas state I/O        |                |                           |
 | - Live-share controllers  |                |      +-----------------+  |
-| - Bundle / report builder |                |      | Vercel Blob     |  |
-| - Project I/O (~/.frank/) |                |      | (share payloads)|  |
-+---------------------------+                |      +-----------------+  |
-        |                                    |      | Upstash Redis   |  |
-        v                                    |      | (live presence, |  |
-  Browser UI (localhost:42068)               |      |  pubsub, diffs) |  |
-  - Home (URL / file / canvas entry)         |      +-----------------+  |
-  - Viewer (iframe + overlay + curation)     +---------------------------+
-  - Canvas (Konva + tools + live badge)                    ^
-  - Timeline (bookmarks, exports)                          | share viewers
-                                                           | (anonymous)
-                                                         Reviewers
+| - URL share auto-deploy   |  -- API -->    |      | Vercel Blob     |  |
+|   (envelope / preflight / |                |      | (share payloads)|  |
+|    inject / Vercel API)   |                |      +-----------------+  |
+| - Bundle / report builder |                |      | Upstash Redis   |  |
+| - Project I/O (~/.frank/) |                |      | (live presence, |  |
++---------------------------+                |      |  pubsub, diffs) |  |
+        |                                    |      +-----------------+  |
+        v                                    +---------------------------+
+  Browser UI (localhost:42068)                           ^       ^
+  - Home (URL / file / canvas entry)                     |       |
+  - Viewer (iframe + overlay + curation)                 |       | share viewers
+  - Canvas (Konva + tools + live badge)                  |       | (anonymous)
+  - Timeline (bookmarks, exports)                        |    Reviewers
+  - Settings → Share Preview (envelope +                 |
+    preflight + Vercel deploy config)                    |
+                                                 Per-share ephemeral
+                                                 app deployments
+                                                 (your Vercel account,
+                                                 one per URL share)
 ```
 
 Everything lives locally in `~/.frank/` unless you hit Share. The cloud is optional; sharing is optional; AI is optional.
@@ -149,6 +157,7 @@ Everything lives locally in `~/.frank/` unless you hit Share. The cloud is optio
 | Canvas export | Konva → SVG → [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) for vector PDF |
 | Report export | [pdfmake](http://pdfmake.org/) — vector PDF with Roboto |
 | Bundle export | [JSZip](https://stuk.github.io/jszip/) — one zip with JSON + reports + snapshots + source + assets |
+| URL share auto-deploy | Envelope detection + allowlist bundler + pre-flight build + [Vercel Deployments API](https://vercel.com/docs/rest-api); per-SDK encoder registry (Supabase / Clerk / Stripe / Sentry / Auth0 / PostHog) generates safe-dummy env at deploy time. [`semver`](https://github.com/npm/node-semver) — MIT for encoder version checks. |
 | Storage | JSON files in `~/.frank/projects/` + content-addressed assets + `~/.frank/config.json` (0600) |
 | Comment anchoring | CSS selector + DOM path + visual coordinates (DOM) · shape ID + last-known world position (canvas) |
 
@@ -297,7 +306,7 @@ cd daemon && npm run build
 
 ### Testing
 
-Daemon has a Vitest suite (**182 passing across 21 files**, plus an opt-in cloud integration harness with 9 more). Unit tests use temp directories — they never touch real `~/.frank/`.
+Daemon has a Vitest suite (**310 passing across 27 files**, plus an opt-in cloud integration harness with 9 more). Unit tests use temp directories — they never touch real `~/.frank/`.
 
 ```bash
 cd daemon
@@ -343,9 +352,23 @@ frank/
 |   +-- src/proxy.ts          # Content proxy for iframe-restricted URLs
 |   +-- src/cloud.ts          # Self-hosted cloud client + secret-aware config I/O
 |   +-- src/mcp/              # MCP server: stdio bridge + 15 tool definitions
+|   +-- src/share/            # URL share auto-deploy pipeline
+|   |   +-- envelope.ts       # Framework + structural checks + refuse-to-guess on unknown SDKs
+|   |   +-- bundler.ts        # Allowlist file walker (hardcoded .env.* refusal except .env.share)
+|   |   +-- env-share.ts      # Minimal dotenv parser for user-supplied overrides
+|   |   +-- encoder-registry.ts  # Registers + merges per-SDK dummy-env encoders
+|   |   +-- sdk-encoders/     # supabase, clerk, stripe, sentry, auth0, posthog
+|   |   +-- preflight.ts      # Build + start-on-ephemeral-port + 30s smoke tail + readiness
+|   |   +-- injection.ts      # Per-framework root-layout detection + <script> injection
+|   |   +-- overlay-source.ts # Embedded frank-overlay.js (shadow DOM, SSE to frank-cloud)
+|   |   +-- vercel-api.ts     # Vercel Deployments API client — create / poll / delete
+|   |   +-- share-create.ts   # End-to-end orchestration + revoke flow
 +-- frank-cloud/              # Deployable Vercel project (self-hosted sharing)
 |   +-- api/                  # Serverless functions (share, comment, health, live)
 |   +-- public/viewer/        # Share viewer — URL/PDF/image iframe OR canvas via Konva
++-- docs/
+|   +-- url-share-auto-deploy-design.md  # Design doc for URL share auto-deploy (rev 4)
+|   +-- share-guards.md       # FRANK_SHARE=1 guard patterns per SDK
 +-- CLAUDE.md
 +-- CLOUD_API.md
 +-- README.md
@@ -381,6 +404,7 @@ Frank bundles or depends on the following third-party software. All are permissi
 - [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) — MIT (canvas PDF, on demand)
 - [Roboto fonts](https://fonts.google.com/specimen/Roboto) — Apache-2.0 (bundled inside pdfmake)
 - [Geist Mono](https://vercel.com/font) — OFL-1.1 (loaded from Google Fonts at runtime; not redistributed)
+- [semver](https://github.com/npm/node-semver) — ISC (URL share encoder version checks)
 - [Vitest](https://vitest.dev/) — MIT (dev-only)
 - [@vercel/blob](https://github.com/vercel/storage) — Apache-2.0 (Frank Cloud only)
 - [@upstash/redis](https://github.com/upstash/upstash-redis) — MIT (Frank Cloud only)

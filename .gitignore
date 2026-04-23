@@ -26,3 +26,6 @@ dist-ssr
 
 # Git worktrees (isolated workspaces; never committed)
 .worktrees/
+
+# Claude Code local config (per-machine settings, task locks)
+.claude/
