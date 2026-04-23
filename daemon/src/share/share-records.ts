@@ -31,6 +31,12 @@ export interface UrlShareRecord {
   expiresAt: string;
   /** Project directory on disk that was bundled. */
   projectDir: string;
+  /** Name of the dir under ~/.frank/share-builds/. Usually differs from
+   *  `shareId` because the build dir uses the daemon's internal 32-char
+   *  id while `shareId` holds the shorter cloud-assigned id. Cleanup
+   *  matches on this, not on `shareId`. Optional for backwards-compat —
+   *  legacy records without this field fall back to `shareId` matching. */
+  buildDirName?: string;
   /** Set when revoke has been attempted. */
   revokedAt?: string;
   /** Revoke outcome — mirrors the shape returned by share-revoke-url. */
@@ -163,11 +169,14 @@ export function purgeOrphanedShareBuilds(): string[] {
   }
   const records = readAll();
   const now = new Date().toISOString();
-  const keep = new Set(
-    records
-      .filter((r) => !r.revokedAt && r.expiresAt >= now)
-      .map((r) => r.shareId),
-  );
+  const keep = new Set<string>();
+  for (const r of records) {
+    if (r.revokedAt) continue;
+    if (r.expiresAt < now) continue;
+    // Prefer buildDirName when present (the actual on-disk name); fall back
+    // to shareId for legacy records written before buildDirName existed.
+    keep.add(r.buildDirName ?? r.shareId);
+  }
   const removed: string[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;

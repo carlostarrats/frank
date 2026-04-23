@@ -245,6 +245,33 @@ describe('share-records — purgeOrphanedShareBuilds', () => {
     expect(removed.sort()).toEqual(['dead', 'orphan']);
     expect(fs.existsSync(path.join(tmp, 'share-builds', 'live'))).toBe(true);
   });
+
+  it('matches buildDirName when present (not the cloud shareId)', () => {
+    // Real-world: shareId is the cloud-assigned short id; build dir is
+    // named by the daemon's internal 32-char id stored in buildDirName.
+    // Without this match, every live share's dir would be wrongly deleted.
+    const future = new Date(Date.now() + 86400000 * 7).toISOString();
+    writeShareRecord(record({
+      shareId: 'cloud_short',
+      buildDirName: 'internal_32_char_hex_id',
+      expiresAt: future,
+    }));
+    makeBuildDir('internal_32_char_hex_id');  // matches buildDirName
+    makeBuildDir('cloud_short');              // orphan — no record uses this name
+    const removed = purgeOrphanedShareBuilds();
+    expect(removed).toEqual(['cloud_short']);
+    expect(fs.existsSync(path.join(tmp, 'share-builds', 'internal_32_char_hex_id'))).toBe(true);
+  });
+
+  it('falls back to shareId for legacy records missing buildDirName', () => {
+    const future = new Date(Date.now() + 86400000 * 7).toISOString();
+    // Simulate a record written before buildDirName was introduced.
+    writeShareRecord(record({ shareId: 'legacy', expiresAt: future }));
+    makeBuildDir('legacy');
+    const removed = purgeOrphanedShareBuilds();
+    expect(removed).toEqual([]);
+    expect(fs.existsSync(path.join(tmp, 'share-builds', 'legacy'))).toBe(true);
+  });
 });
 
 describe('share-records — removeShareBuild', () => {

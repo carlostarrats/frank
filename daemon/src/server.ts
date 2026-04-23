@@ -610,6 +610,11 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
                 createdAt: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + ((msg.expiryDays ?? 7) * 86400000)).toISOString(),
                 projectDir: msg.projectDir,
+                // share-create.ts writes the working dir under the daemon's
+                // internal 32-char shareId (shareResult.shareId). The record's
+                // primary shareId is the shorter cloud-assigned id. Track the
+                // build-dir name separately so cleanup can match it.
+                buildDirName: shareResult.shareId,
               });
             }
           } catch (err: any) {
@@ -677,8 +682,13 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           // Clean up the on-disk working copy — a 5-10 MB dir per share
           // otherwise sits around indefinitely. Startup sweep catches any
           // that this pass misses (Vercel-delete failure, daemon crash, etc).
+          // Build-dir name differs from the cloud shareId (share-create.ts
+          // uses the internal 32-char id), so look it up from the record.
           try {
-            removeShareBuild(msg.shareId);
+            const rec = listShareRecords({ includeRevoked: true, includeExpired: true })
+              .find((r) => r.shareId === msg.shareId);
+            const dirName = rec?.buildDirName ?? msg.shareId;
+            removeShareBuild(dirName);
           } catch (err: any) {
             console.warn('[frank] failed to remove share-build dir:', err.message);
           }
