@@ -167,7 +167,7 @@ frank/
 │       ├── share-envelope.css # Share Preview styling — verdict pills (green/yellow/red), failure list, SDK badges, route probe list, log pre
 ├── daemon/                   # Node.js daemon (TypeScript, strict)
 │   ├── vitest.config.ts
-│   ├── package.json          # deps: ws, pdfmake, tslib, jszip, @modelcontextprotocol/sdk, semver (URL share encoder version checks). @anthropic-ai/sdk is legacy dead code, slated for removal.
+│   ├── package.json          # deps: ws, pdfmake, tslib, jszip, @modelcontextprotocol/sdk, semver (URL share encoder version checks).
 │   ├── src/cli.ts            # frank start / stop / connect / status / export / mcp / uninstall
 │   ├── src/server.ts         # HTTP + WebSocket server, all message handlers (incl. set-project-intent, export-bundle, mcp-add-*, mcp-create-share, canvas-state-changed broadcast)
 │   ├── src/protocol.ts       # Shared types and constants (incl. ProjectV2.intent, bundle + MCP message types)
@@ -189,8 +189,6 @@ frank/
 │   │   ├── server.ts         # runMcpServer() — @modelcontextprotocol/sdk StdioServerTransport
 │   │   ├── bridge.ts         # DaemonBridge — WebSocket client bridging stdio tools ↔ running daemon
 │   │   └── tools.ts          # 15 tool definitions + handlers (reads, canvas writes, create_share)
-│   ├── src/ai-conversations.ts  # Per-project AI conversation storage (legacy, UI-unreachable, slated for removal)
-│   ├── src/ai-providers/claude.ts  # Claude API client (legacy, UI-unreachable, slated for removal)
 │   ├── src/share/            # URL share auto-deploy pipeline — v3.3+
 │   │   ├── types.ts          # EnvelopeResult, BundleResult, DetectedSdk, failure codes
 │   │   ├── envelope.ts       # Framework + structural rules + refuse-to-guess detection
@@ -201,9 +199,10 @@ frank/
 │   │   ├── preflight.ts      # Build + ephemeral-port start + deterministic smoke + 30s stderr tail
 │   │   ├── injection.ts      # Per-framework root-layout detection + one <script> injection on a COPY
 │   │   ├── overlay-source.ts # OVERLAY_SCRIPT_CONTENT — frank-overlay.js as a TS string (shadow DOM, SSE)
-│   │   ├── vercel-api.ts     # createDeployment / pollDeployment / deleteDeployment / verifyVercelToken
-│   │   └── share-create.ts   # End-to-end orchestration (createShare) + revoke (revokeShare)
-│   └── src/*.test.ts         # Vitest tests (310 across 27 files; 9 more in the opt-in cloud integration harness)
+│   │   ├── vercel-api.ts     # createDeployment / pollDeployment / deleteDeployment / verifyVercelToken / disableDeploymentProtection
+│   │   ├── share-create.ts   # End-to-end orchestration (createShare) + revoke (revokeShare)
+│   │   └── share-records.ts  # Local ~/.frank/share-records.json persistence for the list + revoke-after-session UI; startup sweep + per-revoke cleanup of share-builds/
+│   └── src/*.test.ts         # Vitest tests (344 across 27 files; 9 more in the opt-in cloud integration harness)
 ├── frank-cloud/              # Reference cloud backend — Vercel + Blob (users host their own)
 │   ├── api/                  # Serverless functions (share, comment, health)
 │   ├── public/viewer/        # Share viewer page (iframe OR canvas render via Konva CDN)
@@ -307,7 +306,7 @@ The `daemon/src/ai-chain.ts` log captures every Copy-as-prompt action so the exp
 
 **MCP projectId discipline:** `activeProjectId` on the daemon is tied to the browser's current view. MCP tools always pass an explicit `projectId` (derived from tool input) so an AI writing to project B never clobbers what the user is looking at in project A.
 
-Historical note: an earlier v2 version had an in-app Claude panel mounted in the viewer's right sidebar. It was removed pre-v3.0 in favor of the BYO-tool pattern above. The daemon-side `ai-conversations.ts` + `ai-providers/claude.ts` modules still exist but are unreachable from the UI — their removal is a v3.x cleanup item, not urgent.
+Historical note: an earlier v2 version had an in-app Claude panel mounted in the viewer's right sidebar. It was removed pre-v3.0 in favor of the BYO-tool pattern above. The daemon-side `ai-conversations.ts` + `ai-providers/claude.ts` + `@anthropic-ai/sdk` dep + 6 legacy protocol handlers were all dropped in dev-v3.10 (2026-04-23).
 
 ---
 
@@ -367,7 +366,7 @@ FRANK_CLOUD_BASE_URL=http://localhost:3000 \
 
 Test files live alongside source: `src/*.test.ts`. Each test file mocks `./protocol.js` to redirect `PROJECTS_DIR` to a temp directory. The `inject.test.ts` file additionally mocks `os.homedir()` using `vi.hoisted()`.
 
-**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `ai-conversations.ts`, `revision-store.ts`, `live-share.ts` (transport + per-project-type controllers for canvas/image/pdf), `share/envelope.ts`, `share/bundler.ts`, `share/preflight.ts` (pure helpers — link extraction, error counting, classification, port finder, start-command selection), `share/encoder-registry.ts` (all six SDK encoder outputs), `share/injection.ts` (layout detection per framework + injection idempotence + copy-doesn't-touch-source), `share/vercel-api.ts` (mocked-fetch unit tests — create / poll / delete / verify-token).
+**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `revision-store.ts`, `live-share.ts` (transport + per-project-type controllers for canvas/image/pdf), `share/envelope.ts`, `share/bundler.ts`, `share/preflight.ts` (pure helpers — link extraction, error counting, classification, port finder, start-command selection), `share/encoder-registry.ts` (all six SDK encoder outputs), `share/injection.ts` (layout detection per framework + injection idempotence + copy-doesn't-touch-source), `share/vercel-api.ts` (mocked-fetch unit tests — create / poll / delete / verify-token / disableDeploymentProtection), `share/share-records.ts` (write/read/mark-revoked/purge + share-builds sweep with buildDirName matching).
 
 After changing any daemon module, run `npm test` to verify nothing broke. For changes that touch the daemon ↔ cloud contract, run the integration harness too — see the "Shipping a phase" section below.
 
