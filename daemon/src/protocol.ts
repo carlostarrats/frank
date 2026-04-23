@@ -80,19 +80,6 @@ export interface LoadProjectRequest { type: 'load-project'; projectId: string; r
 export interface CreateProjectRequest { type: 'create-project'; name: string; contentType: 'url' | 'pdf' | 'image' | 'canvas'; url?: string; file?: string; requestId?: number; }
 export interface LoadCanvasStateRequest { type: 'load-canvas-state'; projectId?: string; requestId?: number; }
 export interface SaveCanvasStateRequest { type: 'save-canvas-state'; state: string; requestId?: number; }
-export interface GetAiConfigRequest { type: 'get-ai-config'; requestId?: number; }
-export interface SetAiApiKeyRequest { type: 'set-ai-api-key'; provider: 'claude'; apiKey: string; requestId?: number; }
-export interface ClearAiApiKeyRequest { type: 'clear-ai-api-key'; provider: 'claude'; requestId?: number; }
-export interface ListAiConversationsRequest { type: 'list-ai-conversations'; requestId?: number; }
-export interface LoadAiConversationRequest { type: 'load-ai-conversation'; conversationId: string; requestId?: number; }
-export interface SendAiMessageRequest {
-  type: 'send-ai-message';
-  conversationId?: string;      // omit to start a new conversation
-  continuedFrom?: string;       // optional prior conversation id for continuity linking
-  message: string;              // user's typed input
-  feedbackIds?: string[];       // curated comment ids to attach
-  requestId?: number;
-}
 export interface DeleteProjectRequest { type: 'delete-project'; projectId: string; requestId?: number; }
 export interface RenameProjectRequest { type: 'rename-project'; projectId: string; name: string; requestId?: number; }
 export interface SetProjectIntentRequest { type: 'set-project-intent'; projectId: string; intent: string; requestId?: number; }
@@ -298,12 +285,6 @@ export type AppMessage =
   | RevealProjectFolderRequest
   | LoadCanvasStateRequest
   | SaveCanvasStateRequest
-  | GetAiConfigRequest
-  | SetAiApiKeyRequest
-  | ClearAiApiKeyRequest
-  | ListAiConversationsRequest
-  | LoadAiConversationRequest
-  | SendAiMessageRequest
   | StartLiveShareRequest
   | StopLiveShareRequest
   | ResumeLiveShareRequest

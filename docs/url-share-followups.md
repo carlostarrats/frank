@@ -187,16 +187,19 @@ building if users ask — most won't care.
 
 ## Dev hygiene (independent of share work)
 
-### 17. Drop legacy AI modules (~1h)
+### 17. Drop legacy AI modules (~1h) — ✅ DONE (dev-v3.10, 2026-04-23)
 
-CLAUDE.md has flagged these since pre-v3.0:
-- `@anthropic-ai/sdk` in `daemon/package.json`
-- `daemon/src/ai-conversations.ts`
+Removed the UI-unreachable in-app AI chat plumbing flagged pre-v3.0:
+- `@anthropic-ai/sdk` dep
+- `daemon/src/ai-conversations.ts` + its 13-test suite
 - `daemon/src/ai-providers/claude.ts`
-- All the `send-ai-message` / `list-ai-conversations` protocol + server handlers
+- 6 server handlers (`get-ai-config`, `set-ai-api-key`, `clear-ai-api-key`, `list-ai-conversations`, `load-ai-conversation`, `send-ai-message`) + their protocol types
+- `handleSendAiMessage` function
+- `getClaudeApiKey` / `setClaudeApiKey` / `clearClaudeApiKey` in `cloud.ts`
+- Matching 6 UI wrappers in `sync.js`
+- `conversations` field from `report.ts` (ReportData + MD + PDF renderers)
 
-All UI-unreachable. Clean up pass would save ~50KB of daemon dist + a few
-hundred lines.
+Zero dangling refs. Build clean. Tests drop from 355 → 342 (the 13 removed are the deleted ai-conversations suite). AI handoff keeps the three shipping paths: MCP, Copy-for-AI, JSON/MD/PDF export.
 
 ### 18. Update `CLOUD_API.md` for v3.3 additions (~30 min) — ✅ DONE (dev-v3.10, 2026-04-23)
 

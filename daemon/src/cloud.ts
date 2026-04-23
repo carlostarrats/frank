@@ -103,28 +103,6 @@ export function getVercelDeployConfiguredAt(): string | null {
   return (config.vercelDeployConfiguredAt as string) || null;
 }
 
-export function getClaudeApiKey(): string | null {
-  const config = readRawConfig();
-  const providers = (config.aiProviders || {}) as Record<string, { apiKey?: string }>;
-  return providers.claude?.apiKey || null;
-}
-
-export function setClaudeApiKey(apiKey: string): void {
-  const config = readRawConfig();
-  const providers = (config.aiProviders || {}) as Record<string, unknown>;
-  providers.claude = { apiKey };
-  config.aiProviders = providers;
-  writeConfigSecure(config);
-}
-
-export function clearClaudeApiKey(): void {
-  const config = readRawConfig();
-  const providers = (config.aiProviders || {}) as Record<string, unknown>;
-  delete providers.claude;
-  config.aiProviders = providers;
-  writeConfigSecure(config);
-}
-
 export function getAiConversationLimits(): AiConversationLimits {
   const config = readRawConfig();
   const stored = (config.aiConversations || {}) as Partial<AiConversationLimits>;

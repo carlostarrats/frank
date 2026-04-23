@@ -17,7 +17,6 @@ import { loadProject, loadComments } from './projects.js';
 import { listSnapshots } from './snapshots.js';
 import { loadCurations } from './curation.js';
 import { loadAiChain } from './ai-chain.js';
-import { listConversations } from './ai-conversations.js';
 
 export interface ReportData {
   project: FrankExport['project'];
@@ -29,13 +28,11 @@ export interface ReportData {
     remixedComments: number;
     snapshots: number;
     aiInstructions: number;
-    conversations: number;
   };
   comments: Array<{ id: string; author: string; text: string; status: string; ts: string }>;
   curations: Array<{ id: string; action: string; originalTexts: string[]; remixedText: string; ts: string }>;
   snapshots: Array<{ id: string; label: string; starred: boolean; trigger: string; ts: string }>;
   aiInstructions: Array<{ id: string; instruction: string; ts: string }>;
-  conversations: Array<{ id: string; title: string; messageCount: number; modified: string }>;
 }
 
 export function buildReportData(projectId: string): ReportData {
@@ -44,7 +41,6 @@ export function buildReportData(projectId: string): ReportData {
   const curations = loadCurations(projectId);
   const aiChain = loadAiChain(projectId);
   const snapshots = listSnapshots(projectId);
-  const conversations = listConversations(projectId);
 
   const summary = {
     totalComments: comments.length,
@@ -53,7 +49,6 @@ export function buildReportData(projectId: string): ReportData {
     remixedComments: comments.filter(c => c.status === 'remixed').length,
     snapshots: snapshots.length,
     aiInstructions: aiChain.length,
-    conversations: conversations.length,
   };
 
   const screens = Object.entries(project.screens).map(([id, s]) => ({ id, route: s.route, label: s.label }));
@@ -74,7 +69,6 @@ export function buildReportData(projectId: string): ReportData {
     curations: curations.map(cur => ({ id: cur.id, action: cur.action, originalTexts: cur.originalTexts, remixedText: cur.remixedText, ts: cur.ts })),
     snapshots: snapshots.map(s => ({ id: s.id, label: s.label, starred: s.starred, trigger: s.trigger, ts: s.ts })),
     aiInstructions: aiChain.map(ai => ({ id: ai.id, instruction: ai.instruction, ts: ai.ts })),
-    conversations: conversations.map(c => ({ id: c.id, title: c.title, messageCount: c.messageCount, modified: c.modified })),
   };
 }
 
@@ -105,7 +99,6 @@ export function renderReportMarkdown(data: ReportData): string {
   lines.push(`- Total comments: **${data.summary.totalComments}** (${data.summary.approvedComments} approved · ${data.summary.dismissedComments} dismissed · ${data.summary.remixedComments} remixed)`);
   lines.push(`- Snapshots: **${data.summary.snapshots}**`);
   lines.push(`- AI instructions routed: **${data.summary.aiInstructions}**`);
-  lines.push(`- AI conversations: **${data.summary.conversations}**`);
   lines.push('');
 
   if (data.comments.length > 0) {
@@ -159,15 +152,6 @@ export function renderReportMarkdown(data: ReportData): string {
       lines.push(ai.instruction);
       lines.push('');
     }
-  }
-
-  if (data.conversations.length > 0) {
-    lines.push('## AI conversations');
-    lines.push('');
-    for (const conv of data.conversations) {
-      lines.push(`- **${conv.title}** — ${conv.messageCount} messages — last active ${fmtDate(conv.modified)}`);
-    }
-    lines.push('');
   }
 
   return lines.join('\n');
@@ -227,7 +211,6 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
       `Total comments: ${data.summary.totalComments} (${data.summary.approvedComments} approved · ${data.summary.dismissedComments} dismissed · ${data.summary.remixedComments} remixed)`,
       `Snapshots: ${data.summary.snapshots}`,
       `AI instructions routed: ${data.summary.aiInstructions}`,
-      `AI conversations: ${data.summary.conversations}`,
     ],
     margin: [0, 0, 0, 16],
   });
@@ -271,13 +254,6 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
       content.push({ text: fmtDate(ai.ts), style: 'h3' });
       content.push({ text: ai.instruction, margin: [0, 0, 0, 8] });
     }
-  }
-
-  if (data.conversations.length > 0) {
-    content.push({ text: 'AI conversations', style: 'h2' });
-    content.push({
-      ul: data.conversations.map(conv => `${conv.title} — ${conv.messageCount} messages — last active ${fmtDate(conv.modified)}`),
-    });
   }
 
   const docDef: any = {
