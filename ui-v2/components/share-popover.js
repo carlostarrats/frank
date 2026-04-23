@@ -374,6 +374,124 @@ function esc(text) {
   return d.innerHTML;
 }
 
+// Build-progress block with the three-zone UX + streamed log pane.
+// Updates driven by frank:share-create-progress events (broadcast by
+// core/sync.js without resolving the pending share-create promise).
+//
+// Three zones per design doc §6.3:
+//   - 0–90s       "Building your preview" (green / neutral)
+//   - 90s–5min    "Taking longer than usual" (yellow)
+//   - >5min       "Build timed out" (red)
+//
+// The timer is driven locally so the elapsed number updates smoothly
+// between poll-based daemon updates.
+function createBuildProgressBlock() {
+  const el = document.createElement('div');
+  el.className = 'share-url-build-block';
+  el.innerHTML = `
+    <div class="share-url-build-header">
+      <div class="share-url-build-stage" id="sub-stage">
+        <span class="share-live-spinner" aria-hidden="true"></span>
+        <span class="share-url-build-stage-label">Starting…</span>
+      </div>
+      <div class="share-url-build-timer" id="sub-timer" aria-live="off">00:00</div>
+    </div>
+    <div class="share-url-build-zone" id="sub-zone" hidden></div>
+    <pre class="share-url-build-log" id="sub-log" aria-live="polite"></pre>
+  `;
+
+  const stageLabel = el.querySelector('.share-url-build-stage-label');
+  const timerEl = el.querySelector('#sub-timer');
+  const zoneEl = el.querySelector('#sub-zone');
+  const logEl = el.querySelector('#sub-log');
+
+  let startedAt = null;
+  let currentZone = 'expected';
+  let rafId = null;
+
+  function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
+  function formatElapsed(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    return `${pad(total / 60)}:${pad(total % 60)}`;
+  }
+  function zoneFromElapsed(ms) {
+    if (ms < 90_000) return 'expected';
+    if (ms < 5 * 60_000) return 'taking-longer';
+    return 'timeout';
+  }
+  function setZone(z) {
+    if (z === currentZone) return;
+    currentZone = z;
+    if (z === 'expected') {
+      zoneEl.hidden = true;
+    } else if (z === 'taking-longer') {
+      zoneEl.hidden = false;
+      zoneEl.className = 'share-url-build-zone share-url-build-zone-warn';
+      zoneEl.textContent = 'Taking longer than usual. Vercel might be busy, or your app is larger than typical. Still running…';
+    } else {
+      zoneEl.hidden = false;
+      zoneEl.className = 'share-url-build-zone share-url-build-zone-error';
+      zoneEl.textContent = 'Build is past the 5-minute timeout window. Vercel may be degraded or the app build is stuck — check the Vercel dashboard.';
+    }
+  }
+
+  function tick() {
+    if (!startedAt) { rafId = requestAnimationFrame(tick); return; }
+    const elapsed = Date.now() - startedAt;
+    timerEl.textContent = formatElapsed(elapsed);
+    setZone(zoneFromElapsed(elapsed));
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+
+  function appendLog(type, text) {
+    const line = document.createElement('span');
+    line.className = `share-url-build-log-line share-url-build-log-${type}`;
+    line.textContent = text + '\n';
+    logEl.appendChild(line);
+    // Auto-scroll to bottom — user is expected to watch the tail, not read
+    // from the top. If they scroll up manually we don't fight them: only
+    // stick-to-bottom when they were already at the bottom.
+    const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+    if (nearBottom) logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  const STAGE_LABELS = {
+    'envelope': 'Checking share envelope…',
+    'preflight-build': 'Pre-flight build…',
+    'preflight-smoke': 'Pre-flight smoke test…',
+    'bundle-prep': 'Bundling + injecting overlay…',
+    'vercel-upload': 'Uploading to Vercel…',
+    'vercel-building': 'Vercel building your preview…',
+    'complete': 'Share live.',
+  };
+
+  function onProgress(info) {
+    if (!info) return;
+    // First vercel-building event = build clock starts. Everything before
+    // that happens locally and doesn't count against the Vercel build zones.
+    if (info.stage === 'vercel-building' && !startedAt) startedAt = Date.now();
+
+    if (info.stage === 'vercel-log') {
+      appendLog(info.logType || 'stdout', info.logText || info.message || '');
+      return;
+    }
+
+    const label = STAGE_LABELS[info.stage] || info.message || info.stage;
+    stageLabel.textContent = label;
+
+    // Use daemon's zone hint when it's fresher than our local tick (catches
+    // the case where the user's clock drifts or Promise microtasks bunch up).
+    if (info.zone) setZone(info.zone);
+  }
+
+  function stopTimer() {
+    if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+
+  return { el, onProgress, stopTimer };
+}
+
 // Human-readable "expires in 3 days" / "expired 2 hours ago" for the active-
 // shares list. Intentionally fuzzy — users don't care about exact minutes, and
 // an exact timestamp is already on the record if they want to hover.
@@ -623,13 +741,26 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
   modal.querySelector('#share-url-create').addEventListener('click', async () => {
     const createBtn = modal.querySelector('#share-url-create');
     createBtn.disabled = true;
-    progressEl.innerHTML = `<span class="share-live-spinner" aria-hidden="true"></span>Running envelope → pre-flight → deploy. This can take several minutes.`;
     resultEl.innerHTML = '';
+
+    // Three-zone build UX + streamed log pane. The popover's progress area
+    // gets replaced with a live status block: stage + elapsed timer + log
+    // output. Updated by frank:share-create-progress events coming through
+    // sync.js (which broadcasts these without resolving the pending promise).
+    const buildBlock = createBuildProgressBlock();
+    progressEl.innerHTML = '';
+    progressEl.appendChild(buildBlock.el);
+    const onProgress = (e) => buildBlock.onProgress(e.detail);
+    window.addEventListener('frank:share-create-progress', onProgress);
+    const cleanup = () => window.removeEventListener('frank:share-create-progress', onProgress);
+
     try {
       // Pass projectId so the daemon can persist a share-record — Item 3:
       // enables the "active shares" list + revoke-after-session.
       const reply = await sync.shareCreate(sourceDir, undefined, undefined, projectId);
-      progressEl.textContent = '';
+      cleanup();
+      buildBlock.stopTimer();
+      progressEl.innerHTML = '';
       if (reply?.type === 'error') {
         resultEl.innerHTML = `<div class="share-url-gate share-url-gate-warn"><div class="share-url-gate-title">Share failed</div><div class="share-url-gate-body">${esc(reply.error)}</div></div>`;
         createBtn.disabled = false;
@@ -652,7 +783,9 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
       // the user sees it immediately, without closing+reopening the popover.
       if (reply?.status === 'ok') refreshExisting();
     } catch (err) {
-      progressEl.textContent = '';
+      cleanup();
+      buildBlock.stopTimer();
+      progressEl.innerHTML = '';
       resultEl.innerHTML = `<div class="share-url-gate share-url-gate-warn"><div class="share-url-gate-title">Share failed</div><div class="share-url-gate-body">${esc(err?.message ?? String(err))}</div></div>`;
       createBtn.disabled = false;
     }

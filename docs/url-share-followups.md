@@ -104,18 +104,13 @@ the Vercel deployment sits around until the user manually retries.
 - Share list UI surfaces pending/failed state ("⚠️ Revoked from share
   link, but Vercel deployment still live. Retry cleanup?").
 
-### 7. Build-log streaming + three-zone build UX in UI (~3-4h)
+### 7. Build-log streaming + three-zone build UX in UI (~3-4h) — ✅ DONE (dev-v3.11, 2026-04-23)
 
-Vercel's `/v13/deployments/:id/events` endpoint streams build output as
-newline-delimited JSON. Currently the UI shows a generic "Vercel
-building…" spinner with no visibility.
+`vercel-api.ts` gained `streamBuildLogs` hitting `/v3/deployments/:id/events?follow=1&builds=1` — newline-delimited JSON streamed through a `ReadableStream` reader with split-at-newline parsing (handles mid-chunk boundary + malformed lines gracefully). Runs in parallel with `pollDeployment`; aborted when poll resolves.
 
-**Build:**
-- Extend `vercel-api.ts` with `streamBuildLogs(deploymentId, token, onLine)`.
-- Plumb through `share-create` as a progress event.
-- UI: scrollable log pane in the share-create result block.
-- Three-zone time states (§6.3): 0-90s "expected" / 90s-5min "taking
-  longer than usual" / >5min "timeout — check Vercel dashboard."
+`share-create.ts` surfaces log lines through a new `ShareProgress` stage `'vercel-log'` with `logType` + `logText` fields, filtered to stdout / stderr / fatal (deployment-state noise stripped — poll already covers that). UI popover now renders a build-progress block with: current stage label, live elapsed-time timer (driven off `requestAnimationFrame`), three-zone banner (yellow at 90s, red at 5min per design doc §6.3), and a scrollable `<pre>` log pane with auto-scroll-to-bottom (sticky unless the user scrolls up manually).
+
++7 unit tests covering the streamer: parse, chunk-boundary split, malformed-line tolerance, non-2xx silent return, consumer-exception swallowing, teamId query append, external abort.
 
 ### 8. Share-builds directory cleanup (~30 min) — ✅ DONE (dev-v3.10, 2026-04-23)
 

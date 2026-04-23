@@ -1837,6 +1837,71 @@ a.home-icon-btn { text-decoration: none; }
   background: color-mix(in oklch, var(--destructive), transparent 88%);
 }
 .share-url-existing-revoke:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* v3.11 — build progress block (Item 7). Surfaces Vercel build log lines
+ * streamed from /v3/deployments/:id/events plus a three-zone UX
+ * (green / yellow / red) per design doc §6.3. */
+.share-url-build-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.share-url-build-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+.share-url-build-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--foreground);
+}
+.share-url-build-stage-label { color: var(--foreground); }
+.share-url-build-timer {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  tabular-nums: 1;
+  font-variant-numeric: tabular-nums;
+}
+.share-url-build-zone {
+  padding: 6px 10px;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  border-radius: var(--radius-md);
+}
+.share-url-build-zone-warn {
+  background: color-mix(in oklch, #d4a23a, transparent 88%);
+  border: 1px solid color-mix(in oklch, #d4a23a, transparent 60%);
+  color: var(--foreground);
+}
+.share-url-build-zone-error {
+  background: color-mix(in oklch, var(--destructive), transparent 88%);
+  border: 1px solid color-mix(in oklch, var(--destructive), transparent 60%);
+  color: var(--foreground);
+}
+.share-url-build-log {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 180px;
+  overflow: auto;
+  background: color-mix(in oklch, var(--muted-foreground), transparent 94%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.share-url-build-log:empty { display: none; }
+.share-url-build-log-line { display: inline; }
+.share-url-build-log-stderr { color: color-mix(in oklch, var(--destructive), var(--muted-foreground) 30%); }
+.share-url-build-log-fatal  { color: var(--destructive); font-weight: 500; }
 .share-url-progress {
   font-size: var(--text-xs);
   line-height: 1.4;

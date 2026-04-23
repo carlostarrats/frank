@@ -194,6 +194,136 @@ export async function pollDeployment(
   }
 }
 
+export interface StreamBuildLogsOptions {
+  token: string;
+  deploymentId: string;
+  teamId?: string;
+  /** Fires on every build-log line as it arrives from Vercel. */
+  onLine: (evt: BuildLogEvent) => void;
+  /** AbortSignal to stop the stream early — typically fired when the
+   *  deployment reaches a terminal state elsewhere (pollDeployment saw
+   *  READY) or the caller decides to give up. */
+  signal?: AbortSignal;
+  /** Hard timeout for the stream itself (not the deployment). Default 10min
+   *  so a genuinely-stuck build doesn't leak an open fetch forever. */
+  timeoutMs?: number;
+}
+
+export interface BuildLogEvent {
+  /** Vercel event type — observed values include `stdout`, `stderr`,
+   *  `command`, `deployment-state`, `fatal`. Kept as string so Vercel
+   *  can add types without us having to chase the enum. */
+  type: string;
+  /** Unix-ms timestamp from Vercel. Used to compute relative time. */
+  created?: number;
+  /** Plain log text. For `deployment-state` events this is the new state;
+   *  for stdout/stderr it's the raw line. Already newline-stripped. */
+  text?: string;
+  /** Original untouched event payload, in case the caller needs the raw
+   *  JSON (e.g. `payload` sub-objects). */
+  raw: Record<string, unknown>;
+}
+
+/**
+ * Stream Vercel build logs for a deployment. Opens a single long-running
+ * GET to `/v3/deployments/:id/events?follow=1&builds=1` and splits the
+ * newline-delimited JSON body into events, firing `onLine` for each one.
+ *
+ * Resolves when the stream ends naturally (Vercel closes after terminal
+ * state) or when `signal` is aborted. Network errors are swallowed and
+ * logged to console — the deployment poll loop is the authoritative
+ * source of truth for success/failure; logs are surface-only.
+ *
+ * Usage pattern: run alongside `pollDeployment` via Promise.race/all.
+ * When pollDeployment resolves, abort the stream so we stop reading.
+ */
+export async function streamBuildLogs(
+  opts: StreamBuildLogsOptions,
+): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? 10 * 60 * 1000;
+  const timeoutController = new AbortController();
+  const timeoutTimer = setTimeout(() => timeoutController.abort(), timeoutMs);
+
+  // Combine user's signal with our timeout so either aborts the stream.
+  const abortSignals: AbortSignal[] = [timeoutController.signal];
+  if (opts.signal) abortSignals.push(opts.signal);
+  const combined = anySignal(abortSignals);
+
+  const url = appendTeam(
+    `${VERCEL_API_BASE}/v3/deployments/${encodeURIComponent(opts.deploymentId)}/events?follow=1&builds=1`,
+    opts.teamId,
+  );
+
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${opts.token}` },
+      signal: combined,
+    });
+    if (!res.ok) {
+      // Non-2xx on the events endpoint is non-fatal — just means we can't
+      // stream logs for this deployment. Poll loop covers success detection.
+      return;
+    }
+    if (!res.body) return;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      let read: ReadableStreamReadResult<Uint8Array>;
+      try {
+        read = await reader.read();
+      } catch {
+        // Aborted or network hiccup — stop cleanly.
+        break;
+      }
+      if (read.done) break;
+      buffer += decoder.decode(read.value, { stream: true });
+
+      // Vercel emits newline-delimited JSON objects. Split + parse whole
+      // lines; leave the trailing partial in the buffer for next read.
+      let newlineIdx = buffer.indexOf('\n');
+      while (newlineIdx >= 0) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+        if (line) {
+          try {
+            const raw = JSON.parse(line) as Record<string, unknown>;
+            const evt: BuildLogEvent = {
+              type: String(raw.type ?? 'unknown'),
+              created: typeof raw.created === 'number' ? raw.created : undefined,
+              text: typeof raw.text === 'string' ? raw.text : undefined,
+              raw,
+            };
+            try { opts.onLine(evt); } catch { /* swallow consumer bugs */ }
+          } catch {
+            // Malformed line — skip, don't break the stream.
+          }
+        }
+        newlineIdx = buffer.indexOf('\n');
+      }
+    }
+  } catch {
+    // Fetch-level failure. Log streaming is best-effort; we don't want a
+    // socket blip to cascade into a share-create failure when the deployment
+    // itself is fine.
+  } finally {
+    clearTimeout(timeoutTimer);
+  }
+}
+
+// Node's AbortSignal.any() is Node 20+. We target >=18, so ship our own.
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  for (const s of signals) {
+    if (s.aborted) { controller.abort(); break; }
+    s.addEventListener('abort', onAbort, { once: true });
+  }
+  return controller.signal;
+}
+
 export async function deleteDeployment(opts: DeleteDeploymentOptions): Promise<void> {
   const url = appendTeam(
     `${VERCEL_API_BASE}/v13/deployments/${encodeURIComponent(opts.deploymentId)}`,

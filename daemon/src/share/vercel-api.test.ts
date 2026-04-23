@@ -7,6 +7,7 @@ import {
   pollDeployment,
   deleteDeployment,
   disableDeploymentProtection,
+  streamBuildLogs,
   verifyVercelToken,
   zoneForElapsed,
 } from './vercel-api.js';
@@ -280,5 +281,143 @@ describe('disableDeploymentProtection', () => {
     const r = await disableDeploymentProtection({ token: 't', projectIdOrName: 'p' });
     expect(r.ok).toBe(false);
     expect(r.message).toContain('enotfound');
+  });
+});
+
+describe('streamBuildLogs', () => {
+  // Build a Response whose body is a ReadableStream of Uint8Array chunks,
+  // mimicking Vercel's newline-delimited JSON stream.
+  function streamingResponse(chunks: string[]): Response {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const c of chunks) controller.enqueue(encoder.encode(c));
+        controller.close();
+      },
+    });
+    return new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'application/x-ndjson' },
+    });
+  }
+
+  it('parses whole newline-delimited JSON lines and fires onLine per event', async () => {
+    mockFetch(() =>
+      streamingResponse([
+        '{"type":"stdout","text":"Installing dependencies...","created":1}\n',
+        '{"type":"stdout","text":"Building","created":2}\n',
+        '{"type":"deployment-state","text":"READY","created":3}\n',
+      ]),
+    );
+    const events: Array<{ type: string; text?: string }> = [];
+    await streamBuildLogs({
+      token: 't',
+      deploymentId: 'dpl',
+      onLine: (evt) => events.push({ type: evt.type, text: evt.text }),
+    });
+    expect(events).toEqual([
+      { type: 'stdout', text: 'Installing dependencies...' },
+      { type: 'stdout', text: 'Building' },
+      { type: 'deployment-state', text: 'READY' },
+    ]);
+  });
+
+  it('splits lines that arrive across chunk boundaries', async () => {
+    mockFetch(() =>
+      streamingResponse([
+        '{"type":"stdout","text":"Line ',
+        'one"}\n{"type":"stdout","te',
+        'xt":"Line two"}\n',
+      ]),
+    );
+    const events: string[] = [];
+    await streamBuildLogs({
+      token: 't',
+      deploymentId: 'dpl',
+      onLine: (evt) => { if (evt.text) events.push(evt.text); },
+    });
+    expect(events).toEqual(['Line one', 'Line two']);
+  });
+
+  it('skips malformed JSON lines without aborting the stream', async () => {
+    mockFetch(() =>
+      streamingResponse([
+        '{"type":"stdout","text":"first"}\n',
+        'not valid json\n',
+        '{"type":"stdout","text":"third"}\n',
+      ]),
+    );
+    const events: string[] = [];
+    await streamBuildLogs({
+      token: 't',
+      deploymentId: 'dpl',
+      onLine: (evt) => { if (evt.text) events.push(evt.text); },
+    });
+    expect(events).toEqual(['first', 'third']);
+  });
+
+  it('returns quietly on non-2xx response (no throw, no events)', async () => {
+    mockFetch(() => new Response('forbidden', { status: 403 }));
+    const events: unknown[] = [];
+    await expect(streamBuildLogs({
+      token: 't',
+      deploymentId: 'dpl',
+      onLine: (evt) => events.push(evt),
+    })).resolves.toBeUndefined();
+    expect(events).toEqual([]);
+  });
+
+  it('swallows onLine exceptions so one bad consumer can\'t kill the stream', async () => {
+    mockFetch(() =>
+      streamingResponse([
+        '{"type":"stdout","text":"a"}\n',
+        '{"type":"stdout","text":"b"}\n',
+      ]),
+    );
+    const events: string[] = [];
+    await streamBuildLogs({
+      token: 't',
+      deploymentId: 'dpl',
+      onLine: (evt) => {
+        events.push(evt.text ?? '');
+        if (evt.text === 'a') throw new Error('consumer exploded');
+      },
+    });
+    // Both events still delivered despite the first throwing.
+    expect(events).toEqual(['a', 'b']);
+  });
+
+  it('appends teamId to the events URL when provided', async () => {
+    let capturedUrl = '';
+    mockFetch((input) => {
+      capturedUrl = String(input);
+      return streamingResponse([]);
+    });
+    await streamBuildLogs({
+      token: 't',
+      deploymentId: 'dpl_abc',
+      teamId: 'team_xyz',
+      onLine: () => {},
+    });
+    expect(capturedUrl).toContain('/v3/deployments/dpl_abc/events');
+    expect(capturedUrl).toContain('follow=1');
+    expect(capturedUrl).toContain('teamId=team_xyz');
+  });
+
+  it('honours an external AbortSignal — stream resolves without reading more', async () => {
+    const ctrl = new AbortController();
+    mockFetch((_, init) => {
+      // Simulate an abort-aware fetch: if the signal is aborted, the fetch
+      // rejects. That rejection is caught inside streamBuildLogs.
+      if (init?.signal?.aborted) throw new Error('aborted');
+      return streamingResponse([]);
+    });
+    ctrl.abort();
+    await expect(streamBuildLogs({
+      token: 't',
+      deploymentId: 'dpl',
+      signal: ctrl.signal,
+      onLine: () => {},
+    })).resolves.toBeUndefined();
   });
 });

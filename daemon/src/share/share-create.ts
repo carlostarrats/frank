@@ -22,6 +22,7 @@ import {
   pollDeployment,
   deleteDeployment,
   disableDeploymentProtection,
+  streamBuildLogs,
   type CreateDeploymentResult,
   type PollDeploymentResult,
   type BuildZone,
@@ -51,6 +52,7 @@ export interface ShareProgress {
     | 'bundle-prep'
     | 'vercel-upload'
     | 'vercel-building'
+    | 'vercel-log'        // one streamed line from Vercel's /events endpoint
     | 'complete';
   /** Human-readable status for UI. */
   message: string;
@@ -58,6 +60,9 @@ export interface ShareProgress {
   elapsedMs?: number;
   zone?: BuildZone;
   readyState?: string;
+  /** For `vercel-log` stage: the log event type + raw text. */
+  logType?: string;
+  logText?: string;
 }
 
 export interface ShareCreateResult {
@@ -250,6 +255,27 @@ export async function createShare(opts: ShareCreateOptions): Promise<ShareCreate
 
   // ── Stage 5: poll until READY ────────────────────────────────────────
   report('vercel-building', 'Vercel building your preview…', { readyState: created.readyState });
+
+  // Stream Vercel's build-log events in parallel with the ready-state poll.
+  // The poll loop is authoritative for terminal state; the stream exists
+  // purely to surface log lines to the UI. Abort the stream when poll
+  // resolves so we don't hold an open fetch after we're done.
+  const logAbort = new AbortController();
+  const logStream = streamBuildLogs({
+    token: opts.vercelToken,
+    teamId: opts.vercelTeamId,
+    deploymentId: created.id,
+    signal: logAbort.signal,
+    onLine: (evt) => {
+      // Filter to user-facing signal: build stdout/stderr + fatal errors.
+      // Skip deployment-state + command noise — the poll loop already
+      // surfaces readyState transitions via its own onProgress events.
+      if (evt.type !== 'stdout' && evt.type !== 'stderr' && evt.type !== 'fatal') return;
+      if (!evt.text) return;
+      report('vercel-log', evt.text, { logType: evt.type, logText: evt.text });
+    },
+  });
+
   const polled = await pollDeployment({
     token: opts.vercelToken,
     teamId: opts.vercelTeamId,
@@ -262,6 +288,11 @@ export async function createShare(opts: ShareCreateOptions): Promise<ShareCreate
       });
     },
   });
+
+  // Poll is done — shut down the log stream and wait for it to drain.
+  // Swallow errors: draining failure shouldn't fail the share.
+  logAbort.abort();
+  await logStream.catch(() => {});
 
   if (polled.readyState !== 'READY') {
     // Clean up workingDir best-effort — Vercel's deployment is in an error
