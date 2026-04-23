@@ -11,6 +11,7 @@ Frank is a local-first collaboration layer for things that aren't on the interne
 - **Not a whiteboard** — canvas is one of four surfaces. Wrap a URL or PDF and you never open the canvas.
 - **Not a design tool** — Frank reviews what you're building; it doesn't help you build it.
 - **Not a SaaS app** — runs on your machine. The sharing backend, when you need one, is self-hosted.
+- **Not for production data** — Frank's URL share runs your app with placeholder env values. It's for early-stage work where you're still shaping an idea, not for apps wired to real databases, real auth, or real payments.
 
 Most review tools assume the thing being reviewed is already deployed somewhere. Frank assumes it's still private, still evolving, still on your machine.
 
@@ -92,7 +93,7 @@ Frank deliberately does not bundle an in-app AI chat. That would lock you into o
 ### Self-hosted sharing
 - **Async share** — URL, PDF, image, or canvas: create a link, reviewer opens it, both sides comment asynchronously
 - **Live canvas share** — flip a live toggle on a canvas share and every shape edit, drop, move, and comment propagates to open viewers in near real time over SSE. Presence counter, revocation, optional expiration (1 day to 1 year or custom), 2-hour session auto-pause with resume
-- **URL share auto-deploy** — point Frank at a local project directory (Next.js / Vite+React/Svelte/Vue / SvelteKit / Astro / Remix). Frank runs an envelope check, a pre-flight build + 30s smoke, generates safe-dummy env values for Supabase / Clerk / Stripe / Sentry / Auth0 / PostHog, injects a same-origin comment overlay, and deploys to a preview on your own Vercel account. Reviewer opens the preview URL and interacts with the real running app — not a screenshot. Design details in [`docs/url-share-auto-deploy-design.md`](docs/url-share-auto-deploy-design.md); optional `FRANK_SHARE=1` guard patterns in [`docs/share-guards.md`](docs/share-guards.md).
+- **URL share auto-deploy** — point Frank at a local project directory (Next.js / Vite+React/Svelte/Vue / SvelteKit / Astro / Remix). Frank runs an envelope check, a pre-flight build + 30s smoke, generates safe-dummy env values for Supabase / Clerk / Stripe / Sentry / Auth0 / PostHog, injects a same-origin comment overlay, and deploys to a preview on your own Vercel account. Reviewer opens the preview URL and interacts with the real running app — not a screenshot. **Heads up:** apps that block their landing page on a client-side backend call (common: a login page calling `getSession()` on mount) will spin forever in share mode. Add the `FRANK_SHARE=1` guard from [`docs/share-guards.md`](docs/share-guards.md) or disable the probe before sharing. Design details in [`docs/url-share-auto-deploy-design.md`](docs/url-share-auto-deploy-design.md).
 - **You host the backend** — `frank-cloud/` is a one-click Vercel reference implementation. Share payloads live in YOUR Blob storage; live presence lives in YOUR Upstash Redis. Or swap the backend for Cloudflare Workers, Deno Deploy, anything implementing the [Cloud API contract](CLOUD_API.md)
 
 ### Project management (home view)

@@ -63,7 +63,7 @@ Reviewers open the preview URL and interact with the real running app — hovers
 
 Configure a Vercel deploy token once in Settings → Share Preview, point at your project directory, click Check envelope → Run pre-flight → Create share. Revoke flips the share link immediately and tears down the Vercel deployment.
 
-Apps that depend on a live backend may need small FRANK_SHARE guards — Frank surfaces the pattern when the pre-flight detects trouble. See docs/share-guards.md for copy-pasteable patterns.`,
+Frank's URL share is for early-stage work — your app runs with placeholder backends. Pages that block on a real-backend call (e.g. a login page that calls \`getSession()\` on mount) will spin forever. Add the \`FRANK_SHARE=1\` guard from docs/share-guards.md or disable the probe before sharing.`,
   },
   {
     id: 'live',

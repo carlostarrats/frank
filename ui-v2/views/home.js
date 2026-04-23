@@ -58,7 +58,7 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
         <div class="home-col home-col-left">
           <section class="home-panel" data-title="about">
             <h1 class="home-headline">A free local-first collaboration layer.</h1>
-            <p class="home-lede">Runs on your machine. Point Frank at a URL, drop in a file, or start a canvas — then comment, curate, and route feedback to AI. Every decision captured. Frank is private: we don't collect your data and never see your projects. Anything you do share goes through your own cloud backend to whoever you send the link to.</p>
+            <p class="home-lede">Runs on your machine. Point Frank at a URL, drop in a file, or start a canvas — then comment, curate, and route feedback to AI. Every decision captured. Frank is private: we don't collect your data and never see your projects. Anything you do share goes through your own cloud backend to whoever you send the link to. Built for early-stage work, not apps wired to production data.</p>
           </section>
 
           <section class="home-panel" data-title="new share">
