@@ -20,6 +20,8 @@ import {
   listShareRecords,
   markRecordRevoked,
   purgeExpiredRecords,
+  purgeOrphanedShareBuilds,
+  removeShareBuild,
   shareRecordsPath,
   type UrlShareRecord,
 } from './share-records.js';
@@ -171,5 +173,92 @@ describe('share-records — purgeExpiredRecords', () => {
 
   it('works when file doesn\'t exist yet', () => {
     expect(purgeExpiredRecords(30)).toBe(0);
+  });
+});
+
+describe('share-records — purgeOrphanedShareBuilds', () => {
+  function makeBuildDir(shareId: string): string {
+    const dir = path.join(tmp, 'share-builds', shareId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'marker.txt'), shareId);
+    return dir;
+  }
+
+  it('keeps dirs for live, non-expired records', () => {
+    const future = new Date(Date.now() + 86400000 * 7).toISOString();
+    writeShareRecord(record({ shareId: 'live', expiresAt: future }));
+    makeBuildDir('live');
+    const removed = purgeOrphanedShareBuilds();
+    expect(removed).toEqual([]);
+    expect(fs.existsSync(path.join(tmp, 'share-builds', 'live'))).toBe(true);
+  });
+
+  it('removes dirs whose record is revoked', () => {
+    const future = new Date(Date.now() + 86400000 * 7).toISOString();
+    writeShareRecord(record({
+      shareId: 'dead',
+      expiresAt: future,
+      revokedAt: new Date().toISOString(),
+    }));
+    makeBuildDir('dead');
+    const removed = purgeOrphanedShareBuilds();
+    expect(removed).toEqual(['dead']);
+    expect(fs.existsSync(path.join(tmp, 'share-builds', 'dead'))).toBe(false);
+  });
+
+  it('removes dirs whose record has expired', () => {
+    writeShareRecord(record({
+      shareId: 'stale',
+      expiresAt: '2020-01-01T00:00:00.000Z',
+    }));
+    makeBuildDir('stale');
+    const removed = purgeOrphanedShareBuilds();
+    expect(removed).toEqual(['stale']);
+    expect(fs.existsSync(path.join(tmp, 'share-builds', 'stale'))).toBe(false);
+  });
+
+  it('removes orphan dirs with no record at all', () => {
+    makeBuildDir('orphan-a');
+    makeBuildDir('orphan-b');
+    const removed = purgeOrphanedShareBuilds();
+    expect(removed.sort()).toEqual(['orphan-a', 'orphan-b']);
+    expect(fs.existsSync(path.join(tmp, 'share-builds', 'orphan-a'))).toBe(false);
+    expect(fs.existsSync(path.join(tmp, 'share-builds', 'orphan-b'))).toBe(false);
+  });
+
+  it('returns [] when share-builds directory does not exist', () => {
+    expect(purgeOrphanedShareBuilds()).toEqual([]);
+  });
+
+  it('mixed scenario: one live, one revoked, one orphan', () => {
+    const future = new Date(Date.now() + 86400000 * 7).toISOString();
+    writeShareRecord(record({ shareId: 'live', expiresAt: future }));
+    writeShareRecord(record({
+      shareId: 'dead',
+      expiresAt: future,
+      revokedAt: new Date().toISOString(),
+    }));
+    makeBuildDir('live');
+    makeBuildDir('dead');
+    makeBuildDir('orphan');
+    const removed = purgeOrphanedShareBuilds();
+    expect(removed.sort()).toEqual(['dead', 'orphan']);
+    expect(fs.existsSync(path.join(tmp, 'share-builds', 'live'))).toBe(true);
+  });
+});
+
+describe('share-records — removeShareBuild', () => {
+  it('deletes the named directory and returns true', () => {
+    const dir = path.join(tmp, 'share-builds', 's1');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'x');
+    expect(removeShareBuild('s1')).toBe(true);
+    expect(fs.existsSync(dir)).toBe(false);
+  });
+
+  it('returns true even when the dir does not exist (no-op)', () => {
+    // rmSync with force: true doesn't throw on ENOENT; current impl returns
+    // true — accept it as a benign no-op.
+    expect(removeShareBuild('missing')).toBe(true);
   });
 });

@@ -139,5 +139,64 @@ export function purgeExpiredRecords(retentionDays: number = 30): number {
   return dropped;
 }
 
+/**
+ * Sweep `~/.frank/share-builds/` and delete directories that belong to shares
+ * which are no longer active. A directory qualifies for deletion when:
+ *   - Its name (= shareId) has a record whose `revokedAt` is set, OR
+ *   - Its record's `expiresAt` is in the past, OR
+ *   - There is no record at all (orphan from before this module existed, or
+ *     from a pre-record-persistence daemon version).
+ *
+ * Called on daemon startup alongside `purgeExpiredRecords` and also fired
+ * explicitly by the revoke handler to clean up immediately.
+ *
+ * Returns the list of removed shareIds so the caller can log a count.
+ */
+export function purgeOrphanedShareBuilds(): string[] {
+  const buildsRoot = path.join(FRANK_DIR, 'share-builds');
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(buildsRoot, { withFileTypes: true });
+  } catch (err: any) {
+    if (err.code === 'ENOENT') return [];
+    throw err;
+  }
+  const records = readAll();
+  const now = new Date().toISOString();
+  const keep = new Set(
+    records
+      .filter((r) => !r.revokedAt && r.expiresAt >= now)
+      .map((r) => r.shareId),
+  );
+  const removed: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (keep.has(entry.name)) continue;
+    try {
+      fs.rmSync(path.join(buildsRoot, entry.name), { recursive: true, force: true });
+      removed.push(entry.name);
+    } catch {
+      // Best-effort: if rm fails (permission, busy file), skip this one.
+      // Next startup sweep gets another shot.
+    }
+  }
+  return removed;
+}
+
+/**
+ * Delete a single share-build directory. Used by the revoke path so the
+ * 5-10 MB working copy doesn't sit around after the share is torn down.
+ * No-op if the dir doesn't exist.
+ */
+export function removeShareBuild(shareId: string): boolean {
+  const target = path.join(FRANK_DIR, 'share-builds', shareId);
+  try {
+    fs.rmSync(target, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Exported for tests.
 export { recordsPath as shareRecordsPath };

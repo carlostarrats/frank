@@ -117,14 +117,12 @@ building…" spinner with no visibility.
 - Three-zone time states (§6.3): 0-90s "expected" / 90s-5min "taking
   longer than usual" / >5min "timeout — check Vercel dashboard."
 
-### 8. Share-builds directory cleanup (~30 min)
+### 8. Share-builds directory cleanup (~30 min) — ✅ DONE (dev-v3.10, 2026-04-23)
 
-`~/.frank/share-builds/<shareId>/` accumulates forever. Each dir is 5-10MB
-(framework source copy + overlay). Over months this adds up.
-
-**Build:** daemon startup hook (like `purgeExpiredTrash` in `projects.ts`)
-that reads share records and deletes working dirs where `expiresAt` has
-passed. Also clean up on manual revoke.
+`share-records.ts` gained `purgeOrphanedShareBuilds` (startup sweep: deletes
+dirs whose record is revoked, expired, or missing entirely) and
+`removeShareBuild` (synchronous cleanup called from the revoke handler).
+Wired into `startServer` alongside `purgeExpiredRecords`. 8 new tests.
 
 ### 9. Playwright click-interaction probe for Clerk + Auth0 (~1h)
 

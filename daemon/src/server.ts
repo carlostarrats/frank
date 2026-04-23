@@ -43,6 +43,8 @@ import {
   listShareRecords,
   markRecordRevoked,
   purgeExpiredRecords,
+  purgeOrphanedShareBuilds,
+  removeShareBuild,
 } from './share/share-records.js';
 import { verifyVercelToken } from './share/vercel-api.js';
 import { uploadUrlShareRecord } from './cloud.js';
@@ -212,6 +214,12 @@ export function startServer(): void {
     if (droppedShares > 0) console.log(`[frank] purged ${droppedShares} expired share record(s)`);
   } catch (e: any) {
     console.warn(`[frank] share-records purge failed:`, e.message);
+  }
+  try {
+    const removedBuilds = purgeOrphanedShareBuilds();
+    if (removedBuilds.length > 0) console.log(`[frank] cleaned ${removedBuilds.length} share-build dir(s)`);
+  } catch (e: any) {
+    console.warn(`[frank] share-builds cleanup failed:`, e.message);
   }
   startWebSocketServer();
   startHttpServer();
@@ -674,6 +682,14 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             });
           } catch (err: any) {
             console.warn('[frank] failed to mark share record revoked:', err.message);
+          }
+          // Clean up the on-disk working copy — a 5-10 MB dir per share
+          // otherwise sits around indefinitely. Startup sweep catches any
+          // that this pass misses (Vercel-delete failure, daemon crash, etc).
+          try {
+            removeShareBuild(msg.shareId);
+          } catch (err: any) {
+            console.warn('[frank] failed to remove share-build dir:', err.message);
           }
           reply({ type: 'share-revoke-result', ...result, outcome: result.status === 'complete' ? 'ok' : 'partial' });
         } catch (e: any) {
