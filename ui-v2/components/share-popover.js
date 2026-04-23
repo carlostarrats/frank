@@ -549,6 +549,7 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
         <div class="share-url-gate-vercel" id="share-url-gate-vercel"></div>
         <div class="share-url-gate-sourcedir" id="share-url-gate-sourcedir"></div>
         <div class="share-url-existing" id="share-url-existing"></div>
+        <div class="share-url-pending-revokes" id="share-url-pending-revokes"></div>
         <div class="share-url-ready" id="share-url-ready" hidden>
           <div class="share-url-source-row">
             <span class="share-url-source-label">Source:</span>
@@ -574,6 +575,7 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
   const progressEl = modal.querySelector('#share-url-progress');
   const resultEl = modal.querySelector('#share-url-result');
   const existingEl = modal.querySelector('#share-url-existing');
+  const pendingRevokesEl = modal.querySelector('#share-url-pending-revokes');
 
   let vercelConfigured = false;
   let sourceDir = project.sourceDir || '';
@@ -601,13 +603,57 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
     // Only fetch when both gates are cleared — a user who hasn't configured
     // Vercel hasn't created any shares yet, no point in surfacing an empty
     // "Active shares" block above a warning they need to handle first.
-    if (!vercelConfigured) { existingEl.innerHTML = ''; return; }
+    if (!vercelConfigured) {
+      existingEl.innerHTML = '';
+      pendingRevokesEl.innerHTML = '';
+      return;
+    }
     try {
       const reply = await sync.listUrlShares(projectId);
       renderExistingList(reply?.records || []);
     } catch {
       existingEl.innerHTML = '';
     }
+    // Pending-revoke retries are global (not scoped to a project). Surface
+    // any entries here so the user knows background cleanup is in-flight or
+    // has given up. Worker runs autonomously — no buttons, just state.
+    try {
+      const reply = await sync.listPendingRevokes();
+      renderPendingRevokes(reply?.entries || []);
+    } catch {
+      pendingRevokesEl.innerHTML = '';
+    }
+  }
+
+  function renderPendingRevokes(entries) {
+    if (!entries.length) { pendingRevokesEl.innerHTML = ''; return; }
+    const gaveUp = entries.filter((e) => e.gaveUpAt);
+    const retrying = entries.filter((e) => !e.gaveUpAt);
+    let html = '<div class="share-url-pending-section">';
+    if (retrying.length) {
+      html += `<div class="share-url-pending-title">Vercel cleanup retrying (${retrying.length})</div>`;
+      html += '<ul class="share-url-pending-list">';
+      for (const e of retrying) {
+        html += `<li class="share-url-pending-item">
+          <code>${esc(e.shareId)}</code>
+          <span class="share-url-pending-meta">next attempt ${esc(formatRelative(e.nextAttemptAt))} · ${e.attemptCount}/6 tries</span>
+        </li>`;
+      }
+      html += '</ul>';
+    }
+    if (gaveUp.length) {
+      html += `<div class="share-url-pending-title share-url-pending-title-error">Vercel cleanup failed — delete manually (${gaveUp.length})</div>`;
+      html += '<ul class="share-url-pending-list">';
+      for (const e of gaveUp) {
+        html += `<li class="share-url-pending-item">
+          <code>${esc(e.shareId)}</code>
+          <span class="share-url-pending-meta">${esc(e.lastError || 'unknown error')}</span>
+        </li>`;
+      }
+      html += '</ul>';
+    }
+    html += '</div>';
+    pendingRevokesEl.innerHTML = html;
   }
 
   function renderExistingList(records) {

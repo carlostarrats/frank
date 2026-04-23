@@ -42,10 +42,17 @@ import {
   writeShareRecord,
   listShareRecords,
   markRecordRevoked,
+  patchRecordRevoke,
   purgeExpiredRecords,
   purgeOrphanedShareBuilds,
   removeShareBuild,
 } from './share/share-records.js';
+import {
+  enqueueRevoke,
+  listPendingRevokes,
+} from './share/revoke-queue.js';
+import { startRevokeWorker, notifyRevokeEnqueued } from './share/revoke-worker.js';
+import { deleteDeployment as vercelDeleteDeployment } from './share/vercel-api.js';
 import { verifyVercelToken } from './share/vercel-api.js';
 import { uploadUrlShareRecord } from './cloud.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
@@ -211,6 +218,37 @@ export function startServer(): void {
     if (removedBuilds.length > 0) console.log(`[frank] cleaned ${removedBuilds.length} share-build dir(s)`);
   } catch (e: any) {
     console.warn(`[frank] share-builds cleanup failed:`, e.message);
+  }
+  try {
+    const pending = listPendingRevokes();
+    if (pending.length > 0) {
+      console.log(`[frank] ${pending.length} pending revoke retry${pending.length === 1 ? '' : 's'} in queue`);
+    }
+    startRevokeWorker({
+      getVercelToken: () => {
+        const cfg = getVercelDeployConfig();
+        if (!cfg) return null;
+        return { token: cfg.token, teamId: cfg.teamId ?? undefined };
+      },
+      deleteDeployment: (args) =>
+        vercelDeleteDeployment({
+          token: args.token,
+          deploymentId: args.deploymentId,
+          teamId: args.teamId,
+        }),
+      onSuccess: (entry) => {
+        // Retry succeeded → record reflects the late Vercel-delete success.
+        patchRecordRevoke(entry.shareId, { vercelDeleted: true, vercelError: undefined });
+        console.log(`[frank] revoke retry succeeded for ${entry.shareId}`);
+      },
+      onFailure: (entry, error, gaveUp) => {
+        if (gaveUp) {
+          console.warn(`[frank] revoke retry gave up for ${entry.shareId} after ${entry.attemptCount} attempts: ${error}`);
+        }
+      },
+    });
+  } catch (e: any) {
+    console.warn(`[frank] revoke worker failed to start:`, e.message);
   }
   startWebSocketServer();
   startHttpServer();
@@ -647,6 +685,15 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       break;
     }
 
+    case 'list-pending-revokes': {
+      try {
+        reply({ type: 'pending-revokes-list', entries: listPendingRevokes() });
+      } catch (e: any) {
+        reply({ type: 'error', error: e.message });
+      }
+      break;
+    }
+
     case 'share-revoke-url': {
       if (!msg.shareId || !msg.revokeToken || !msg.vercelDeploymentId) {
         reply({ type: 'error', error: 'share-revoke-url requires shareId, revokeToken, vercelDeploymentId' });
@@ -678,6 +725,25 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             });
           } catch (err: any) {
             console.warn('[frank] failed to mark share record revoked:', err.message);
+          }
+          // Item 6: if Vercel delete failed but the cloud flag DID flip
+          // (link is dead but the deployment is still live), enqueue a
+          // retry. Design doc §7.2 — the privacy story depends on the
+          // deployment being torn down eventually; leaving it for the user
+          // to manually retry is hostile.
+          if (result.linkInvalidated && !result.vercelDeleted && result.vercelError) {
+            try {
+              enqueueRevoke({
+                shareId: msg.shareId,
+                vercelDeploymentId: msg.vercelDeploymentId,
+                vercelTeamId: msg.vercelTeamId ?? vercelConfig.teamId ?? undefined,
+                firstError: result.vercelError,
+              });
+              notifyRevokeEnqueued();
+              console.log(`[frank] queued revoke retry for ${msg.shareId}: ${result.vercelError}`);
+            } catch (err: any) {
+              console.warn('[frank] failed to enqueue revoke retry:', err.message);
+            }
           }
           // Clean up the on-disk working copy — a 5-10 MB dir per share
           // otherwise sits around indefinitely. Startup sweep catches any

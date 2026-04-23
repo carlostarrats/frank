@@ -132,6 +132,27 @@ export function markRecordRevoked(
 }
 
 /**
+ * Merge-update of the `revoke` sub-object. Used by the retry worker so a
+ * late-arriving Vercel-delete success can flip `vercelDeleted: true` on
+ * the record without clobbering other fields (e.g. linkInvalidated, which
+ * fired during the initial sync attempt).
+ */
+export function patchRecordRevoke(
+  shareId: string,
+  patch: Partial<NonNullable<UrlShareRecord['revoke']>>,
+): void {
+  const records = readAll();
+  const idx = records.findIndex((r) => r.shareId === shareId);
+  if (idx < 0) return;
+  const current = records[idx].revoke ?? { linkInvalidated: false, vercelDeleted: false };
+  records[idx] = {
+    ...records[idx],
+    revoke: { ...current, ...patch },
+  };
+  writeAll(records);
+}
+
+/**
  * Drop records whose expiresAt is more than `retentionDays` past the
  * expiry. Default 30 days. Called on daemon startup alongside
  * `purgeExpiredTrash` to keep the file from growing unbounded.

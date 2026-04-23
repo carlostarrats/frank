@@ -1902,6 +1902,48 @@ a.home-icon-btn { text-decoration: none; }
 .share-url-build-log-line { display: inline; }
 .share-url-build-log-stderr { color: color-mix(in oklch, var(--destructive), var(--muted-foreground) 30%); }
 .share-url-build-log-fatal  { color: var(--destructive); font-weight: 500; }
+
+/* v3.11 — pending-revoke retries (Item 6). Surfaces the revoke-queue
+ * state under the active-shares list. No buttons — worker retries
+ * autonomously; this block is purely informational. */
+.share-url-pending-section:empty { display: none; }
+.share-url-pending-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.share-url-pending-title {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.share-url-pending-title-error {
+  color: color-mix(in oklch, var(--destructive), var(--foreground) 30%);
+}
+.share-url-pending-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.share-url-pending-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 6px 10px;
+  background: color-mix(in oklch, #d4a23a, transparent 92%);
+  border: 1px solid color-mix(in oklch, #d4a23a, transparent 70%);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+}
+.share-url-pending-item code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--foreground);
+}
+.share-url-pending-meta { color: var(--muted-foreground); flex: 1; min-width: 0; }
 .share-url-progress {
   font-size: var(--text-xs);
   line-height: 1.4;

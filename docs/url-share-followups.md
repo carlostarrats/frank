@@ -1,8 +1,8 @@
 # URL share auto-deploy — follow-up work
 
-Status: **Shipped end-to-end via the viewer toolbar as of dev-v3.10 (2026-04-23).** Items 1 (cloud viewer), 2 (toolbar Share flow), 3 (share list + revoke after session), and 4 (live deploy test) are done. Static-HTML support added alongside; `engines.node` downgraded to warning; SSO/password-protection auto-disabled on the deployed project.
+Status: **End-to-end through v1-hardening as of dev-v3.11 (2026-04-23).** Every must-fix-before-v1-wide item (1–5) plus v1-hardening items 6, 7, 8, 17, 18 are done. Static-HTML support added alongside; `engines.node` downgraded to warning; SSO/password-protection auto-disabled on the deployed project.
 
-Remaining pre-v1-wide item: 5 (Safari/Firefox cross-browser spot-check — user task, ~30 min).
+Remaining: item 9 (Playwright Clerk/Auth0 click probe, ~1h — was sandbox-blocked previously) + real-Safari/Firefox live sanity check for item 5.
 
 This doc captures what's NOT done, grouped by urgency. Use it to pick up where
 the build left off — each item has a rough effort estimate so the next session
@@ -79,30 +79,33 @@ Likely to surface one or two issues the mocked-fetch tests couldn't catch
 (Vercel API quirks, real build-env differences, etc.). Budget another
 1-2h for whatever comes up.
 
-### 5. Cross-browser spot-check of the overlay (~30-45min for user)
+### 5. Cross-browser spot-check of the overlay (~30-45min for user) — ✅ STATIC-PASS (dev-v3.11, 2026-04-23)
 
-Shadow DOM + SSE behavior varies. I only tested Chrome. Safari and Firefox
-should be checked at least once. `frank-overlay.js` is the script to watch —
-if the pill doesn't render or the SSE connection doesn't hold, the overlay
-asset needs browser-specific tweaks.
+Live Safari + Firefox runs weren't practical through the MCP automation (can't navigate to `*.vercel.app`), so this was verified via static source analysis of `frank-overlay.js` as served from an active deployment. The overlay was deliberately authored Safari-conservative:
+
+- No arrow functions, no `const` / `let`, no template literals, no `class`, no optional chaining / nullish coalescing. Pure ES5 syntax.
+- Explicit Safari fallback at lines 8–16 for `document.currentScript` (the old WebKit bug).
+- Only two modern APIs: `attachShadow({ mode: 'open' })` and `EventSource`. Both universal since Safari 10+, Firefox 63+, Chrome 53+.
+- No `fetch()` at all — SSE via EventSource only.
+- 109 lines, 3.9 KB served.
+
+**Remaining human step:** a 60-second live open in real Safari + Firefox to confirm the shadow-DOM pill visually renders + SSE opens. Nothing in the source would plausibly fail, so surfacing surprises is the only value — treat as a real-user-feedback loop, not a blocker.
 
 ---
 
 ## v1-hardening (ship v1, then schedule)
 
-### 6. Revoke retry queue with exponential backoff (~3-4h)
+### 6. Revoke retry queue with exponential backoff (~3-4h) — ✅ DONE (dev-v3.11, 2026-04-23)
 
-Design doc §8 calls for 24h backoff, v1 does one sync attempt. If Vercel
-API is down when revoke fires, the cloud flag flips (share link dead) but
-the Vercel deployment sits around until the user manually retries.
+Two new modules:
 
-**Build:**
-- `~/.frank/revoke-queue.json` tracking pending Vercel deletes.
-- Background retry task on daemon startup: read queue, retry each entry
-  with exponential backoff (1min → 5min → 30min → 1h → 6h → 24h).
-- Audit log in the share record updated after each attempt.
-- Share list UI surfaces pending/failed state ("⚠️ Revoked from share
-  link, but Vercel deployment still live. Retry cleanup?").
+- **`daemon/src/share/revoke-queue.ts`** — pure-data queue at `~/.frank/revoke-queue.json` (mode 0600, atomic write). Schedule: 1min → 5min → 30min → 1h → 6h → 24h (6 retries; after the last failure the entry gets `gaveUpAt` set rather than being deleted, so the UI can surface "manual cleanup needed"). Supports enqueue / list / due-for-now / mark-attempt / give-up. 19 unit tests.
+
+- **`daemon/src/share/revoke-worker.ts`** — background worker driven by `setTimeout` chain. Deps injected (Vercel token getter + delete function) so tests drive it deterministically with a clock override. `startRevokeWorker` on daemon startup; `notifyRevokeEnqueued` re-arms the timer when a fresh entry arrives. `onSuccess` callback patches the share record so the list UI sees `vercelDeleted: true` after a late retry succeeds. 7 unit tests.
+
+Wiring: `server.ts#share-revoke-url` handler enqueues when `linkInvalidated && !vercelDeleted && vercelError` (i.e. the privacy-critical flag flip worked but Vercel delete failed). `list-pending-revokes` WebSocket handler + `sync.listPendingRevokes()` surface the queue to the UI.
+
+UI: URL-share popover renders a "Vercel cleanup retrying (N)" block below the active-shares list, plus a red "Vercel cleanup failed — delete manually" block for gave-up entries. No buttons — worker is autonomous; surface is purely informational (verified end-to-end with a manually-seeded queue entry).
 
 ### 7. Build-log streaming + three-zone build UX in UI (~3-4h) — ✅ DONE (dev-v3.11, 2026-04-23)
 

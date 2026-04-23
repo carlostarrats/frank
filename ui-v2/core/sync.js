@@ -191,6 +191,7 @@ const sync = {
     });
   },
   listUrlShares(projectId) { return send({ type: 'list-url-shares', projectId }); },
+  listPendingRevokes() { return send({ type: 'list-pending-revokes' }); },
   getVercelDeployConfig() { return send({ type: 'get-vercel-deploy-config' }); },
   setVercelDeployConfig(token, teamId) { return send({ type: 'set-vercel-deploy-config', token, teamId }); },
   clearVercelDeployConfig() { return send({ type: 'clear-vercel-deploy-config' }); },
