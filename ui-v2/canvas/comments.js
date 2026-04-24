@@ -14,6 +14,7 @@ import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { COMMENT_CURSOR } from './cursors.js';
 import { showConfirm } from '../components/confirm.js';
+import { openCommentComposer } from '../components/comment-composer.js';
 
 export const CANVAS_SCREEN_ID = 'canvas';
 
@@ -198,42 +199,16 @@ export function createCommentController({ stage, contentLayer, uiLayer, onCommit
     closeInput();
     const screenPt = worldToScreen(worldX, worldY);
     const containerRect = stage.container().getBoundingClientRect();
-
-    input = document.createElement('div');
-    input.className = 'canvas-comment-input';
-    input.style.left = `${containerRect.left + screenPt.x}px`;
-    input.style.top = `${containerRect.top + screenPt.y + 12}px`;
-    input.innerHTML = `
-      <textarea class="canvas-comment-input-textarea" rows="2" placeholder="Add a comment…" aria-label="New comment on shape"></textarea>
-      <div class="canvas-comment-input-actions">
-        <button class="btn-ghost canvas-comment-cancel">Cancel</button>
-        <button class="btn-primary canvas-comment-submit">Post</button>
-      </div>
-    `;
-    document.body.appendChild(input);
-    const ta = input.querySelector('textarea');
-    ta.focus();
-
-    const close = () => closeInput();
-    input.querySelector('.canvas-comment-cancel').addEventListener('click', close);
-    input.querySelector('.canvas-comment-submit').addEventListener('click', () => {
-      const text = ta.value.trim();
-      if (!text) { close(); return; }
-      onSubmit(text);
-      close();
+    const handle = openCommentComposer({
+      clientX: containerRect.left + screenPt.x,
+      clientY: containerRect.top + screenPt.y,
+      onSubmit,
     });
-    ta.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close();
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-        const text = ta.value.trim();
-        if (text) onSubmit(text);
-        close();
-      }
-    });
+    input = { close: handle.close };
   }
 
   function closeInput() {
-    if (input) { input.remove(); input = null; }
+    if (input) { input.close(); input = null; }
   }
 
   // ─── Pop-over on pin click ───────────────────────────────────────────────

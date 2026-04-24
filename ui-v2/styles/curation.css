@@ -10,13 +10,42 @@
 .curation-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
 .curation-header h3 {
   font-size: var(--text-sm);
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+/* Close X sits in the top-right of the feedback header, matching every
+ * other modal/dismiss affordance in the app. margin-left:auto pushes it to
+ * the right edge without depending on a specific header layout. */
+.curation-close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+.curation-close:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.curation-close:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .curation-filters {

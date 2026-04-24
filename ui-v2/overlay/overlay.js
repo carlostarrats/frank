@@ -1,89 +1,50 @@
 // overlay.js — Transparent overlay controller
-import { findMeaningfulElement } from './element-detect.js';
-import { createAnchor, createPinAnchor } from './anchoring.js';
-import { showHighlight, showSelected, clearHighlight, clearSelected } from './highlight.js';
-import { COMMENT_CURSOR } from '../canvas/cursors.js';
+//
+// Click-anywhere commenting, identical to canvas + the reviewer overlay:
+//   - enabling comment mode puts `comment-mode` on the overlay div, which
+//     captures clicks (pointer-events: auto) and shows a crosshair cursor
+//   - a click on the overlay drops a free pin at the click point and opens
+//     a small composer popover in place (same CSS class as the canvas
+//     composer so they're visually identical)
+//   - submit posts the comment via the callback; cancel / Esc discards
+//
+// Capturing clicks on the overlay div (not the iframe's contentDocument)
+// means cross-origin iframes work too — we never need to reach inside.
+import { createPinAnchor } from './anchoring.js';
+import { openCommentComposer } from '../components/comment-composer.js';
 
 let commentMode = false;
-let onCommentCreate = null;
+let onCommentSubmit = null;
 let currentIframe = null;
+let currentOverlayEl = null;
+let composerEl = null;
 
-export function setupOverlay(iframeEl, callbacks) {
+export function setupOverlay(iframeEl, overlayEl, callbacks) {
   currentIframe = iframeEl;
-  onCommentCreate = callbacks.onCommentCreate;
+  currentOverlayEl = overlayEl;
+  onCommentSubmit = callbacks.onCommentSubmit;
 
-  iframeEl.addEventListener('load', () => {
-    try {
-      const doc = iframeEl.contentDocument;
-      if (!doc) return;
-
-      doc.addEventListener('mousemove', (e) => {
-        if (!commentMode) return;
-        const target = findMeaningfulElement(e.target);
-        showHighlight(target, iframeEl);
-      });
-
-      doc.addEventListener('click', (e) => {
-        if (!commentMode) return;
-        e.preventDefault();
-        e.stopPropagation();
-
-        const target = findMeaningfulElement(e.target);
-        const iframeRect = iframeEl.getBoundingClientRect();
-
-        // Empty-space click (no meaningful element above the target) drops a
-        // free pin at the click coords — same behavior as canvas. Otherwise
-        // anchor to the found element with the triple-anchor strategy.
-        const isEmptyClick = !target || target === doc.body || target === doc.documentElement;
-        let anchor;
-        if (isEmptyClick) {
-          // e.clientX/Y are relative to the iframe's own viewport.
-          anchor = createPinAnchor(e.clientX, e.clientY, { width: iframeRect.width, height: iframeRect.height });
-          clearHighlight();
-          clearSelected();
-        } else {
-          showSelected(target, iframeEl);
-          clearHighlight();
-          anchor = createAnchor(target, iframeRect);
-        }
-
-        if (onCommentCreate) {
-          onCommentCreate(anchor, isEmptyClick ? null : target);
-        }
-      });
-
-      doc.addEventListener('mouseleave', () => {
-        clearHighlight();
-      });
-    } catch (e) {
-      console.warn('[overlay] cannot attach to iframe (cross-origin):', e.message);
-    }
+  overlayEl.addEventListener('click', (e) => {
+    if (!commentMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const iframeRect = iframeEl.getBoundingClientRect();
+    const relX = e.clientX - iframeRect.left;
+    const relY = e.clientY - iframeRect.top;
+    const anchor = createPinAnchor(relX, relY, { width: iframeRect.width, height: iframeRect.height });
+    openComposer(e.clientX, e.clientY, anchor);
   });
 }
 
 export function enableCommentMode() {
   commentMode = true;
-  // Custom speech-bubble-plus cursor — same one the canvas uses so the two
-  // surfaces feel identical. Applied to the iframe body (cross-origin blocks
-  // access; we fall back to the default cursor in that case).
-  if (currentIframe) {
-    try {
-      const doc = currentIframe.contentDocument;
-      if (doc) doc.body.style.cursor = COMMENT_CURSOR;
-    } catch { /* cross-origin */ }
-  }
+  if (currentOverlayEl) currentOverlayEl.classList.add('comment-mode');
 }
 
 export function disableCommentMode() {
   commentMode = false;
-  clearHighlight();
-  clearSelected();
-  if (currentIframe) {
-    try {
-      const doc = currentIframe.contentDocument;
-      if (doc) doc.body.style.cursor = '';
-    } catch { /* cross-origin */ }
-  }
+  if (currentOverlayEl) currentOverlayEl.classList.remove('comment-mode');
+  closeComposer();
 }
 
 export function toggleCommentMode() {
@@ -94,4 +55,18 @@ export function toggleCommentMode() {
 
 export function isCommentModeActive() {
   return commentMode;
+}
+
+// Shared composer — identical DOM/CSS/drag behavior with canvas.
+function closeComposer() {
+  if (composerEl) { composerEl.close(); composerEl = null; }
+}
+
+function openComposer(clientX, clientY, anchor) {
+  closeComposer();
+  composerEl = openCommentComposer({
+    clientX,
+    clientY,
+    onSubmit: (text) => { if (onCommentSubmit) onCommentSubmit(anchor, text); },
+  });
 }

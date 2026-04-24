@@ -79,6 +79,35 @@ const proxyTargets = new Map<string, string>();
 // removed on revoke-share / SIGINT.
 const liveShares = new Map<string, LiveShareController>();
 
+// Wraps listProjects() to attach runtime liveShare state from the in-memory
+// map. Home cards render a LIVE badge off this — without enrichment the
+// badge would only appear after the next state broadcast tick.
+function listProjectsEnriched() {
+  return listProjects().map((p) => {
+    let project;
+    try { project = loadProject(p.projectId); } catch { return p; }
+    const enriched = { ...p };
+    if (project.activeShare) enriched.hasShare = true;
+    // URL-share auto-deploy writes share-records instead of activeShare; a
+    // project with only an auto-deploy share still counts as shared.
+    if (!enriched.hasShare) {
+      try {
+        if (listShareRecords({ projectId: p.projectId }).length > 0) enriched.hasShare = true;
+      } catch { /* best-effort */ }
+    }
+    const ctl = liveShares.get(p.projectId);
+    if (ctl) {
+      const diskLive = project.activeShare?.live;
+      if (diskLive?.paused) {
+        enriched.liveShare = { status: 'paused', viewers: ctl.viewers };
+      } else if (diskLive) {
+        enriched.liveShare = { status: 'live', viewers: ctl.viewers };
+      }
+    }
+    return enriched;
+  });
+}
+
 function liveShareRate(contentType: 'canvas' | 'image' | 'pdf' | 'url'): number {
   if (contentType === 'canvas') return 15;
   if (contentType === 'pdf') return 5;
@@ -383,7 +412,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
   switch (msg.type) {
     case 'list-projects': {
       try {
-        const projects = listProjects();
+        const projects = listProjectsEnriched();
         reply({ type: 'project-list', projects });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
@@ -423,6 +452,11 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             lastError: null,
           });
         }
+        // Pull cloud comments immediately — otherwise the author waits up to
+        // 30s (the setInterval cadence) after opening a project to see new
+        // reviewer feedback. Don't block the reply; if anything new arrives,
+        // the function broadcasts project-loaded and the UI re-renders.
+        void syncCloudComments();
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -478,7 +512,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       try {
         deleteProject(msg.projectId);
         if (activeProjectId === msg.projectId) activeProjectId = null;
-        reply({ type: 'project-list', projects: listProjects() });
+        reply({ type: 'project-list', projects: listProjectsEnriched() });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -488,7 +522,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'rename-project': {
       try {
         renameProject(msg.projectId, msg.name);
-        reply({ type: 'project-list', projects: listProjects() });
+        reply({ type: 'project-list', projects: listProjectsEnriched() });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -837,7 +871,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'archive-project': {
       try {
         archiveProject(msg.projectId);
-        reply({ type: 'project-list', projects: listProjects() });
+        reply({ type: 'project-list', projects: listProjectsEnriched() });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -847,7 +881,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'unarchive-project': {
       try {
         unarchiveProject(msg.projectId);
-        reply({ type: 'project-list', projects: listProjects() });
+        reply({ type: 'project-list', projects: listProjectsEnriched() });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -858,7 +892,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       try {
         trashProject(msg.projectId);
         if (activeProjectId === msg.projectId) activeProjectId = null;
-        reply({ type: 'project-list', projects: listProjects() });
+        reply({ type: 'project-list', projects: listProjectsEnriched() });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -868,7 +902,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'restore-project': {
       try {
         restoreProject(msg.projectId);
-        reply({ type: 'project-list', projects: listProjects() });
+        reply({ type: 'project-list', projects: listProjectsEnriched() });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -879,7 +913,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
       try {
         deleteProject(msg.projectId);
         if (activeProjectId === msg.projectId) activeProjectId = null;
-        reply({ type: 'project-list', projects: listProjects() });
+        reply({ type: 'project-list', projects: listProjectsEnriched() });
       } catch (e: any) {
         reply({ type: 'error', error: e.message });
       }
@@ -1474,22 +1508,37 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
 
 async function syncCloudComments(): Promise<void> {
   if (!activeProjectId) return;
+  const projectId = activeProjectId; // pin — activeProjectId may change during await
   try {
-    const project = loadProject(activeProjectId);
-    if (!project.activeShare?.id) return;
+    const project = loadProject(projectId);
 
-    const cloudComments = await fetchShareComments(project.activeShare.id);
-    if (cloudComments.length === 0) return;
+    // Collect every shareId this project could have received comments on.
+    // Canvas / PDF / image async shares live on project.activeShare; URL-share
+    // auto-deploy shares live in ~/.frank/share-records.json (possibly many
+    // per project). Previously this only pulled from activeShare, so URL
+    // auto-deploy reviewer comments never flowed back to the author.
+    const shareIds = new Set<string>();
+    if (project.activeShare?.id) shareIds.add(project.activeShare.id);
+    try {
+      for (const r of listShareRecords({ projectId })) shareIds.add(r.shareId);
+    } catch { /* best-effort */ }
+    if (shareIds.size === 0) return;
 
-    const { newCount } = mergeCloudComments(activeProjectId, cloudComments);
+    const allCloud: Array<{ id: string; author: string; screenId: string; anchor: unknown; text: string; ts: string }> = [];
+    for (const sid of shareIds) {
+      const cc = await fetchShareComments(sid);
+      if (cc.length) allCloud.push(...cc);
+    }
+    if (allCloud.length === 0) return;
+
+    const { newCount } = mergeCloudComments(projectId, allCloud);
     if (newCount > 0) {
-      // Update unseen count
-      project.activeShare.unseenNotes = (project.activeShare.unseenNotes || 0) + newCount;
-      saveProject(activeProjectId, project);
-
-      // Broadcast to connected clients
-      const allComments = loadComments(activeProjectId);
-      broadcast({ type: 'project-loaded', projectId: activeProjectId, project, comments: allComments } as any);
+      if (project.activeShare) {
+        project.activeShare.unseenNotes = (project.activeShare.unseenNotes || 0) + newCount;
+        saveProject(projectId, project);
+      }
+      const allComments = loadComments(projectId);
+      broadcast({ type: 'project-loaded', projectId, project, comments: allComments } as any);
       console.log(`[frank] synced ${newCount} new comment(s) from cloud`);
     }
   } catch {

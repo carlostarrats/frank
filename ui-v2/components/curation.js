@@ -20,7 +20,7 @@ const PIN_PALETTE = [
   '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
 ];
 
-export function renderCuration(container, { screenId }) {
+export function renderCuration(container, { screenId, onClose }) {
   function render() {
     const allComments = screenId
       ? projectManager.getCommentsForScreen(screenId)
@@ -34,6 +34,7 @@ export function renderCuration(container, { screenId }) {
       <div class="curation-panel">
         <div class="curation-header">
           <h3>Feedback (${allComments.length}${selectedIds.size > 0 ? ` · ${selectedIds.size} selected` : ''})</h3>
+          ${onClose ? '<button type="button" class="curation-close" aria-label="Close feedback panel" title="Close feedback">✕</button>' : ''}
         </div>
         <div class="curation-filters">
           ${['all', 'pending', 'approved', 'dismissed'].map(f =>
@@ -108,6 +109,10 @@ export function renderCuration(container, { screenId }) {
         </div>
       </div>
     `;
+
+    // Close button (only present when onClose was provided)
+    const closeBtn = container.querySelector('.curation-close');
+    if (closeBtn && onClose) closeBtn.addEventListener('click', onClose);
 
     // Filters
     container.querySelectorAll('.curation-filter').forEach(btn => {

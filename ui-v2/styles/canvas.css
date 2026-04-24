@@ -383,6 +383,27 @@
   flex-direction: column;
   gap: 8px;
 }
+/* Small drag strip at the top — pointerdown here moves the whole composer.
+ * Lets users pull the box out from under a content edge or reposition it
+ * so the composer doesn't hide what they're trying to comment on. */
+.canvas-comment-input-drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  margin: -4px -4px 0;
+  border-radius: var(--radius-sm);
+  cursor: move;
+  color: var(--muted-foreground);
+  user-select: none;
+}
+.canvas-comment-input-drag:hover { background: var(--muted); }
+.canvas-comment-input-grip {
+  font-size: 11px;
+  letter-spacing: 2px;
+  line-height: 1;
+  pointer-events: none;
+}
 .canvas-comment-input-textarea {
   width: 100%;
   padding: 6px 8px;

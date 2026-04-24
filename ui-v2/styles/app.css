@@ -1042,6 +1042,68 @@ a.home-icon-btn { text-decoration: none; }
   font-size: var(--text-xs);
   color: var(--muted-foreground);
 }
+/* Name + inline LIVE badge sit on one row so the badge flows next to the
+ * project title instead of wrapping under it on narrow cards. */
+.project-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.project-card-name-row .project-card-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-card-live-badge-host {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.project-card-live-badge-host[hidden] {
+  display: none;
+}
+/* Matches .toolbar-live-badge visually but non-interactive — clicking the
+ * card already opens the project, so a second click target inside the row
+ * would be ambiguous for keyboard nav. */
+.project-card-live-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-round);
+  animation: toolbar-live-pulse 2s ease-in-out infinite;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* "Shared" chip — shows when a share link is active but not live. Same pill
+ * shape as LIVE but muted + static so it reads as ambient state rather than
+ * a live signal. LIVE wins when both could apply. */
+.project-card-shared-badge-host { display: inline-flex; align-items: center; flex-shrink: 0; }
+.project-card-shared-badge-host[hidden] { display: none; }
+.project-card-shared-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--space-2);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-round);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.project-card-shared-badge svg { flex-shrink: 0; }
 .project-card-actions { opacity: 0; transition: opacity 0.15s; }
 .project-card:hover .project-card-actions { opacity: 1; }
 .project-menu-btn {

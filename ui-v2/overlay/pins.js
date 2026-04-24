@@ -31,27 +31,12 @@ export function createViewerPinRenderer({ hostEl, overlayEl, screenId }) {
   let popover = null;
 
   function resolveAnchorPoint(comment) {
+    // All commenting is click-anywhere now: anchor.x / anchor.y are viewport
+    // percentages of the iframe at creation time. Pin lands at that same
+    // fraction of the current host rect. Legacy element-anchored comments
+    // still carry x/y too, so they render — just at their stored fraction
+    // instead of tracking the element.
     const a = comment.anchor || {};
-
-    // For element-anchored comments, try to resolve the live element first
-    // (works for same-origin / proxied). This gives accurate coordinates
-    // even if the layout has shifted since the comment was made.
-    if (a.type !== 'pin') {
-      try {
-        const doc = hostEl.contentDocument;
-        if (doc && (a.cssSelector || a.domPath)) {
-          const el = doc.querySelector(a.cssSelector) || doc.querySelector(a.domPath);
-          if (el) {
-            const r = el.getBoundingClientRect();
-            return { x: r.left + r.width / 2, y: r.top };
-          }
-        }
-      } catch { /* cross-origin — fall through */ }
-    }
-
-    // Fallback: anchor.x / anchor.y were stored as percentages of the host's
-    // width/height at creation time (see anchoring.js createAnchor /
-    // createPinAnchor). Convert back to pixels against the current host size.
     const hostRect = hostEl.getBoundingClientRect();
     const pctX = typeof a.x === 'number' ? a.x : 0;
     const pctY = typeof a.y === 'number' ? a.y : 0;

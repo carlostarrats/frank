@@ -265,7 +265,12 @@ export function renderCanvas(container, { onBack }) {
 
   // Curation sidebar mirrors the viewer layout; filters to 'canvas' screen.
   const curationHost = container.querySelector('#canvas-curation-host');
-  renderCuration(curationHost, { screenId: CANVAS_SCREEN_ID });
+  renderCuration(curationHost, {
+    screenId: CANVAS_SCREEN_ID,
+    // X in the feedback header turns comment mode off, which in turn closes
+    // the curation host (see the .curation-host 'open' class toggle below).
+    onClose: () => comments.setMode('off'),
+  });
 
   const commentToggleBtn = container.querySelector('#canvas-comment-toggle');
   commentToggleBtn.addEventListener('click', () => {

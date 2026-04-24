@@ -5,7 +5,6 @@ import { renderToolbar, syncToolbarLiveBadge } from '../components/toolbar.js';
 import { setupOverlay, toggleCommentMode, disableCommentMode, isCommentModeActive } from '../overlay/overlay.js';
 import { createViewerPinRenderer } from '../overlay/pins.js';
 import { renderCuration } from '../components/curation.js';
-import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent, buildMediaFileSnapshot } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
 import { renderErrorCard } from '../components/error-card.js';
@@ -30,7 +29,10 @@ export function renderViewer(container, { onBack }) {
   renderToolbar(container.querySelector('#viewer-toolbar'), {
     projectName: project.name,
     url: project.url || project.file || '',
-    onBack,
+    // Disable comment mode before leaving so any highlight/selected rectangle
+    // the overlay drew on document.body is removed. Without this, the dashed
+    // highlight from the viewer survives into the home view.
+    onBack: () => { disableCommentMode(); onBack(); },
     projectId: projectManager.getId(),
   });
   syncToolbarLiveBadge(projectManager.getId());
@@ -56,10 +58,19 @@ export function renderViewer(container, { onBack }) {
   }
   function leaveCommentModeFromUi() {
     if (isCommentModeActive()) toggleCommentMode();
+    // Closing the sidebar when leaving comment mode makes the toolbar
+    // comment button a true toggle: click-open, click-close. Before this,
+    // the sidebar stayed sticky and only the mode flipped, so there was no
+    // way to dismiss the feedback drawer from the toolbar.
+    sidebar.classList.remove('open');
     syncCommentModeUi();
   }
   function toggleCommentModeFromUi() {
-    isCommentModeActive() ? leaveCommentModeFromUi() : enterCommentModeFromUi();
+    // Whole drawer is one unit: open if either sidebar is closed or comment
+    // mode is off; close if both are currently "on".
+    const open = sidebar.classList.contains('open') || isCommentModeActive();
+    if (open) leaveCommentModeFromUi();
+    else enterCommentModeFromUi();
   }
 
   if (commentToggle) {
@@ -79,7 +90,7 @@ export function renderViewer(container, { onBack }) {
   // Must use the same fallback as onCommentCreate below ('default') so the
   // panel + pins read comments at the same screenId they were written with.
   const screenId = Object.keys(project.screens || {})[0] || 'default';
-  renderCuration(sidebar, { screenId });
+  renderCuration(sidebar, { screenId, onClose: leaveCommentModeFromUi });
 
   // Manual snapshot trigger from toolbar — button flashes like the canvas
   // snapshot button for visual consistency.
@@ -210,18 +221,31 @@ export function renderViewer(container, { onBack }) {
     if (pinRenderer) pinRenderer.setFocused(e.detail?.id ?? null);
   });
 
+  // Wires comment-on-click for any host + overlay pair. Loaders call this
+  // once their DOM is ready, so URL / PDF / image all share the exact same
+  // commenting pipeline — crosshair, click anywhere, floating composer.
+  function mountCommenting(hostEl, overlayEl) {
+    setupOverlay(hostEl, overlayEl, {
+      onCommentSubmit(anchor, text) {
+        sync.addComment(screenId, anchor, text);
+        disableCommentMode();
+        syncCommentModeUi();
+      },
+    });
+  }
+
   if (project.contentType === 'url' && project.url) {
-    loadUrlContent(contentEl, project.url, mountPinRenderer);
+    loadUrlContent(contentEl, project.url, mountPinRenderer, mountCommenting);
   } else if (project.contentType === 'pdf' && project.file) {
-    loadPdfContent(contentEl, project.file, mountPinRenderer);
+    loadPdfContent(contentEl, project.file, mountPinRenderer, mountCommenting);
   } else if (project.contentType === 'image' && project.file) {
-    loadImageContent(contentEl, project.file, mountPinRenderer);
+    loadImageContent(contentEl, project.file, mountPinRenderer, mountCommenting);
   } else {
     contentEl.innerHTML = '<div class="viewer-error">No content to display</div>';
   }
 }
 
-async function loadUrlContent(container, url, mountPins) {
+async function loadUrlContent(container, url, mountPins, onOverlayReady) {
   container.innerHTML = `
     <div class="iframe-wrapper" id="iframe-wrapper">
       <iframe
@@ -237,22 +261,7 @@ async function loadUrlContent(container, url, mountPins) {
   const iframe = container.querySelector('#content-iframe');
   const overlayEl = container.querySelector('#overlay');
   mountPins?.(iframe, overlayEl);
-
-  // Setup overlay immediately — it listens for load events internally
-  setupOverlay(iframe, {
-    onCommentCreate(anchor, targetElement) {
-      const sidebar = document.querySelector('#viewer-sidebar');
-      if (sidebar && !sidebar.classList.contains('open')) {
-        sidebar.classList.add('open');
-      }
-      showCommentInput(sidebar, anchor, (anchor, text) => {
-        const screenId = Object.keys(projectManager.get()?.screens || {})[0] || 'default';
-        sync.addComment(screenId, anchor, text);
-        disableCommentMode();
-        syncCommentModeUi();
-      });
-    },
-  });
+  onOverlayReady?.(iframe, overlayEl);
 
   iframe.addEventListener('error', () => fallbackToProxy(container, url));
 
@@ -338,7 +347,7 @@ async function fallbackToProxy(container, url) {
   }
 }
 
-function loadPdfContent(container, filePath, mountPins) {
+function loadPdfContent(container, filePath, mountPins, onOverlayReady) {
   container.innerHTML = `
     <div class="iframe-wrapper">
       <iframe
@@ -352,9 +361,10 @@ function loadPdfContent(container, filePath, mountPins) {
   const iframe = container.querySelector('#content-iframe');
   const overlayEl = container.querySelector('#overlay');
   mountPins?.(iframe, overlayEl);
+  onOverlayReady?.(iframe, overlayEl);
 }
 
-function loadImageContent(container, filePath, mountPins) {
+function loadImageContent(container, filePath, mountPins, onOverlayReady) {
   container.innerHTML = `
     <div class="image-wrapper">
       <img
@@ -433,6 +443,9 @@ function loadImageContent(container, filePath, mountPins) {
   };
   img.addEventListener('load', onLoad, { once: true });
   if (img.complete) onLoad();
+  // Commenting doesn't need to wait for the image bytes — clicks on the
+  // overlay work the moment comment mode flips on.
+  onOverlayReady?.(img, overlayEl);
 }
 
 function autoAddScreen(newUrl) {
