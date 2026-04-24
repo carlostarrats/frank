@@ -6,7 +6,7 @@ A local-first collaboration layer. Point it at any URL — localhost, staging, p
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
 Latest tagged release: `v3.0` (canvas live share + async share for URL/PDF/image).
-Current branch: `dev-v3.12` (post-v3.0 shipping: intent field, bundle-first download, MCP server, **URL share auto-deploy** end-to-end — toolbar Share flow, cloud viewer, active-shares list, revoke retry queue, build-log streaming, `frank share` CLI, static-HTML support, Frank-styled confirm modal).
+Current branch: `dev-v3.13` (post-v3.0 shipping: intent field, bundle-first download, MCP server, **URL share auto-deploy** end-to-end — toolbar Share flow, cloud viewer, active-shares list, revoke retry queue, build-log streaming, `frank share` CLI, static-HTML support, Frank-styled confirm modal, unified commenting UX + design-system audit + home LIVE/Shared pills).
 
 ## Scope — what ships and what's NOT on the roadmap
 
@@ -25,6 +25,10 @@ Current branch: `dev-v3.12` (post-v3.0 shipping: intent field, bundle-first down
 - **Frank-styled confirm dialog** — `ui-v2/components/confirm.js` replaces `window.confirm()` across 9 call sites (home delete / trash, share revokes, comment deletes, curation batch delete, viewer sensitive-content share). Sharp corners match design system, focus-trapped, Escape / overlay-click / Cancel all resolve false.
 - **Live-share polish** — Resume after daemon restart (in-memory controller recreated on resume), optimistic spinner on pause/resume, custom expiry dropdown (1d / 1w / 1mo / 1y / custom), state broadcast across all panel clients (fixes cross-browser live-share visibility).
 - **UI polish** — clickable LIVE badge opens share modal; image wheel-zoom with toolbar pill; home card menu clamps inside viewport.
+- **Unified commenting UX (dev-v3.13)** — one shared composer (`ui-v2/components/comment-composer.js`) used by canvas, viewer, and the reviewer overlay baked into every URL-share deploy. All three surfaces: plain `crosshair` cursor, click-anywhere drops a free pin at the click point (no element detection, no hover dashed outline, no selection rectangle), same floating `.canvas-comment-input` with `⋮⋮` drag-grip at the top + Cancel / Post. Reviewer overlay (`daemon/src/share/overlay-source.ts`) ships a visual twin inside its shadow DOM since it can't reach Frank's stylesheet.
+- **Home card share indicators (dev-v3.13)** — `ProjectSummary` gained `liveShare` + `hasShare`, populated by `listProjectsEnriched()` reading the in-memory live-share map AND `share-records.json` (so URL auto-deploy projects also surface as Shared). Cards render a red pulsing **LIVE · N** pill for active live sessions, a muted **Shared** chip for any project with an active share record.
+- **URL-share reviewer comments sync back (dev-v3.13)** — `syncCloudComments` was only reading from `project.activeShare.id`; URL auto-deploy shares write to `share-records.json` instead, so reviewer comments were stored on frank-cloud but invisible to the author. Now collects shareIds from both sources and merges. Plus a one-shot sync kicks off on `load-project` so the author sees current cloud state without waiting 30s for the poll tick.
+- **Design-system audit (dev-v3.13)** — one button system (`.btn-primary / .btn-secondary / .btn-ghost / .btn-destructive` + `.btn-sm` size modifier); one input system (`.input` + `textarea.input` extension); `.ui-checkbox` on the curation drawer checkbox for sharp-cornered rendering; every hardcoded `border-radius` replaced with `var(--radius-round)` or `var(--radius-sm)`. Dropped the parallel `.v-btn* / .v-input*` CSS blocks and the one-off `.share-url-existing-copy/revoke/source-change` rules (~145 lines of drift). Feedback drawer gets an X in the top-right; toolbar comment button is now a true toggle (click-open, click-close). Share modal closes on Escape like every other modal. See `daemon/frank-audit.mjs` for the 59-test harness that verified the audit + every MCP tool.
 
 Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 URL share auto-deploy design doc: [`docs/url-share-auto-deploy-design.md`](docs/url-share-auto-deploy-design.md) (rev 4, post-calibration).
@@ -207,7 +211,8 @@ frank/
 │   │   ├── share-records.ts  # Local ~/.frank/share-records.json persistence + share-builds cleanup (startup sweep + per-revoke removal by buildDirName)
 │   │   ├── revoke-queue.ts   # ~/.frank/revoke-queue.json — pending Vercel-delete retries with 1m/5m/30m/1h/6h/24h backoff
 │   │   └── revoke-worker.ts  # Background worker draining revoke-queue on startup + re-armed on enqueue
-│   └── src/*.test.ts         # Vitest tests (377 across 29 files; 9 more in the opt-in cloud integration harness)
+│   ├── src/*.test.ts         # Vitest tests (377 across 29 files; 9 more in the opt-in cloud integration harness)
+│   └── frank-audit.mjs       # End-to-end quality harness for CLI + MCP. Spawns `frank mcp` over stdio, runs 59 quality assertions against every subcommand + every MCP tool (shape round-trips, anchor fields, forbidden-tool absence). Re-run with `node frank-audit.mjs` when touching CLI or MCP surface.
 ├── frank-cloud/              # Reference cloud backend — Vercel + Blob (users host their own)
 │   ├── api/                  # Serverless functions (share, comment, health)
 │   ├── public/viewer/        # Share viewer page (iframe OR canvas render via Konva CDN)
@@ -259,41 +264,65 @@ frank/
 
 | View | What it shows |
 |---|---|
-| **Home** | Project list + URL/file entry. **Tabs** (Recent / Archived / Deleted) replace the old collapsible sections. Search / sort / type-filter chips below the tab. Cards support **inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete**. Keyboard: ↑/↓ between cards, Enter to open, Delete to trash, F2 to rename. Header has a **Settings** cog (cloud backend config) and **Help** button. |
-| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar. **Numbered colored pins** render on the overlay for each comment; click → same draggable Close/Edit/Delete popover used by canvas; feedback-row click → pin pulses. Empty-space clicks drop free pins. Proxy failures render an inline **error card with Retry**. |
-| **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Intent pill** (amber/green), **shape- and pin-anchored comments** (SVG icon, speech-bubble-plus cursor), **Bookmark moment** (camera icon — captures canvas state + thumbnail to the timeline), **Share** (link icon, live-share toggle, clickable LIVE·N badge), **Download** (bundle zip), **Export dropdown** (PNG / SVG / PDF / JSON), **undo** (button + Cmd+Z), **timeline** (shared event with viewer), **Cmd+C / Cmd+V / Cmd+D** copy/paste/duplicate shapes, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
+| **Home** | Project list + URL/file entry. **Tabs** (Recent / Archived / Deleted) replace the old collapsible sections. Search / sort / type-filter chips below the tab. Cards support **inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete**. Cards also surface share state: red pulsing **LIVE · N** pill for active live sessions, muted **Shared** chip for projects with an active share record. Keyboard: ↑/↓ between cards, Enter to open, Delete to trash, F2 to rename. Header has a **Settings** cog (cloud backend config) and **Help** button. |
+| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar. Commenting is **click-anywhere**: crosshair cursor, every click drops a free pin at the click point (no element detection, no hover dashed outline). **Numbered colored pins** render on the overlay; click → draggable Close / Edit / Delete popover (`.canvas-comment-popover`); feedback-row click → pin pulses. The **X** in the top-right of the feedback drawer closes it + exits comment mode; clicking the toolbar comment button a second time does the same. Proxy failures render an inline **error card with Retry**. |
+| **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Intent pill** (amber/green), **shape-anchored comments** (crosshair cursor — clicking a shape anchors to it; clicking empty canvas drops a free pin), **Bookmark moment** (camera icon — captures canvas state + thumbnail to the timeline), **Share** (link icon, live-share toggle, clickable LIVE·N badge), **Download** (bundle zip), **Export dropdown** (PNG / SVG / PDF / JSON), **undo** (button + Cmd+Z), **timeline** (shared event with viewer), **Cmd+C / Cmd+V / Cmd+D** copy/paste/duplicate shapes, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
 | **Timeline** | Chronological view of comments + bookmarks + curations + AI instructions. Canvas bookmarks show a Canvas badge + inline thumbnail. **Show folder** (reveal in Finder/Explorer) + unified **Export** dropdown (JSON / Markdown / PDF). Close (X) returns to canvas or viewer depending on the project. |
 
-## Commenting — unified across viewer and canvas
+## Commenting — unified across canvas, viewer, and URL-share reviewer overlay
 
-As of v2.04 the two surfaces share one commenting UX end-to-end. Anything
-that touches pins, popovers, curation, or feedback-to-AI should stay
-unified on both sides.
+As of dev-v3.13 every commenting surface in Frank uses the same UX. A
+reviewer leaving feedback on a Vercel-deployed share sees the same composer
+a user sees inside the Frank viewer or on a canvas. Changes to the commenting
+UX need to land in all three places.
 
+- **Create composer — `ui-v2/components/comment-composer.js`** — a single
+  shared helper. Canvas (`canvas/comments.js openCreateInput`) and viewer
+  (`overlay/overlay.js openComposer`) both call `openCommentComposer({
+  clientX, clientY, onSubmit })`. Renders a 260px floating `.canvas-comment-input`
+  at the click point with a `⋮⋮` drag-grip strip, textarea, and right-aligned
+  **Cancel / Post** buttons. Cmd/Ctrl+Enter submits; Escape cancels; dragging
+  the grip clamps so 40px always stays visible. The **reviewer overlay**
+  (`daemon/src/share/overlay-source.ts`) ships a visual twin inside its shadow
+  DOM — same drag handle, same button labels, matching dark-theme styling —
+  because the shadow root can't reach Frank's stylesheet.
+- **Cursor** — `COMMENT_CURSOR` from `ui-v2/canvas/cursors.js` is plain
+  `'crosshair'`. Applied on the canvas stage container (`canvas/comments.js`)
+  and on the viewer's `.overlay` div via the `comment-mode` class
+  (`app.css` → `.overlay.comment-mode { cursor: crosshair }`). The reviewer
+  overlay's `.intercept` layer uses the same CSS cursor.
+- **Click-anywhere pinning** — every click in comment mode drops a free pin
+  at the click point. No element detection, no hover dashed outline, no
+  "select the thing" rectangle. Canvas emits `{ type: 'pin', x, y }` in world
+  coords (or `{ type: 'shape', shapeId, ... }` when the click lands on an
+  existing shape — shapes are first-class content on canvas). Viewer + reviewer
+  emit `{ type: 'pin', x, y }` with x/y as viewport percentages.
 - **Pin rendering** — canvas uses Konva circles on `uiLayer`; viewer uses
-  absolutely-positioned HTML buttons on `.overlay`. Both use the same
-  `PIN_PALETTE` (10 hues cycled by comment index) and the same visual
-  grammar (circle + number, subtle shadow). Stale canvas pins go dashed/grey.
-- **Popover** — uses the `.canvas-comment-popover` CSS class in both
-  surfaces. Draggable by its header, clamped inside the viewport on open.
-  Buttons: Close / Edit / Delete. Edit dispatches `frank:edit-comment` →
-  feedback panel opens, scrolls to the row, enters inline edit mode.
-- **Comment-mode cursor** — `COMMENT_CURSOR` (speech-bubble + plus SVG) is
-  exported from `canvas/cursors.js` and applied in both the canvas stage and
-  (on same-origin iframes) the viewer iframe body.
-- **Free-pin on empty click** — both surfaces support it. Canvas emits
-  `{ type: 'pin', x, y }` in world coords; viewer emits the same shape with
-  x/y as percentages of the iframe viewport.
-- **Feedback panel** — same `renderCuration` component mounted in both
-  sidebars. Click a row to focus it (subtle tint + accented border) and
-  trigger a continuous pulse on the matching pin. Click again to clear.
-  Status toggles (approve/dismiss) are two-way: clicking the active
-  status resets to pending via the `reset` curation action.
+  absolutely-positioned HTML buttons on `.overlay`; reviewer overlay uses
+  shadow-DOM buttons. All three use the same `PIN_PALETTE` (10 hues cycled by
+  comment index) and the same visual grammar (circle + number, subtle shadow).
+  Stale canvas pins (deleted shape) go dashed/grey.
+- **Read popover (click an existing pin)** — uses the `.canvas-comment-popover`
+  CSS class on canvas + viewer. Draggable by its header, clamped inside the
+  viewport on open. Buttons: Close / Edit / Delete. Edit dispatches
+  `frank:edit-comment` → feedback panel opens, scrolls to the row, enters
+  inline edit mode. Reviewer overlay's read popover uses `.read-popover`
+  inside the shadow DOM with a matching drag strip and a single Close button
+  (reviewers don't edit or delete; that's the author's job).
+- **Feedback drawer** — `renderCuration` mounts into both the viewer sidebar
+  and the canvas curation host. X in the top-right closes it; clicking the
+  toolbar comment button a second time also closes it. Feedback row click
+  focuses the row and triggers a continuous pulse on the matching pin.
+  Status toggles (approve/dismiss) are two-way: clicking the active status
+  resets to pending via the `reset` curation action. Checkbox uses
+  `.ui-checkbox` (sharp-cornered, matches the rest of the design system).
 - **Data flow** — the daemon broadcasts `project-loaded` after every
   curate/delete/remix action; `app.js` handles the broadcast and calls
   `projectManager.setFromLoaded()`, which re-renders both the feedback
-  panel and the pins. Before v2.04 the broadcast was ignored, which is
-  why status changes appeared to do nothing.
+  panel and the pins. `syncCloudComments` pulls reviewer comments from both
+  `project.activeShare.id` AND every record in `share-records.json` so URL
+  auto-deploy shares flow back too, and runs once immediately on `load-project`
+  so the author sees fresh state without waiting for the 30s poll tick.
 
 Surface-specific features (canvas has undo/export/inspector/shapes; viewer
 has URL proxy / multi-page tracking) are intentional — they reflect
