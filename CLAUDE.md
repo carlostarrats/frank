@@ -6,7 +6,7 @@ A local-first collaboration layer. Point it at any URL — localhost, staging, p
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
 Latest tagged release: `v3.0` (canvas live share + async share for URL/PDF/image).
-Current branch: `dev-v3.7` (post-v3.0 shipping: intent field, bundle-first download, MCP server, **URL share auto-deploy**).
+Current branch: `dev-v3.12` (post-v3.0 shipping: intent field, bundle-first download, MCP server, **URL share auto-deploy** end-to-end — toolbar Share flow, cloud viewer, active-shares list, revoke retry queue, build-log streaming, `frank share` CLI, static-HTML support, Frank-styled confirm modal).
 
 ## Scope — what ships and what's NOT on the roadmap
 
@@ -20,7 +20,9 @@ Current branch: `dev-v3.7` (post-v3.0 shipping: intent field, bundle-first downl
 - **Project brief / Intent** — free-text `intent` field on `ProjectV2` (≤ 2000 chars). Amber "Add Intent" / green "Intent set" pill in viewer + canvas toolbars. Prepended to Copy-for-AI prompts and included in JSON / MD / PDF exports.
 - **Bundle-first Download** — one zip (`daemon/src/bundle.ts` via JSZip) containing project.json + report.md + report.pdf + canvas-state.json + snapshots/ + source/ + assets/. Renamed canvas "Snapshot" → "**Bookmark moment**" so its intent doesn't blur with Download.
 - **MCP server** (`daemon/src/mcp/`) — Frank exposes 15 tools over Model Context Protocol (stdio transport). Tools cover reads (list_projects, load_project, get_intent, get_comments, get_canvas_state, list_snapshots, get_timeline, export_bundle) + canvas writes (add_shape, add_text, add_path, add_connector, insert_template placeholder, add_comment) + create_share. AI connects directly to a running daemon via `frank mcp` subprocess. Setup in Settings → MCP Setup tab.
-- **URL share auto-deploy** (`daemon/src/share/`) — envelope detection (framework / structural / refuse-to-guess) + allowlist bundler + pre-flight build + 30s smoke tail + per-SDK encoder registry (Supabase / Clerk / Stripe / Sentry / Auth0 / PostHog) + layout-aware overlay injection + Vercel Deployments API client + revoke contract. UI: Settings → **Share Preview** tab. `semver` added as a daemon dep for encoder version checks.
+- **URL share auto-deploy** (`daemon/src/share/`) — envelope detection (framework / structural / refuse-to-guess) + allowlist bundler + pre-flight build + 30s smoke tail + per-SDK encoder registry (Supabase / Clerk / Stripe / Sentry / Auth0 / PostHog) + layout-aware overlay injection + Vercel Deployments API client + revoke contract. UI: Settings → **Share Preview** tab AND viewer toolbar Share button (URL projects pointing at localhost auto-route to the URL-share popover). `semver` added as a daemon dep for encoder version checks.
+- **URL-share end-to-end shipping (dev-v3.10–v3.12)** — toolbar Share flow with `ProjectV2.sourceDir` persisted per project + Vercel-token gate + source-dir gate + Create share with streamed stage-by-stage progress; frank-cloud viewer (`/s/<id>`) branches on contentType to iframe URL-share deployments vs. render snapshot viewers; active-shares list with per-row Copy / Revoke; revoke retry queue (`share/revoke-queue.ts` + `share/revoke-worker.ts`) with 1m → 24h exponential backoff, drained on daemon startup + re-armed on enqueue; pending-retries UI block in the popover; build-log streaming via Vercel `/v3/deployments/:id/events` with three-zone UX (green / yellow / red at 90s / 5min); SSO+password auto-disable on the per-share Vercel project (design doc §6.4 — P0); static-HTML support (no framework needed — denylist bundler, skip preflight, inject overlay at root); `engines.node` downgraded from blocker to warning; share-builds cleanup (startup sweep + per-revoke removal by `buildDirName`); `frank share <dir> / list / revoke` CLI parallel to the UI flow.
+- **Frank-styled confirm dialog** — `ui-v2/components/confirm.js` replaces `window.confirm()` across 9 call sites (home delete / trash, share revokes, comment deletes, curation batch delete, viewer sensitive-content share). Sharp corners match design system, focus-trapped, Escape / overlay-click / Cancel all resolve false.
 - **Live-share polish** — Resume after daemon restart (in-memory controller recreated on resume), optimistic spinner on pause/resume, custom expiry dropdown (1d / 1w / 1mo / 1y / custom), state broadcast across all panel clients (fixes cross-browser live-share visibility).
 - **UI polish** — clickable LIVE badge opens share modal; image wheel-zoom with toolbar pill; home card menu clamps inside viewport.
 
@@ -147,14 +149,15 @@ frank/
 │   │   ├── curation.js       # Feedback curation panel — inline edit, approve/dismiss toggles, pin-number color badge, focus-pulse, approved-gated "Copy for AI" (batch + per-row), Delete (batch)
 │   │   ├── intent-button.js  # Amber "Add Intent" / green "Intent set" pill + modal (project brief textarea, ≤ 2000 chars)
 │   │   ├── comments.js       # Comment input (used by overlay callback)
-│   │   ├── share-popover.js  # Share link management (viewer + canvas) — optimistic pause/resume spinner, custom expiry dropdown
+│   │   ├── share-popover.js  # Share link management (viewer + canvas) — URL-share popover (Vercel gate + sourceDir gate + active-shares list + build-log stream + three-zone UX + pending-retries), optimistic pause/resume spinner, custom expiry dropdown
 │   │   ├── ai-routing.js     # Clipboard AI routing (non-Claude fallback)
 │   │   ├── url-input.js      # URL paste + file picker + drag-drop (PDF / image)
 │   │   ├── help-panel.js     # Getting-started modal (5 feature cards, focus trap)
 │   │   ├── settings-panel.js # Settings modal — top-level tabs: "Cloud Backend" (Vercel / custom, Deploy-to-Vercel CTA, configured-at hint) + "MCP Setup" (config snippet + per-client paths + security notes) + "Share Preview" (URL share auto-deploy diagnostics — path input, envelope check, preflight, Vercel token config, create + revoke). Takes `initialTopTab` param.
 │   │   ├── share-envelope-panel.js  # Reusable display + interactive harness for the Share Preview tab. Renders envelope result, bundle summary, preflight verdict, share-create progress + revoke.
 │   │   ├── toast.js          # info/warn/error notifications (top-right, stackable, info shows checkmark)
-│   │   └── error-card.js     # Inline error block (message + suggestion + retry)
+│   │   ├── error-card.js     # Inline error block (message + suggestion + retry)
+│   │   └── confirm.js        # Frank-styled confirm dialog (replaces native window.confirm) — destructive variant, focus trap, Escape/overlay-click/Cancel all resolve false
 │   └── styles/
 │       ├── tokens.css        # Design tokens, resets, :focus-visible rule
 │       ├── app.css           # Home, toolbar, cards, help modal, toasts, error cards
@@ -168,7 +171,7 @@ frank/
 ├── daemon/                   # Node.js daemon (TypeScript, strict)
 │   ├── vitest.config.ts
 │   ├── package.json          # deps: ws, pdfmake, tslib, jszip, @modelcontextprotocol/sdk, semver (URL share encoder version checks).
-│   ├── src/cli.ts            # frank start / stop / connect / status / export / mcp / uninstall
+│   ├── src/cli.ts            # frank start / stop / connect / status / export / mcp / share / uninstall
 │   ├── src/server.ts         # HTTP + WebSocket server, all message handlers (incl. set-project-intent, export-bundle, mcp-add-*, mcp-create-share, canvas-state-changed broadcast)
 │   ├── src/protocol.ts       # Shared types and constants (incl. ProjectV2.intent, bundle + MCP message types)
 │   ├── src/projects.ts       # Project CRUD + rename/archive/trash/restore/purge + createProjectFromFile + setProjectIntent
@@ -199,10 +202,12 @@ frank/
 │   │   ├── preflight.ts      # Build + ephemeral-port start + deterministic smoke + 30s stderr tail
 │   │   ├── injection.ts      # Per-framework root-layout detection + one <script> injection on a COPY
 │   │   ├── overlay-source.ts # OVERLAY_SCRIPT_CONTENT — frank-overlay.js as a TS string (shadow DOM, SSE)
-│   │   ├── vercel-api.ts     # createDeployment / pollDeployment / deleteDeployment / verifyVercelToken / disableDeploymentProtection
+│   │   ├── vercel-api.ts     # createDeployment / pollDeployment / deleteDeployment / verifyVercelToken / disableDeploymentProtection / streamBuildLogs
 │   │   ├── share-create.ts   # End-to-end orchestration (createShare) + revoke (revokeShare)
-│   │   └── share-records.ts  # Local ~/.frank/share-records.json persistence for the list + revoke-after-session UI; startup sweep + per-revoke cleanup of share-builds/
-│   └── src/*.test.ts         # Vitest tests (344 across 27 files; 9 more in the opt-in cloud integration harness)
+│   │   ├── share-records.ts  # Local ~/.frank/share-records.json persistence + share-builds cleanup (startup sweep + per-revoke removal by buildDirName)
+│   │   ├── revoke-queue.ts   # ~/.frank/revoke-queue.json — pending Vercel-delete retries with 1m/5m/30m/1h/6h/24h backoff
+│   │   └── revoke-worker.ts  # Background worker draining revoke-queue on startup + re-armed on enqueue
+│   └── src/*.test.ts         # Vitest tests (377 across 29 files; 9 more in the opt-in cloud integration harness)
 ├── frank-cloud/              # Reference cloud backend — Vercel + Blob (users host their own)
 │   ├── api/                  # Serverless functions (share, comment, health)
 │   ├── public/viewer/        # Share viewer page (iframe OR canvas render via Konva CDN)
@@ -366,7 +371,7 @@ FRANK_CLOUD_BASE_URL=http://localhost:3000 \
 
 Test files live alongside source: `src/*.test.ts`. Each test file mocks `./protocol.js` to redirect `PROJECTS_DIR` to a temp directory. The `inject.test.ts` file additionally mocks `os.homedir()` using `vi.hoisted()`.
 
-**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `revision-store.ts`, `live-share.ts` (transport + per-project-type controllers for canvas/image/pdf), `share/envelope.ts`, `share/bundler.ts`, `share/preflight.ts` (pure helpers — link extraction, error counting, classification, port finder, start-command selection), `share/encoder-registry.ts` (all six SDK encoder outputs), `share/injection.ts` (layout detection per framework + injection idempotence + copy-doesn't-touch-source), `share/vercel-api.ts` (mocked-fetch unit tests — create / poll / delete / verify-token / disableDeploymentProtection), `share/share-records.ts` (write/read/mark-revoked/purge + share-builds sweep with buildDirName matching).
+**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `revision-store.ts`, `live-share.ts` (transport + per-project-type controllers for canvas/image/pdf), `share/envelope.ts`, `share/bundler.ts`, `share/preflight.ts` (pure helpers — link extraction, error counting, classification, port finder, start-command selection), `share/encoder-registry.ts` (all six SDK encoder outputs), `share/injection.ts` (layout detection per framework + injection idempotence + copy-doesn't-touch-source), `share/vercel-api.ts` (mocked-fetch unit tests — create / poll / delete / verify-token / disableDeploymentProtection / streamBuildLogs newline-delimited JSON parser), `share/share-records.ts` (write/read/mark-revoked/purge + share-builds sweep with buildDirName matching), `share/revoke-queue.ts` (backoff schedule + enqueue/list/remove/recordAttempt/dueEntries/nextWakeupAt), `share/revoke-worker.ts` (deps-injected timer-driven retry loop + gave-up handling).
 
 After changing any daemon module, run `npm test` to verify nothing broke. For changes that touch the daemon ↔ cloud contract, run the integration harness too — see the "Shipping a phase" section below.
 
