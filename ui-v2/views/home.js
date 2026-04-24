@@ -4,6 +4,7 @@ import sync from '../core/sync.js';
 import { renderUrlInput } from '../components/url-input.js';
 import { showHelpPanel } from '../components/help-panel.js';
 import { showSettingsPanel } from '../components/settings-panel.js';
+import { showConfirm } from '../components/confirm.js';
 
 const DEFAULT_UI_STATE = {
   search: '',
@@ -420,9 +421,12 @@ function wireCards(host, projects, variant, { onOpenProject, refresh }) {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         if (variant === 'trash') {
-          if (confirm(`Delete "${project.name}" permanently? This cannot be undone.`)) {
-            sync.purgeProject(id).then(refresh);
-          }
+          showConfirm({
+            title: `Delete "${project.name}" permanently?`,
+            message: 'This cannot be undone.',
+            confirmLabel: 'Delete permanently',
+            destructive: true,
+          }).then((ok) => { if (ok) sync.purgeProject(id).then(refresh); });
         } else {
           confirmTrash(project, refresh);
         }
@@ -581,9 +585,12 @@ function menuItemsForVariant(project, variant, refresh) {
     return [
       { key: 'restore', label: 'Restore', action: () => sync.restoreProject(project.projectId).then(refresh) },
       { key: 'purge', label: 'Delete permanently', danger: true, action: () => {
-        if (confirm(`Delete "${project.name}" permanently? This cannot be undone.`)) {
-          sync.purgeProject(project.projectId).then(refresh);
-        }
+        showConfirm({
+          title: `Delete "${project.name}" permanently?`,
+          message: 'This cannot be undone.',
+          confirmLabel: 'Delete permanently',
+          destructive: true,
+        }).then((ok) => { if (ok) sync.purgeProject(project.projectId).then(refresh); });
       }},
     ];
   }
@@ -608,9 +615,12 @@ function menuItemsForVariant(project, variant, refresh) {
 }
 
 function confirmTrash(project, refresh) {
-  if (confirm(`Delete "${project.name}"? It will move to Trash for 30 days.`)) {
-    sync.trashProject(project.projectId).then(refresh);
-  }
+  showConfirm({
+    title: `Delete "${project.name}"?`,
+    message: 'It will move to Trash for 30 days.',
+    confirmLabel: 'Delete',
+    destructive: true,
+  }).then((ok) => { if (ok) sync.trashProject(project.projectId).then(refresh); });
 }
 
 // ─── Utilities ──────────────────────────────────────────────────────────────

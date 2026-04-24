@@ -9,6 +9,7 @@ import { showCommentInput } from '../components/comments.js';
 import { captureSnapshot, detectSensitiveContent, buildMediaFileSnapshot } from '../overlay/snapshot.js';
 import { updateSharePopover } from '../components/share-popover.js';
 import { renderErrorCard } from '../components/error-card.js';
+import { showConfirm } from '../components/confirm.js';
 import { toastError, toastInfo } from '../components/toast.js';
 import { mountZoomMenu } from '../components/zoom-menu.js';
 
@@ -150,7 +151,12 @@ export function renderViewer(container, { onBack }) {
     if (snapshot.html) {
       const warnings = detectSensitiveContent(snapshot.html);
       if (warnings.length > 0) {
-        const proceed = confirm(`Warning: ${warnings.join(', ')}. Share anyway?`);
+        const proceed = await showConfirm({
+          title: 'Sensitive content detected',
+          message: `${warnings.join(', ')}.\nShare anyway?`,
+          confirmLabel: 'Share anyway',
+          destructive: true,
+        });
         if (!proceed) {
           updateSharePopover({ error: 'Cancelled' });
           return;

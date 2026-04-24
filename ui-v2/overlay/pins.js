@@ -15,6 +15,7 @@
 
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
+import { showConfirm } from '../components/confirm.js';
 
 const PIN_PALETTE = [
   '#f0b429', '#3b82f6', '#10b981', '#ef4444', '#a855f7',
@@ -163,8 +164,13 @@ export function createViewerPinRenderer({ hostEl, overlayEl, screenId }) {
       window.dispatchEvent(new CustomEvent('frank:edit-comment', { detail: { id: comment.id } }));
       closePopover();
     });
-    popover.querySelector('.canvas-comment-popover-delete').addEventListener('click', () => {
-      if (confirm('Delete this comment?')) {
+    popover.querySelector('.canvas-comment-popover-delete').addEventListener('click', async () => {
+      const ok = await showConfirm({
+        title: 'Delete this comment?',
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (ok) {
         sync.deleteComment(comment.id);
         closePopover();
       }

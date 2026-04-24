@@ -13,6 +13,7 @@
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { COMMENT_CURSOR } from './cursors.js';
+import { showConfirm } from '../components/confirm.js';
 
 export const CANVAS_SCREEN_ID = 'canvas';
 
@@ -279,8 +280,13 @@ export function createCommentController({ stage, contentLayer, uiLayer, onCommit
       window.dispatchEvent(new CustomEvent('frank:edit-comment', { detail: { id: comment.id } }));
       closePopover();
     });
-    popover.querySelector('.canvas-comment-popover-delete').addEventListener('click', () => {
-      if (confirm('Delete this comment?')) {
+    popover.querySelector('.canvas-comment-popover-delete').addEventListener('click', async () => {
+      const ok = await showConfirm({
+        title: 'Delete this comment?',
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (ok) {
         sync.deleteComment(comment.id);
         closePopover();
       }

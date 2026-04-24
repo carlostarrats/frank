@@ -3,6 +3,7 @@ import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { renderShareCreateResult } from './share-envelope-panel.js';
 import { showSettingsPanel } from './settings-panel.js';
+import { showConfirm } from './confirm.js';
 
 // Localhost / private-network hostnames that route to the URL-share
 // auto-deploy flow. Keep the set conservative — a public URL should use
@@ -232,15 +233,16 @@ export function showSharePopover(anchorEl, { onClose }) {
   });
 
   // Revoke share
-  modal.querySelector('#share-revoke')?.addEventListener('click', () => {
+  modal.querySelector('#share-revoke')?.addEventListener('click', async () => {
     const p = projectManager.get();
     if (!p?.activeShare) return;
-    const confirmed = confirm(
-      'Revoke this share?\n\n' +
-      'The link will stop working for all current viewers and cannot be restored.\n\n' +
-      'Your project is unchanged — you can create a new share afterward.'
-    );
-    if (!confirmed) return;
+    const ok = await showConfirm({
+      title: 'Revoke this share?',
+      message: 'The link will stop working for all current viewers and cannot be restored.\nYour project is unchanged — you can create a new share afterward.',
+      confirmLabel: 'Revoke',
+      destructive: true,
+    });
+    if (!ok) return;
     sync.send({ type: 'revoke-share', projectId });
     // Daemon broadcasts share-revoked; the frank:share-revoked listener above
     // clears liveShareState for this project. project-loaded broadcasts
@@ -694,10 +696,13 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
         const shareId = btn.dataset.revoke;
         const record = records.find((r) => r.shareId === shareId);
         if (!record) return;
-        if (!confirm(
-          'Revoke this share?\n\n' +
-          'The share link will stop working for all current viewers and the Vercel deployment will be deleted. This cannot be undone.'
-        )) return;
+        const ok = await showConfirm({
+          title: 'Revoke this share?',
+          message: 'The share link will stop working for all current viewers and the Vercel deployment will be deleted. This cannot be undone.',
+          confirmLabel: 'Revoke',
+          destructive: true,
+        });
+        if (!ok) return;
         btn.disabled = true;
         btn.textContent = 'Revoking…';
         try {

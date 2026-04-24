@@ -1752,6 +1752,11 @@ a.home-icon-btn { text-decoration: none; }
   text-decoration: underline;
 }
 .share-url-source-change:hover { color: var(--foreground); }
+.share-url-ready {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
 .share-url-actions { display: flex; justify-content: flex-end; }
 
 /* v3.10 — active-share list inside the URL-share popover. Each row shows
@@ -1944,6 +1949,69 @@ a.home-icon-btn { text-decoration: none; }
   color: var(--foreground);
 }
 .share-url-pending-meta { color: var(--muted-foreground); flex: 1; min-width: 0; }
+
+/* v3.12 — Frank-styled confirm dialog (replaces window.confirm). Sharp
+ * corners match --radius-md: 0rem. Destructive variant uses var(--destructive)
+ * for the primary button. */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in oklch, var(--background), transparent 20%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.confirm-modal {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  max-width: 440px;
+  width: calc(100% - 32px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.confirm-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.confirm-title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--foreground);
+}
+.confirm-message {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.confirm-actions .v-btn { min-width: 80px; }
+/* Destructive primary — red like Frank's revoke affordance. */
+.v-btn-destructive {
+  appearance: none;
+  background: var(--destructive);
+  color: var(--destructive-foreground, #fff);
+  border: 1px solid var(--destructive);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  padding: 6px 14px;
+  font-family: inherit;
+}
+.v-btn-destructive:hover {
+  background: color-mix(in oklch, var(--destructive), black 10%);
+}
+.v-btn-destructive:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--destructive), transparent 60%);
+  outline-offset: 1px;
+}
 .share-url-progress {
   font-size: var(--text-xs);
   line-height: 1.4;

@@ -2,6 +2,7 @@
 import sync from '../core/sync.js';
 import projectManager from '../core/project.js';
 import { toastInfo, toastError } from './toast.js';
+import { showConfirm } from './confirm.js';
 
 let selectedIds = new Set();
 let filterMode = 'all'; // all | pending | approved | dismissed
@@ -215,13 +216,16 @@ export function renderCuration(container, { screenId }) {
       if (approvedIds.length === 0) return;
       copyCommentsForAi(approvedIds);
     });
-    container.querySelector('#batch-delete')?.addEventListener('click', () => {
+    container.querySelector('#batch-delete')?.addEventListener('click', async () => {
       const ids = [...selectedIds];
       if (ids.length === 0) return;
-      const msg = ids.length === 1
-        ? 'Delete this comment?'
-        : `Delete ${ids.length} comments?`;
-      if (!confirm(msg)) return;
+      const title = ids.length === 1 ? 'Delete this comment?' : `Delete ${ids.length} comments?`;
+      const ok = await showConfirm({
+        title,
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (!ok) return;
       for (const id of ids) sync.deleteComment(id);
       selectedIds.clear();
       render();
