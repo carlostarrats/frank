@@ -167,9 +167,17 @@ POSTs a new expiresAt to frank-cloud.
 `meta.json.auditLog` exists server-side but no UI reads it. Per-share
 detail view showing the event timeline.
 
-### 15. `frank share <dir>` CLI
-Command-line equivalent of the UI flow. All internal modules exist; wire
-`cli.ts` to call `createShare()` and print the preview URL.
+### 15. `frank share <dir>` CLI — ✅ DONE (dev-v3.12, 2026-04-23)
+
+New `frank share` subcommand with three verbs:
+
+- `frank share <dir> [--expiry <days>]` — creates a URL-share (shorthand for `create`). Runs the same envelope → preflight → Vercel deploy → frank-cloud upload pipeline as the UI Share button. Streams stage-by-stage progress + Vercel build logs to stdout; prints share URL + deployment URL + revoke command on success. Works without `frank start` running — the CLI imports the modules directly and reads `~/.frank/config.json` for Vercel + frank-cloud creds.
+- `frank share list` — lists active (non-revoked, non-expired) shares from `~/.frank/share-records.json`. Shows CLI- and UI-created shares alike.
+- `frank share revoke <shareId>` — flips the cloud flag + deletes the Vercel deployment + marks the local record. On Vercel API failure, enqueues a retry (the retry worker only runs while `frank start` is up, but the queue is preserved and drained on next daemon boot).
+
+CLI-created shares use `projectId: 'cli-share'` so they don't appear under a Frank project's popover (they aren't bound to one). The shared records file means `frank share list` and the UI popover see the same underlying state.
+
+Verified end-to-end: create → list → revoke round-trip against real Vercel + frank-cloud. Chrome confirmed CLI-created records surface via the same `list-url-shares` WebSocket handler the UI uses.
 
 ### 16. Hard-isolation mode (§10 open question)
 Two Vercel tokens (one for frank-cloud, one for deploys). Only worth
