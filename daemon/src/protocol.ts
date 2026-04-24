@@ -310,6 +310,13 @@ export interface ProjectSummary {
   commentCount: number;
   archived?: string;
   trashed?: string;
+  // True when project.activeShare is set — drives the home card's "shared"
+  // badge. Populated by server.ts; not present on disk.
+  hasShare?: boolean;
+  // Populated by server.ts from the in-memory liveShares map before sending
+  // a project-list reply. Absent on disk — purely runtime-derived so home
+  // cards can render a LIVE badge without waiting for the first state tick.
+  liveShare?: { status: 'live' | 'throttled' | 'paused' | 'connecting'; viewers: number };
 }
 
 export interface ProjectListMessage {

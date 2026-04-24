@@ -371,7 +371,11 @@ function renderCard(p, variant) {
          tabindex="0"
          aria-label="${escapeHtml(accessibleLabel)}">
       <div class="project-card-info">
-        <span class="project-card-name" data-id="${p.projectId}">${escapeHtml(p.name)}</span>
+        <div class="project-card-name-row">
+          <span class="project-card-name" data-id="${p.projectId}">${escapeHtml(p.name)}</span>
+          <span class="project-card-live-badge-host" data-frank-card-live-host data-project-id="${p.projectId}"${renderCardLiveBadge(p.liveShare) ? '' : ' hidden'}>${renderCardLiveBadge(p.liveShare)}</span>
+          <span class="project-card-shared-badge-host" data-frank-card-shared-host data-project-id="${p.projectId}"${shouldShowShared(p) ? '' : ' hidden'}>${shouldShowShared(p) ? renderCardSharedBadge() : ''}</span>
+        </div>
         <span class="project-card-meta">${escapeHtml(meta)}</span>
       </div>
       <div class="project-card-actions">
@@ -379,6 +383,80 @@ function renderCard(p, variant) {
       </div>
     </div>
   `;
+}
+
+function renderCardLiveBadge(state) {
+  if (!state) return '';
+  if (state.status !== 'live' && state.status !== 'throttled') return '';
+  const count = state.viewers || 0;
+  const label = count === 1 ? 'LIVE · 1' : `LIVE · ${count}`;
+  return `<span class="project-card-live-badge" aria-label="${label}">${label}</span>`;
+}
+
+// LIVE wins over SHARED — a live session is already a share. Only show the
+// muted "shared" chip when an async/auto-deploy share exists but isn't live.
+function shouldShowShared(p) {
+  if (!p || !p.hasShare) return false;
+  const live = p.liveShare;
+  if (live && (live.status === 'live' || live.status === 'throttled')) return false;
+  return true;
+}
+
+function renderCardSharedBadge() {
+  return (
+    '<span class="project-card-shared-badge" aria-label="Shared" title="Active share link">' +
+    '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M10.5 13.5 a4 4 0 0 1 0-5.66 l2.5-2.5 a4 4 0 0 1 5.66 5.66 l-1.5 1.5"/>' +
+    '<path d="M13.5 10.5 a4 4 0 0 1 0 5.66 l-2.5 2.5 a4 4 0 0 1-5.66-5.66 l1.5-1.5"/>' +
+    '</svg>' +
+    '<span>Shared</span>' +
+    '</span>'
+  );
+}
+
+// Live-share state for cards arrives through two channels:
+//   1. list-projects reply includes liveShare when the daemon has a running
+//      controller (see listProjectsEnriched in server.ts). This paints the
+//      badge on first render.
+//   2. frank:live-share-state / frank:share-revoked events keep the badge
+//      in sync as viewers come and go (or the share stops) while home is
+//      open. Same event source the toolbar badge consumes.
+window.addEventListener('frank:live-share-state', (e) => {
+  const { projectId, status, viewers } = e.detail;
+  updateCardLiveBadge(projectId, { status, viewers });
+  // Live badge takes precedence — hide the static "shared" chip when a
+  // live session is actively running so the two don't double-stack.
+  if (status === 'live' || status === 'throttled') updateCardSharedBadge(projectId, false);
+  else updateCardSharedBadge(projectId, true);
+});
+window.addEventListener('frank:share-revoked', (e) => {
+  updateCardLiveBadge(e.detail.projectId, null);
+  updateCardSharedBadge(e.detail.projectId, false);
+});
+
+function updateCardLiveBadge(projectId, state) {
+  const host = document.querySelector('[data-frank-card-live-host][data-project-id="' + projectId + '"]');
+  if (!host) return;
+  const html = renderCardLiveBadge(state);
+  if (!html) {
+    host.innerHTML = '';
+    host.hidden = true;
+    return;
+  }
+  host.innerHTML = html;
+  host.hidden = false;
+}
+
+function updateCardSharedBadge(projectId, show) {
+  const host = document.querySelector('[data-frank-card-shared-host][data-project-id="' + projectId + '"]');
+  if (!host) return;
+  if (show) {
+    host.innerHTML = renderCardSharedBadge();
+    host.hidden = false;
+  } else {
+    host.innerHTML = '';
+    host.hidden = true;
+  }
 }
 
 function wireCards(host, projects, variant, { onOpenProject, refresh }) {

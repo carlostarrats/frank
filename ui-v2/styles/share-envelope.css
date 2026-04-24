@@ -32,19 +32,10 @@
   color: var(--muted-foreground);
 }
 
-.share-diagnostics-form input[type="text"] {
-  padding: 8px 10px;
+/* Path field uses the canonical .input class; only the mono font is
+ * surface-specific — absolute paths read better in monospace. */
+.share-diagnostics-form input.input {
   font-family: var(--font-mono);
-  font-size: 0.85rem;
-  color: var(--foreground);
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  outline: none;
-}
-
-.share-diagnostics-form input[type="text"]:focus-visible {
-  border-color: var(--foreground);
 }
 
 .share-diagnostics-form button {

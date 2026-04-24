@@ -35,7 +35,7 @@
   transform: translate(-50%, -120%);
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   border: 1.5px solid #111;
   color: #111;
   font-size: 11px;

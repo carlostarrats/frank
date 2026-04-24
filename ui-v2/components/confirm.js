@@ -40,8 +40,8 @@ export function showConfirm(opts) {
           ${message ? `<p class="confirm-message">${escWithBreaks(message)}</p>` : ''}
         </div>
         <div class="confirm-actions">
-          <button type="button" class="v-btn v-btn-ghost" data-action="cancel">${esc(cancelLabel)}</button>
-          <button type="button" class="v-btn ${destructive ? 'v-btn-destructive' : 'v-btn-primary'}" data-action="confirm">${esc(confirmLabel)}</button>
+          <button type="button" class="btn-ghost" data-action="cancel">${esc(cancelLabel)}</button>
+          <button type="button" class="${destructive ? 'btn-destructive' : 'btn-primary'}" data-action="confirm">${esc(confirmLabel)}</button>
         </div>
       </div>
     `;

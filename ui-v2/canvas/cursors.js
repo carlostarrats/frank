@@ -96,6 +96,10 @@ export const TOOL_CURSORS = {
   text: 'text',
 };
 
-// Comment-mode cursor: speech bubble + plus, same visual grammar as the
-// click-to-place shape tools so users read it as "click to drop a comment".
-export const COMMENT_CURSOR = cursorUrl(withPlus(SPEECH_ICON));
+// Comment-mode cursor: plain crosshair. Consistent across canvas, viewer,
+// and the reviewer overlay — "click anywhere to drop a comment." Previously
+// this was a compound speech-bubble + plus SVG, but it reads as "pick a
+// thing" on DOM surfaces (paired with the hover dashed outline), which made
+// the commenting UX surface-dependent. Crosshair keeps the affordance
+// uniform: no selection, no highlight, just click-where-you-want.
+export const COMMENT_CURSOR = 'crosshair';

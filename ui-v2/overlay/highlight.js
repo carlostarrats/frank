@@ -33,12 +33,16 @@ export function showSelected(targetElement, iframeEl) {
   selectedEl.style.height = rect.height + 'px';
 }
 
+// Remove the DOM node (not just hide). highlight/selected elements are
+// appended to document.body, so if we only hide them, they survive a view
+// change — a leftover .element-highlight from the viewer would sit over
+// the home page with its dashed border still drawn.
 export function clearHighlight() {
-  if (highlightEl) highlightEl.style.display = 'none';
+  if (highlightEl) { highlightEl.remove(); highlightEl = null; }
 }
 
 export function clearSelected() {
-  if (selectedEl) selectedEl.style.display = 'none';
+  if (selectedEl) { selectedEl.remove(); selectedEl = null; }
 }
 
 function getElementRectRelativeToViewport(element, iframeEl) {
