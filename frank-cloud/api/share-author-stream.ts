@@ -9,7 +9,7 @@ const redis = redisClient();
 const GRACE_MS = Number(process.env.FRANK_AUTHOR_GRACE_MS || 15_000);
 
 function extractShareId(pathname: string): string | null {
-  const m = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,20})\/author-stream\/?$/);
+  const m = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,64})\/author-stream\/?$/);
   return m ? m[1] : null;
 }
 

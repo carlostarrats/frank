@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { shareId, screenId, anchor, author, text } = body;
 
     // Validate inputs
-    if (!shareId || !/^[a-zA-Z0-9_-]{8,20}$/.test(shareId)) {
+    if (!shareId || !/^[a-zA-Z0-9_-]{8,64}$/.test(shareId)) {
       res.status(400).json({ error: 'Invalid share ID' });
       return;
     }

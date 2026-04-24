@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // GET /api/share?id=xxx — public (reviewers)
   if (req.method === 'GET') {
     const shareId = typeof req.query.id === 'string' ? req.query.id : undefined;
-    if (!shareId || !/^[a-zA-Z0-9_-]{8,20}$/.test(shareId)) {
+    if (!shareId || !/^[a-zA-Z0-9_-]{8,64}$/.test(shareId)) {
       res.status(400).json({ error: 'Invalid share ID' });
       return;
     }
@@ -136,7 +136,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch { /* old share cleanup is best-effort */ }
       }
 
-      const shareId = generateId();
+      // v3.11: Daemon can supply the shareId when the overlay is baked
+      // into the deployment BEFORE the cloud record is created (URL-share
+      // auto-deploy path). Without this, the overlay's SSE URL keys on the
+      // daemon's internal id while the cloud record keys on its own id —
+      // they never match and reviewer sees "Comments unavailable."
+      //
+      // Validation: length 8-64, URL-safe chars only (alphanum / - / _).
+      // Generate when absent or malformed.
+      const CLIENT_SHARE_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+      const clientShareId = typeof body.shareId === 'string' && CLIENT_SHARE_ID_RE.test(body.shareId)
+        ? body.shareId
+        : null;
+      const shareId = clientShareId || generateId();
       const revokeToken = generateId();
       const now = new Date();
       const days = expiryDays || 7;
@@ -212,7 +224,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
     const shareId = typeof req.query.id === 'string' ? req.query.id : undefined;
-    if (!shareId || !/^[a-zA-Z0-9_-]{8,20}$/.test(shareId)) {
+    if (!shareId || !/^[a-zA-Z0-9_-]{8,64}$/.test(shareId)) {
       res.status(400).json({ error: 'Invalid share ID' });
       return;
     }

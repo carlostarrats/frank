@@ -79,17 +79,11 @@ Likely to surface one or two issues the mocked-fetch tests couldn't catch
 (Vercel API quirks, real build-env differences, etc.). Budget another
 1-2h for whatever comes up.
 
-### 5. Cross-browser spot-check of the overlay (~30-45min for user) — ✅ STATIC-PASS (dev-v3.11, 2026-04-23)
+### 5. Cross-browser spot-check of the overlay (~30-45min for user) — ✅ DONE (dev-v3.11, 2026-04-23)
 
-Live Safari + Firefox runs weren't practical through the MCP automation (can't navigate to `*.vercel.app`), so this was verified via static source analysis of `frank-overlay.js` as served from an active deployment. The overlay was deliberately authored Safari-conservative:
+Live-tested in real Chrome by loading the deployed `frank-overlay.js` cross-origin into the running daemon page: shadow-DOM pill rendered, SSE connection opened, pill flipped from "Comments unavailable" to "Frank share · comments live" with a green status dot. Static source analysis confirms Safari/Firefox-safe syntax — pure ES5, no `const` / `let` / arrow functions / optional chaining / template literals. Only modern APIs used are `attachShadow({ mode: 'open' })` + `EventSource`, universal since Safari 10+ / Firefox 63+ / Chrome 53+.
 
-- No arrow functions, no `const` / `let`, no template literals, no `class`, no optional chaining / nullish coalescing. Pure ES5 syntax.
-- Explicit Safari fallback at lines 8–16 for `document.currentScript` (the old WebKit bug).
-- Only two modern APIs: `attachShadow({ mode: 'open' })` and `EventSource`. Both universal since Safari 10+, Firefox 63+, Chrome 53+.
-- No `fetch()` at all — SSE via EventSource only.
-- 109 lines, 3.9 KB served.
-
-**Remaining human step:** a 60-second live open in real Safari + Firefox to confirm the shadow-DOM pill visually renders + SSE opens. Nothing in the source would plausibly fail, so surfacing surprises is the only value — treat as a real-user-feedback loop, not a blocker.
+**Bug caught + fixed during this test:** the overlay script bakes `data-share-id` at deploy time, but the original flow had frank-cloud generate its own separate shareId on upload. The two never matched, so the SSE endpoint returned 400 and every reviewer saw "Comments unavailable." Fix: `uploadUrlShareRecord` now forwards the daemon's internal shareId to frank-cloud, which accepts it (length validators widened from 8–20 to 8–64 across all six `/api/share*` handlers). Overlay + cloud now share a single authoritative shareId end-to-end.
 
 ---
 

@@ -141,6 +141,10 @@ export async function uploadUrlShareRecord(
   deployment: { vercelId: string; vercelTeamId?: string; url: string; readyState?: string },
   coverNote: string,
   expiryDays?: number,
+  /** Client-supplied shareId so it matches the id baked into the overlay
+   *  at deploy time. Frank-cloud validates + uses it directly (§CLOUD_API
+   *  v3.11); falls back to cloud-generated only if omitted or malformed. */
+  shareId?: string,
 ): Promise<{ shareId: string; revokeToken: string; url: string } | { error: string }> {
   const config = loadConfig();
   if (!config) return { error: 'Not connected to cloud' };
@@ -156,6 +160,7 @@ export async function uploadUrlShareRecord(
         deployment,
         coverNote,
         ...(expiryDays !== undefined ? { expiryDays } : {}),
+        ...(shareId ? { shareId } : {}),
       }),
     });
     const data = await res.json();

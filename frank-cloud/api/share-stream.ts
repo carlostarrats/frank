@@ -28,7 +28,7 @@ async function maybeFireAuthorOffline(shareId: string): Promise<void> {
 }
 
 function extractShareId(pathname: string): string | null {
-  const m = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,20})\/stream\/?$/);
+  const m = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,64})\/stream\/?$/);
   return m ? m[1] : null;
 }
 

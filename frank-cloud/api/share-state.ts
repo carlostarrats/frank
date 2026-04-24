@@ -10,7 +10,7 @@ const MAX_PAYLOAD_BYTES = Number(process.env.FRANK_STATE_MAX_BYTES || 1_048_576)
 
 function extractShareId(pathname: string): string | null {
   // Expect: /api/share/<id>/state
-  const m = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,20})\/state\/?$/);
+  const m = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,64})\/state\/?$/);
   return m ? m[1] : null;
 }
 

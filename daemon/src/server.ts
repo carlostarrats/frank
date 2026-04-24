@@ -612,6 +612,11 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           }
 
           // Persist to frank-cloud so the share link is reachable by reviewers.
+          // Pass the daemon's internal shareId so it matches what's already
+          // baked into the deployment's overlay script (data-share-id). Without
+          // this the overlay's SSE connection keys on the daemon id while the
+          // cloud record keys on a separate id — they'd never match and the
+          // reviewer would see "Comments unavailable."
           const cloudRecord = await uploadUrlShareRecord(
             {
               vercelId: shareResult.deployment.id,
@@ -621,6 +626,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
             },
             '',
             msg.expiryDays,
+            shareResult.shareId,
           );
           if ('error' in cloudRecord) {
             reply({ type: 'share-create-result', ...shareResult, cloudError: cloudRecord.error, status: 'fail' });

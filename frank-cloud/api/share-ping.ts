@@ -24,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   // req.url is a path + query on Vercel's Node runtime; anchor it so URL parses.
   const url = new URL(req.url || '', 'http://x');
-  const m = url.pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,20})\/ping\/?$/);
+  const m = url.pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{8,64})\/ping\/?$/);
   if (!m) {
     res.status(400).json({ error: 'Invalid share ID' });
     return;
