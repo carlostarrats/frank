@@ -582,7 +582,20 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
   let vercelConfigured = false;
   let sourceDir = project.sourceDir || '';
 
-  const close = () => { overlay.remove(); onClose?.(); };
+  const close = () => {
+    document.removeEventListener('keydown', onEscape, true);
+    overlay.remove();
+    onClose?.();
+  };
+  // Escape closes — parity with every other modal in Frank (confirm,
+  // settings, help). Without this, the share modal was the odd one out.
+  const onEscape = (e) => {
+    if (e.key === 'Escape' && overlay.isConnected) {
+      e.stopPropagation();
+      close();
+    }
+  };
+  document.addEventListener('keydown', onEscape, true);
   modal.querySelector('#share-close').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 

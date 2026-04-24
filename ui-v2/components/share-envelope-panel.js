@@ -171,6 +171,7 @@ export function mountShareDiagnostics(container) {
         <label for="share-diagnostics-input">Absolute path to project</label>
         <input
           type="text"
+          class="input"
           id="share-diagnostics-input"
           placeholder="/Users/you/code/my-app"
           autocomplete="off"
