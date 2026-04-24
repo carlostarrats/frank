@@ -160,15 +160,15 @@ export function showSharePopover(anchorEl, { onClose }) {
       <div class="share-popover-inner">
         ${activeShare ? `
           <div class="share-popover-url">
-            <input type="text" class="v-input" id="share-url" value="${esc(activeShare.id)}" readonly aria-label="Share link ID">
-            <button class="v-btn v-btn-primary" id="share-copy">Copy</button>
+            <input type="text" class="input" id="share-url" value="${esc(activeShare.id)}" readonly aria-label="Share link ID">
+            <button class="btn-primary" id="share-copy">Copy</button>
           </div>
           <div class="share-revoke-row">
             <button type="button" class="share-revoke-btn" id="share-revoke">Revoke share</button>
             <span class="share-revoke-help">Invalidates the link for all current viewers.</span>
           </div>
         ` : ''}
-        <textarea class="v-input v-textarea" id="share-note" placeholder="Cover note (optional)... e.g. 'Focus on the signup flow'"
+        <textarea class="input textarea" id="share-note" placeholder="Cover note (optional)... e.g. 'Focus on the signup flow'"
           aria-label="Cover note for reviewers (optional)"
           rows="2">${esc(activeShare?.coverNote || '')}</textarea>
         <label class="share-expiry-label">Expires after</label>
@@ -192,8 +192,8 @@ export function showSharePopover(anchorEl, { onClose }) {
           </div>
         </div>
         <div class="share-popover-actions">
-          <button class="v-btn v-btn-ghost" id="share-cancel">Cancel</button>
-          <button class="v-btn v-btn-primary" id="share-create">${activeShare ? 'Update Link' : 'Create Link'}</button>
+          <button class="btn-ghost" id="share-cancel">Cancel</button>
+          <button class="btn-primary" id="share-create">${activeShare ? 'Update Link' : 'Create Link'}</button>
         </div>
         <div class="share-popover-status" id="share-status"></div>
         ${renderLiveBlock(projectId || '')}
@@ -353,8 +353,8 @@ export function updateSharePopover(result) {
   const urlSection = modal.querySelector('.share-popover-url') || document.createElement('div');
   urlSection.className = 'share-popover-url';
   urlSection.innerHTML = `
-    <input type="text" class="v-input" id="share-url" value="${esc(result.url)}" readonly aria-label="Share link URL">
-    <button class="v-btn v-btn-primary" id="share-copy">Copy</button>
+    <input type="text" class="input" id="share-url" value="${esc(result.url)}" readonly aria-label="Share link URL">
+    <button class="btn-primary" id="share-copy">Copy</button>
   `;
   if (!modal.querySelector('.share-popover-url')) {
     modal.querySelector('.share-popover-inner').prepend(urlSection);
@@ -556,10 +556,10 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
           <div class="share-url-source-row">
             <span class="share-url-source-label">Source:</span>
             <code class="share-url-source-path" id="share-url-source-path"></code>
-            <button type="button" class="share-url-source-change" id="share-url-source-change">Change</button>
+            <button type="button" class="btn-ghost btn-sm share-url-source-change" id="share-url-source-change">Change</button>
           </div>
           <div class="share-url-actions">
-            <button type="button" class="v-btn v-btn-primary" id="share-url-create">Create share</button>
+            <button type="button" class="btn-primary" id="share-url-create">Create share</button>
           </div>
         </div>
         <div class="share-url-progress" id="share-url-progress" aria-live="polite"></div>
@@ -671,8 +671,8 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
                 <div class="share-url-existing-meta">Expires ${esc(formatRelative(r.expiresAt))} · Vercel: <code>${esc(r.deploymentUrl.replace(/^https?:\/\//, ''))}</code></div>
               </div>
               <div class="share-url-existing-actions">
-                <button type="button" class="share-url-existing-copy" data-copy="${esc(r.shareUrl)}">Copy</button>
-                <button type="button" class="share-url-existing-revoke" data-revoke="${esc(r.shareId)}">Revoke</button>
+                <button type="button" class="btn-secondary btn-sm share-url-existing-copy" data-copy="${esc(r.shareUrl)}">Copy</button>
+                <button type="button" class="btn-destructive btn-sm share-url-existing-revoke" data-revoke="${esc(r.shareId)}">Revoke</button>
               </div>
             </li>
           `).join('')}
@@ -730,7 +730,7 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
         <div class="share-url-gate-title">Vercel deploy token not configured</div>
         <div class="share-url-gate-body">Frank needs a Vercel personal access token to deploy your app. Configure it once in Settings.</div>
         <div class="share-url-gate-actions">
-          <button type="button" class="v-btn v-btn-primary" id="share-url-open-settings">Open Settings</button>
+          <button type="button" class="btn-primary" id="share-url-open-settings">Open Settings</button>
         </div>
       </div>
     `;
@@ -750,8 +750,8 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
         <div class="share-url-gate-title">Absolute path to your project</div>
         <div class="share-url-gate-body">Browsers can't pick directories, so paste the full path. Example: <code>/Users/you/code/my-app</code></div>
         <form class="share-url-source-form" id="share-url-source-form">
-          <input type="text" class="v-input" id="share-url-source-input" placeholder="/Users/you/code/my-app" autocomplete="off" spellcheck="false" />
-          <button type="submit" class="v-btn v-btn-primary">Save path</button>
+          <input type="text" class="input" id="share-url-source-input" placeholder="/Users/you/code/my-app" autocomplete="off" spellcheck="false" />
+          <button type="submit" class="btn-primary">Save path</button>
         </form>
       </div>
     `;

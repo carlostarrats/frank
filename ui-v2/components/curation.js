@@ -55,7 +55,7 @@ export function renderCuration(container, { screenId, onClose }) {
                 <div class="curation-item ${selectedIds.has(c.id) ? 'selected' : ''} ${focusedId === c.id ? 'focused' : ''} curation-status-${c.status}" data-id="${c.id}">
                   <div class="curation-item-header">
                     <label class="curation-check">
-                      <input type="checkbox" ${selectedIds.has(c.id) ? 'checked' : ''} data-id="${c.id}">
+                      <input type="checkbox" class="ui-checkbox" ${selectedIds.has(c.id) ? 'checked' : ''} data-id="${c.id}">
                     </label>
                     <span class="curation-pin-badge" style="background:${pinColor}" title="Pin ${pinIdx + 1}">${pinIdx + 1}</span>
                     <strong>${esc(c.author)}</strong>
