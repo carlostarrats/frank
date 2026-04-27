@@ -600,6 +600,38 @@ textarea.input,
   color: var(--muted-foreground);
 }
 
+/* Amber stats line at the very top of the home page — display-only.
+ * Same amber as the empty Intent pill (#f59e0b). Counts come from
+ * renderStatsBar() in views/home.js. No box / no border — just text. */
+.home-stats-bar {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+  color: #f59e0b;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.home-stats-bar:empty {
+  display: none;
+}
+.home-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.home-stat-label {
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.home-stat-count {
+  font-weight: 600;
+  color: #f59e0b;
+  font-variant-numeric: tabular-nums;
+}
+
 .home-masthead {
   display: flex;
   align-items: flex-start;

@@ -31,9 +31,16 @@ const FILTER_LABELS = {
 let uiState = { ...DEFAULT_UI_STATE };
 let openMenu = null;
 
+// Cached projects list from the last list-projects fetch. The stats strip
+// reads from this so live-share events can mutate one project + re-render
+// without triggering a full project-list refresh (which would close any
+// open ⋯ menu or interrupt inline rename).
+let lastProjects = [];
+
 export function renderHome(container, { onOpenProject, onCreateProject }) {
   container.innerHTML = `
     <div class="home">
+      <div class="home-stats-bar" id="home-stats-bar" role="status" aria-label="Project stats"></div>
       <header class="home-masthead">
         <img src="frank-logo.svg" alt="Frank" class="home-logo">
         <span class="home-version">v3.0</span>
@@ -128,7 +135,9 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
 
   const refresh = () => {
     sync.listProjects().then(data => {
-      renderProjects(container.querySelector('#home-projects'), data.projects || [], {
+      lastProjects = data.projects || [];
+      renderStatsBar(container.querySelector('#home-stats-bar'), lastProjects);
+      renderProjects(container.querySelector('#home-projects'), lastProjects, {
         onOpenProject,
         refresh,
       });
@@ -193,6 +202,35 @@ function renderProjects(host, projects, { onOpenProject, refresh }) {
     listEl.innerHTML = filtered.map(p => renderCard(p, cardVariant)).join('');
     wireCards(listEl, filtered, cardVariant, { onOpenProject, refresh });
   }
+}
+
+// Yellow info strip at the top of the home page. Display-only — clicking a
+// stat does NOT filter or navigate. Counts are computed from active projects
+// (not archived, not trashed), matching what the user sees in the Recent tab.
+// PDF + image projects are bucketed under "URL" since URL share auto-deploy
+// is the only flow they participate in.
+function renderStatsBar(host, projects) {
+  if (!host) return;
+  const active = projects.filter(p => !p.archived && !p.trashed);
+  const live = active.filter(p => p.liveShare && (p.liveShare.status === 'live' || p.liveShare.status === 'throttled')).length;
+  const shared = active.filter(p => p.hasShare).length;
+  const canvas = active.filter(p => p.contentType === 'canvas').length;
+  const url = active.filter(p => p.contentType === 'url' || p.contentType === 'pdf' || p.contentType === 'image').length;
+
+  const stat = (label, count) => `
+    <span class="home-stat">
+      <span class="home-stat-label">${label}</span>
+      <span class="home-stat-count">${count}</span>
+    </span>
+  `;
+
+  host.innerHTML = `
+    ${stat('Active', active.length)}
+    ${stat('Shared', shared)}
+    ${stat('Live', live)}
+    ${stat('Canvas', canvas)}
+    ${stat('URL', url)}
+  `;
 }
 
 function renderTabs(recentCount, archivedCount, trashedCount) {
@@ -428,11 +466,28 @@ window.addEventListener('frank:live-share-state', (e) => {
   // live session is actively running so the two don't double-stack.
   if (status === 'live' || status === 'throttled') updateCardSharedBadge(projectId, false);
   else updateCardSharedBadge(projectId, true);
+  // Mirror onto the cached project so the stats strip stays accurate.
+  const proj = lastProjects.find(p => p.projectId === projectId);
+  if (proj) {
+    proj.liveShare = { status, viewers };
+    if (status === 'live' || status === 'throttled') proj.hasShare = true;
+    refreshStatsBar();
+  }
 });
 window.addEventListener('frank:share-revoked', (e) => {
   updateCardLiveBadge(e.detail.projectId, null);
   updateCardSharedBadge(e.detail.projectId, false);
+  const proj = lastProjects.find(p => p.projectId === e.detail.projectId);
+  if (proj) {
+    proj.liveShare = null;
+    proj.hasShare = false;
+    refreshStatsBar();
+  }
 });
+
+function refreshStatsBar() {
+  renderStatsBar(document.getElementById('home-stats-bar'), lastProjects);
+}
 
 function updateCardLiveBadge(projectId, state) {
   const host = document.querySelector('[data-frank-card-live-host][data-project-id="' + projectId + '"]');
