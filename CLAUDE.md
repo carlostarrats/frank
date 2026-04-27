@@ -5,85 +5,60 @@ A local-first collaboration layer. Point it at any URL — localhost, staging, p
 
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
-Latest tagged release: `v3.0` (canvas live share + async share for URL/PDF/image).
-Current branch: `dev-v3.13` (post-v3.0 shipping: intent field, bundle-first download, MCP server, **URL share auto-deploy** end-to-end — toolbar Share flow, cloud viewer, active-shares list, revoke retry queue, build-log streaming, `frank share` CLI, static-HTML support, Frank-styled confirm modal, unified commenting UX + design-system audit + home LIVE/Shared pills).
+Latest tagged release: `v3.0`. Current branch: `dev-v3.13`. Per-version shipping log lives in `PROGRESS.md` and `git log` — not here.
 
-## Scope — what ships and what's NOT on the roadmap
+## Scope
 
-**Live share is a canvas-only user-facing feature.** Canvas projects get full live collaboration (shape edits, drops, moves, comments all propagate to open viewers over SSE). Image, PDF, and URL projects pick up the shared transport infrastructure incidentally but surface static share + commenting as their UX.
+**Live share is canvas-only as a user-facing feature.** Image, PDF, and URL projects share the transport infrastructure but surface as static share + commenting.
 
-**URL share auto-deploy was reopened and shipped as v3.3+ work.** Prior direction doc had URL live share deprioritized in favor of screen-share tools — that call was revisited when the snapshot-only async path turned out to be too lossy for interactive apps (hovers, modals, client state don't survive a static HTML dump). The new approach: point Frank at a local project directory, Frank auto-deploys a preview to the user's own Vercel account with safe-dummy env, injects a same-origin comment overlay, reviewer interacts with the real running app. Full design: [`docs/url-share-auto-deploy-design.md`](docs/url-share-auto-deploy-design.md). Guard patterns: [`docs/share-guards.md`](docs/share-guards.md).
+**URL share auto-deploys to the user's own Vercel.** Frank points at a local project directory, builds a preview with safe-dummy env, injects a same-origin comment overlay, and the reviewer interacts with the running app. Snapshot-only async share was too lossy for interactive apps (hovers, modals, client state don't survive a static dump). Design: [`docs/url-share-auto-deploy-design.md`](docs/url-share-auto-deploy-design.md). Guard patterns: [`docs/share-guards.md`](docs/share-guards.md).
 
-**Phase 4b (PDF.js rendering migration) was dropped.** It was scoped as enabling PDF live sync. With PDF live sync not a feature, Phase 4b's justification collapsed. Browser-native PDF rendering is adequate for static PDF share.
-
-**Post-v3.0 additions (shipped on the dev branch):**
-- **Project brief / Intent** — free-text `intent` field on `ProjectV2` (≤ 2000 chars). Amber "Add Intent" / green "Intent set" pill in viewer + canvas toolbars. Prepended to Copy-for-AI prompts and included in JSON / MD / PDF exports.
-- **Bundle-first Download** — one zip (`daemon/src/bundle.ts` via JSZip) containing project.json + report.md + report.pdf + canvas-state.json + snapshots/ + source/ + assets/. Renamed canvas "Snapshot" → "**Bookmark moment**" so its intent doesn't blur with Download.
-- **MCP server** (`daemon/src/mcp/`) — Frank exposes 15 tools over Model Context Protocol (stdio transport). Tools cover reads (list_projects, load_project, get_intent, get_comments, get_canvas_state, list_snapshots, get_timeline, export_bundle) + canvas writes (add_shape, add_text, add_path, add_connector, insert_template placeholder, add_comment) + create_share. AI connects directly to a running daemon via `frank mcp` subprocess. Setup in Settings → MCP Setup tab.
-- **URL share auto-deploy** (`daemon/src/share/`) — envelope detection (framework / structural / refuse-to-guess) + allowlist bundler + pre-flight build + 30s smoke tail + per-SDK encoder registry (Supabase / Clerk / Stripe / Sentry / Auth0 / PostHog) + layout-aware overlay injection + Vercel Deployments API client + revoke contract. UI: Settings → **Share Preview** tab AND viewer toolbar Share button (URL projects pointing at localhost auto-route to the URL-share popover). `semver` added as a daemon dep for encoder version checks.
-- **URL-share end-to-end shipping (dev-v3.10–v3.12)** — toolbar Share flow with `ProjectV2.sourceDir` persisted per project + Vercel-token gate + source-dir gate + Create share with streamed stage-by-stage progress; frank-cloud viewer (`/s/<id>`) branches on contentType to iframe URL-share deployments vs. render snapshot viewers; active-shares list with per-row Copy / Revoke; revoke retry queue (`share/revoke-queue.ts` + `share/revoke-worker.ts`) with 1m → 24h exponential backoff, drained on daemon startup + re-armed on enqueue; pending-retries UI block in the popover; build-log streaming via Vercel `/v3/deployments/:id/events` with three-zone UX (green / yellow / red at 90s / 5min); SSO+password auto-disable on the per-share Vercel project (design doc §6.4 — P0); static-HTML support (no framework needed — denylist bundler, skip preflight, inject overlay at root); `engines.node` downgraded from blocker to warning; share-builds cleanup (startup sweep + per-revoke removal by `buildDirName`); `frank share <dir> / list / revoke` CLI parallel to the UI flow.
-- **Frank-styled confirm dialog** — `ui-v2/components/confirm.js` replaces `window.confirm()` across 9 call sites (home delete / trash, share revokes, comment deletes, curation batch delete, viewer sensitive-content share). Sharp corners match design system, focus-trapped, Escape / overlay-click / Cancel all resolve false.
-- **Live-share polish** — Resume after daemon restart (in-memory controller recreated on resume), optimistic spinner on pause/resume, custom expiry dropdown (1d / 1w / 1mo / 1y / custom), state broadcast across all panel clients (fixes cross-browser live-share visibility).
-- **UI polish** — clickable LIVE badge opens share modal; image wheel-zoom with toolbar pill; home card menu clamps inside viewport.
-- **Unified commenting UX (dev-v3.13)** — one shared composer (`ui-v2/components/comment-composer.js`) used by canvas, viewer, and the reviewer overlay baked into every URL-share deploy. All three surfaces: plain `crosshair` cursor, click-anywhere drops a free pin at the click point (no element detection, no hover dashed outline, no selection rectangle), same floating `.canvas-comment-input` with `⋮⋮` drag-grip at the top + Cancel / Post. Reviewer overlay (`daemon/src/share/overlay-source.ts`) ships a visual twin inside its shadow DOM since it can't reach Frank's stylesheet.
-- **Home card share indicators (dev-v3.13)** — `ProjectSummary` gained `liveShare` + `hasShare`, populated by `listProjectsEnriched()` reading the in-memory live-share map AND `share-records.json` (so URL auto-deploy projects also surface as Shared). Cards render a red pulsing **LIVE · N** pill for active live sessions, a muted **Shared** chip for any project with an active share record.
-- **URL-share reviewer comments sync back (dev-v3.13)** — `syncCloudComments` was only reading from `project.activeShare.id`; URL auto-deploy shares write to `share-records.json` instead, so reviewer comments were stored on frank-cloud but invisible to the author. Now collects shareIds from both sources and merges. Plus a one-shot sync kicks off on `load-project` so the author sees current cloud state without waiting 30s for the poll tick.
-- **Design-system audit (dev-v3.13)** — one button system (`.btn-primary / .btn-secondary / .btn-ghost / .btn-destructive` + `.btn-sm` size modifier); one input system (`.input` + `textarea.input` extension); `.ui-checkbox` on the curation drawer checkbox for sharp-cornered rendering; every hardcoded `border-radius` replaced with `var(--radius-round)` or `var(--radius-sm)`. Dropped the parallel `.v-btn* / .v-input*` CSS blocks and the one-off `.share-url-existing-copy/revoke/source-change` rules (~145 lines of drift). Feedback drawer gets an X in the top-right; toolbar comment button is now a true toggle (click-open, click-close). Share modal closes on Escape like every other modal. See `daemon/frank-audit.mjs` for the 59-test harness that verified the audit + every MCP tool.
+**Phase 4b (PDF.js rendering migration) was dropped** — its only justification was PDF live sync, which isn't a feature.
 
 Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
-URL share auto-deploy design doc: [`docs/url-share-auto-deploy-design.md`](docs/url-share-auto-deploy-design.md) (rev 4, post-calibration).
 
 ---
 
 ## Architecture — Non-Negotiable Decisions
 
-### Browser-Based
-- **No Tauri, no native app.** Frank runs as a Node.js daemon + browser UI at `localhost:42068`.
-- The daemon serves the UI, handles file I/O, proxies content, and communicates via WebSocket.
+### Browser-Based, Daemon-Driven
+- Node.js daemon at `localhost:42068` (HTTP) + `:42069` (WebSocket) serves the UI, handles file I/O, proxies content. **No Tauri, no native app.**
+- **Daemon is sole file writer.** UI never touches the filesystem; all I/O goes through WebSocket.
+- Projects in `~/.frank/projects/{id}/` — JSON files + `source/` (uploads) + `assets/` (canvas image drops + comment attachments, content-addressed by sha256).
 
 ### Content Wrapping
-- Frank loads any URL in a **controlled iframe** with a transparent commenting overlay on top.
-- For sites that block iframe embedding (X-Frame-Options, CSP), the daemon **proxies** the content, stripping only iframe-restrictive headers.
-- The iframe content is the real running page — Frank does not modify or re-render it.
-
-### Daemon as Sole File Writer
-- The daemon is the sole file writer — the UI never touches the filesystem.
-- All file I/O goes through the daemon via WebSocket.
-- Projects stored in `~/.frank/projects/{id}/` as JSON files.
-- Uploaded source files live at `~/.frank/projects/{id}/source/`.
-- Canvas image drops + comment attachments live at `~/.frank/projects/{id}/assets/`, content-addressed by sha256.
+- Frank loads any URL in a controlled iframe with a transparent commenting overlay on top.
+- For sites that block embedding (X-Frame-Options, CSP) the daemon proxies the content, stripping only iframe-restrictive headers.
+- The iframe content is the real running page — Frank never modifies or re-renders it.
 
 ### Self-Hosted Cloud
 - Sharing talks to a backend **the user hosts**. There is no Anthropic-run cloud.
-- The backend contract is documented in [`CLOUD_API.md`](CLOUD_API.md). v3 adds live-share endpoints on top of v2's static-share shape: `/api/health`, `GET+POST+DELETE /api/share`, `POST /api/comment`, `POST /api/share/:id/state`, `GET /api/share/:id/stream`, `GET /api/share/:id/author-stream`, `POST /api/share/:id/ping`.
-- `frank-cloud/` is the **reference implementation** — Vercel serverless functions + Vercel Blob (durable share payloads) + Upstash Redis (live presence, pubsub, session tracking, rolling 60s diff buffer). Full deployment walkthrough including required Vercel Marketplace integrations and the Deployment Protection gotcha: [`frank-cloud/DEPLOYMENT.md`](frank-cloud/DEPLOYMENT.md).
-- Any host that serves the contract works — Cloudflare Workers, Deno Deploy, self-hosted Node, etc. The Settings modal (home header → cog icon) has a "Use Vercel" tab with a one-click **Deploy to Vercel** button (`vercel.com/new/clone?...` with `root-directory=frank-cloud` + `FRANK_API_KEY` env prompt) and a "Use your own" tab for alternative backends.
-- Required env vars on the backend: `FRANK_API_KEY`, `KV_REST_API_URL`, `KV_REST_API_TOKEN` (Vercel Marketplace naming) OR `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (direct Upstash naming — `lib/redis.ts` reads either), `BLOB_READ_WRITE_TOKEN`.
-- Handler runtime split: `api/health.ts` and `api/tick.ts` run on Vercel's **edge** runtime (Fetch-API, no Blob deps). All blob-touching handlers run on Vercel's **nodejs** runtime with classic `(req: VercelRequest, res: VercelResponse)` signatures — edge rejects `@vercel/blob` at build time because of its transitive Node-only deps. `DEPLOYMENT.md` covers why.
-- The CLI equivalent is `frank connect <url> --key <key>`, which writes URL + key to `~/.frank/config.json` (mode 0600, secret-aware write). The Settings modal hits the same daemon handlers (`set-cloud-config`, `test-cloud-connection`).
-- `saveCloudConfig()` also writes `cloudConfiguredAt` (ISO timestamp). It flows back through `get/set-cloud-config` so the Settings UI can show a green "Already configured on <date>" hint at the top of both tabs when a config is on file.
-- Cloud is optional — everything except sharing works offline. Until it's configured, the Share button warns that cloud isn't set up.
-- For canvas sharing, the daemon bundles the canvas state + every referenced asset as inline data URLs into the share payload, so the cloud viewer can render without round-tripping back to the daemon.
-- For live share, the daemon opens a long-lived SSE connection to `/api/share/:id/author-stream` per active live share and POSTs state updates to `/api/share/:id/state` with monotonic revisions. Viewers open `/api/share/:id/stream` and receive either a full state (cold open, or 30s stale) or a diff replay from the 60s rolling buffer. All three per-project-type controllers (canvas/image/pdf) share the transport; only canvas surfaces live as a user-facing feature.
+- Contract documented in [`CLOUD_API.md`](CLOUD_API.md): `/api/health`, `GET+POST+DELETE /api/share`, `POST /api/comment`, `POST /api/share/:id/state`, `GET /api/share/:id/stream`, `GET /api/share/:id/author-stream`, `POST /api/share/:id/ping`.
+- `frank-cloud/` is the **reference implementation** — Vercel functions + Vercel Blob (durable share payloads) + Upstash Redis (live presence, pubsub, rolling 60s diff buffer). Deploy guide: [`frank-cloud/DEPLOYMENT.md`](frank-cloud/DEPLOYMENT.md).
+- Required env: `FRANK_API_KEY`, `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Vercel Marketplace) OR `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (direct Upstash; `lib/redis.ts` reads either), `BLOB_READ_WRITE_TOKEN`.
+- Runtime split: `api/health.ts` and `api/tick.ts` run on Vercel **edge** (Fetch-API, no Blob deps). All blob-touching handlers run on **nodejs** with classic `(req, res)` signatures — edge rejects `@vercel/blob` at build time.
+- Configure via Settings modal (cog in home header) or `frank connect <url> --key <key>` (writes `~/.frank/config.json`, mode 0600). `cloudConfiguredAt` ISO timestamp drives the Settings "Already configured on <date>" hint.
+- **Cloud is optional** — everything except sharing works offline. Until configured, Share warns.
+- Canvas share payload is self-contained: canvas state + every referenced asset as inline data URLs. Cloud viewer renders with Konva from CDN alone.
+- Live share opens a long-lived SSE connection to `/api/share/:id/author-stream` per active live share, POSTs state with monotonic revisions to `/api/share/:id/state`. Viewers open `/api/share/:id/stream` and get either a full state (cold open or 30s stale) or diff replay from the 60s buffer. All three per-project-type controllers (canvas/image/pdf) share the transport; only canvas surfaces it as a user-facing feature.
 
 ### URL Share Auto-Deploy
-- URL shares are **NOT static snapshots** — Frank auto-deploys a real preview to the user's own Vercel account. Reviewer hits the preview URL and interacts with the running app.
-- Flow: envelope check (§1 of design doc) → pre-flight build + 30s smoke tail (§2) → encoder registry generates safe-dummy env (§3) → overlay injection into root layout on a COPY of the source (§4) → Vercel Deployments API upload + poll (§6) → frank-cloud share record (§7) → revoke contract (§8).
-- **Allowlist bundler is P0** (`daemon/src/share/bundler.ts`). Hardcoded positive list of what ships to Vercel: framework source dirs, `package.json`, one lockfile, `public/`, known configs, middleware/proxy/instrumentation, exactly `.env.share`. Everything else refused — including explicit user request to ship `.env.local`. Prevents secret leaks to public preview URLs.
-- **Refuse-to-guess** (§1.4): if a detected SDK has no registry encoder and no `.env.share` coverage, Share is refused with an actionable message. No silent dummies.
-- **User's working tree is never modified.** Overlay injection happens on a copy of the source in a working dir under `~/.frank/share-builds/<shareId>/`. Each Share click picks up a fresh copy; the user's repo stays untouched.
-- **Overlay is bundled into each deployment**, not loaded cross-origin from frank-cloud. `frank-overlay.js` ships into the deployed app's `public/` (or `static/` for SvelteKit) — same-origin script that attaches a shadow-DOM pill and connects to frank-cloud via SSE for comments. If frank-cloud is offline, the overlay still renders and shows a "comments unavailable" banner.
-- **Vercel token is account-scoped.** Vercel's PATs aren't permission-scoped; honest disclosure in the Settings UI and the design doc §6.1.
-- **Revoke is two-step.** Cloud flag flips synchronously (share link 404s within ms), Vercel DELETE fires after. V1 does one sync attempt; retry queue is v1-hardening follow-up.
-- **Calibration sweep memory (`project_frank_calibration_sweep`)** has paste-ready encoder outputs for every SDK that ships in v1. Don't reverse-engineer from tests — read the memo.
+- URL shares are **NOT static snapshots** — Frank deploys a real preview to the user's own Vercel; reviewer interacts with the running app.
+- Pipeline (`daemon/src/share/`): envelope check → preflight build + 30s smoke tail → encoder registry generates safe-dummy env → overlay injected into root layout on a COPY → Vercel Deployments API upload + poll → frank-cloud share record → revoke contract.
+- **Allowlist bundler is P0** (`share/bundler.ts`). Hardcoded positive list: framework source dirs, `package.json`, one lockfile, `public/`, known configs, middleware/proxy/instrumentation, exactly `.env.share`. Everything else refused — including explicit user request to ship `.env.local`. No flag overrides this.
+- **Refuse-to-guess.** If a detected SDK has no registry encoder and no `.env.share` coverage, Share is refused with an actionable message. No silent dummies. Overclaiming is a trust failure.
+- **User's working tree is never modified.** Overlay injection happens on a COPY in `~/.frank/share-builds/<shareId>/`. Each Share click picks up a fresh copy.
+- **Overlay is bundled into each deployment**, not loaded cross-origin. `frank-overlay.js` ships into `public/` (or `static/` for SvelteKit) — same-origin, attaches a shadow-DOM pill, connects to frank-cloud via SSE for comments. Frank-cloud offline → overlay still renders, shows "comments unavailable" banner.
+- **Vercel token is account-scoped** (Vercel PATs aren't permission-scoped — disclosed in Settings UI and design doc §6.1). SSO+password auto-disabled on the per-share Vercel project.
+- **Revoke is two-step.** Cloud flag flips synchronously (link 404s within ms), Vercel DELETE fires after with a retry queue (`share/revoke-queue.ts` + `share/revoke-worker.ts`, 1m/5m/30m/1h/6h/24h backoff, drained on daemon startup + re-armed on enqueue).
+- For paste-ready encoder outputs per SDK, read the `project_frank_calibration_sweep` memory — don't reverse-engineer from tests.
+- Static-HTML projects supported (no framework needed — denylist bundler, skip preflight, inject overlay at root).
 
 ### Plain JS Frontend
-- **No build step.** The `ui-v2/` directory is served directly by the daemon's HTTP server.
-- **No framework.** Plain DOM — innerHTML for static renders, event listeners for interaction.
-- Plain JS ES modules — no TypeScript, no bundler, no transpilation.
-- Plain CSS with custom properties — no Tailwind, no CSS-in-JS.
-- **Konva** is loaded via `<script>` tag in `index.html` (unpkg CDN) and accessed as `window.Konva`. It powers the canvas view.
-- **jsPDF + svg2pdf** and **pdfmake** are loaded on demand (jsPDF/svg2pdf from CDN on first use; pdfmake is a daemon-side dep) — only pay the cost when the user actually exports.
+- **No build step.** `ui-v2/` is served as-is by the daemon's HTTP server.
+- **No framework.** Plain DOM — innerHTML for static renders, event listeners for interaction. Plain CSS with custom properties — no Tailwind, no CSS-in-JS.
+- **Konva** loaded via `<script>` tag in `index.html` (unpkg CDN), accessed as `window.Konva`. Powers the canvas view.
+- **jsPDF + svg2pdf** and **pdfmake** load on demand (jsPDF/svg2pdf from CDN on first use; pdfmake is a daemon dep).
 
 ---
 
@@ -92,139 +67,54 @@ URL share auto-deploy design doc: [`docs/url-share-auto-deploy-design.md`](docs/
 | Layer | Technology |
 |---|---|
 | Browser UI | Plain JS ES modules (no framework, no build step) |
-| Canvas | [Konva](https://konvajs.org/) 9, loaded via `<script>` tag |
-| Daemon | Node.js + TypeScript — HTTP server (42068) + WebSocket (42069) |
-| AI | BYO — MCP server (stdio, `frank mcp`) for direct connection, clipboard "Copy as prompt" for one-off handoffs, JSON / MD / PDF export for whole-project handoffs. No in-app AI chat. |
+| Canvas | [Konva](https://konvajs.org/) 9 via `<script>` tag |
+| Daemon | Node.js + TypeScript — HTTP (42068) + WebSocket (42069) |
+| AI | BYO — MCP server (stdio, `frank mcp`), clipboard "Copy as prompt", JSON / MD / PDF export. **No in-app AI chat.** |
 | Content wrapping | iframe + transparent overlay + content proxy |
-| Cloud sharing | Vercel serverless functions + Blob storage + Upstash Redis (self-hosted) |
+| Cloud sharing | Vercel functions + Vercel Blob + Upstash Redis (self-hosted) |
 | Project storage | JSON files in `~/.frank/projects/` |
-| Comment anchoring | CSS selector + DOM path + visual coordinates (URL/PDF/image); shape ID + last-known world position (canvas) |
-| Canvas export | Raster PNG (Konva) · Vector SVG (in-house Konva→SVG translator) · Vector PDF (jsPDF + svg2pdf.js) |
-| Report export | Markdown (hand-written) · PDF (pdfmake w/ Roboto) |
-| Bundle export | One zip (JSZip) with JSON + reports + snapshots + source + assets |
-| URL share auto-deploy | `daemon/src/share/` — envelope + allowlist bundler + pre-flight build + per-SDK dummy-env encoders + overlay injection + Vercel Deployments API client. `semver` (^7.7.4) for encoder version checks. |
+| Comment anchoring | CSS selector + DOM path + visual coords (URL/PDF/image); shape ID + last-known position (canvas) |
+| Canvas export | Raster PNG (Konva) · Vector SVG (Konva→SVG translator) · Vector PDF (jsPDF + svg2pdf.js) |
+| Report export | Markdown + PDF (pdfmake w/ Roboto) |
+| Bundle export | Zip (JSZip) — JSON + reports + snapshots + source + assets |
+| URL share auto-deploy | `daemon/src/share/` — envelope + allowlist bundler + preflight + SDK encoders + overlay injection + Vercel API. `semver` for encoder version checks. |
 
 ---
 
 ## Project Structure
 
+Per-file annotations are intentionally omitted — read the actual files. Names are descriptive.
+
 ```
 frank/
-├── ui-v2/                    # Browser UI (plain JS, no build step)
-│   ├── index.html            # Entry point; Konva <script> tag
-│   ├── app.js                # App shell: view router, state, toast on create failure
-│   ├── frank-logo.svg
-│   ├── core/
-│   │   ├── sync.js           # WebSocket client; reconnect toasts on disconnect/recover
-│   │   └── project.js        # In-memory project state manager
-│   ├── views/
-│   │   ├── home.js           # Project list — tabs (Recent/Archived/Deleted), create, rename, archive, trash, search/sort/filter, Settings + Help buttons
-│   │   ├── viewer.js         # Content viewer — iframe + overlay + comment pins + popover + error card on proxy fail
-│   │   ├── canvas.js         # Konva canvas view — tools, comments, snapshots, share, export, shortcuts, undo (button + Cmd+Z), copy/paste/duplicate, timeline
-│   │   └── timeline.js       # Chronological view + unified Export dropdown (JSON/MD/PDF) + Show-folder button
-│   ├── canvas/
-│   │   ├── stage.js          # Konva Stage + Layer setup, pan (space+drag), zoom
-│   │   ├── tools.js          # Tool modes: select, rect, text, sticky, freehand, arrow, elbow, shapes, paths
-│   │   ├── transformer.js    # Selection + Konva.Transformer handles; Delete/Cmd+G/Cmd+Shift+G keybinds
-│   │   ├── serialize.js      # Save/load via Konva JSON; rebinds connectors + rehydrates images
-│   │   ├── shapes.js         # Shape factories (shared by tools + templates)
-│   │   ├── paths.js          # SVG path data for Path-based shapes
-│   │   ├── connectors.js     # Follow-shape arrow/elbow connectors (dragmove index)
-│   │   ├── endpoint-edit.js  # Connector endpoint handles (re-attach on drag)
-│   │   ├── anchors.js        # Rotation-aware shape anchors + nearest-snap target
-│   │   ├── templates.js      # Kanban/Mindmap/Flowchart/Calendar inserts + group/ungroup
-│   │   ├── properties.js     # Right-side inspector (fill, stroke, alignment, dissolve group)
-│   │   ├── comments.js       # Shape-anchored comments: pins + dragmove follow + orphan treatment
-│   │   ├── image.js          # Drop images → upload asset → Konva.Image; rehydrate on load
-│   │   ├── shortcuts.js      # V/R/T/P/N/A, Esc, Cmd+Z/Shift+Z, Cmd+D, Cmd+C/Cmd+V (copy/paste shapes)
-│   │   ├── cursors.js        # SVG data-URL cursors for every tool + COMMENT_CURSOR (shared with viewer)
-│   │   ├── history.js        # In-memory undo/redo ring buffer
-│   │   ├── svg-export.js     # Konva content layer → standalone SVG string
-│   │   └── export.js         # PNG/SVG/PDF/JSON download helpers (PDF routes SVG→svg2pdf)
-│   ├── overlay/
-│   │   ├── overlay.js        # Click handling, comment mode toggle, custom COMMENT_CURSOR on same-origin iframes
-│   │   ├── element-detect.js # Smart element detection (bubble to meaningful)
-│   │   ├── anchoring.js      # Triple-anchor: CSS selector + DOM path + coords; free-pin anchor for empty-space clicks
-│   │   ├── pins.js           # Viewer-side pin rendering — numbered colored markers + shared popover (parity with canvas)
-│   │   ├── highlight.js      # Element highlight rendering
-│   │   └── snapshot.js       # DOM snapshot capture for sharing
-│   ├── components/
-│   │   ├── toolbar.js        # Top toolbar (viewer) + exported SVG icons (commentPlus/camera/link/download/timeline/undo) shared with canvas
-│   │   ├── curation.js       # Feedback curation panel — inline edit, approve/dismiss toggles, pin-number color badge, focus-pulse, approved-gated "Copy for AI" (batch + per-row), Delete (batch)
-│   │   ├── intent-button.js  # Amber "Add Intent" / green "Intent set" pill + modal (project brief textarea, ≤ 2000 chars)
-│   │   ├── comments.js       # Comment input (used by overlay callback)
-│   │   ├── share-popover.js  # Share link management (viewer + canvas) — URL-share popover (Vercel gate + sourceDir gate + active-shares list + build-log stream + three-zone UX + pending-retries), optimistic pause/resume spinner, custom expiry dropdown
-│   │   ├── ai-routing.js     # Clipboard AI routing (non-Claude fallback)
-│   │   ├── url-input.js      # URL paste + file picker + drag-drop (PDF / image)
-│   │   ├── help-panel.js     # Getting-started modal (5 feature cards, focus trap)
-│   │   ├── settings-panel.js # Settings modal — top-level tabs: "Cloud Backend" (Vercel / custom, Deploy-to-Vercel CTA, configured-at hint) + "MCP Setup" (config snippet + per-client paths + security notes) + "Share Preview" (URL share auto-deploy diagnostics — path input, envelope check, preflight, Vercel token config, create + revoke). Takes `initialTopTab` param.
-│   │   ├── share-envelope-panel.js  # Reusable display + interactive harness for the Share Preview tab. Renders envelope result, bundle summary, preflight verdict, share-create progress + revoke.
-│   │   ├── toast.js          # info/warn/error notifications (top-right, stackable, info shows checkmark)
-│   │   ├── error-card.js     # Inline error block (message + suggestion + retry)
-│   │   └── confirm.js        # Frank-styled confirm dialog (replaces native window.confirm) — destructive variant, focus trap, Escape/overlay-click/Cancel all resolve false
-│   └── styles/
-│       ├── tokens.css        # Design tokens, resets, :focus-visible rule
-│       ├── app.css           # Home, toolbar, cards, help modal, toasts, error cards
-│       ├── ui.css            # Button/input primitives
-│       ├── overlay.css       # Overlay + highlight styles
-│       ├── comments.css      # Comment input styles
-│       ├── curation.css      # Curation panel styles
-│       ├── timeline.css      # Timeline view + canvas badge + thumbnail
-│       ├── canvas.css        # Canvas topbar, drawer, inspector, curation host, comment popovers, export menu
-│       ├── share-envelope.css # Share Preview styling — verdict pills (green/yellow/red), failure list, SDK badges, route probe list, log pre
-├── daemon/                   # Node.js daemon (TypeScript, strict)
-│   ├── vitest.config.ts
-│   ├── package.json          # deps: ws, pdfmake, tslib, jszip, @modelcontextprotocol/sdk, semver (URL share encoder version checks).
-│   ├── src/cli.ts            # frank start / stop / connect / status / export / mcp / share / uninstall
-│   ├── src/server.ts         # HTTP + WebSocket server, all message handlers (incl. set-project-intent, export-bundle, mcp-add-*, mcp-create-share, canvas-state-changed broadcast)
-│   ├── src/protocol.ts       # Shared types and constants (incl. ProjectV2.intent, bundle + MCP message types)
-│   ├── src/projects.ts       # Project CRUD + rename/archive/trash/restore/purge + createProjectFromFile + setProjectIntent
-│   ├── src/assets.ts         # Content-addressed (sha256) asset storage per project
-│   ├── src/proxy.ts          # Content proxy for iframe-restricted URLs
-│   ├── src/cloud.ts          # Cloud client (share upload, comment fetch) + secret-aware config I/O
-│   ├── src/snapshots.ts      # Canvas "Bookmark moment" + DOM snapshot storage (thumbnail PNG for canvas)
-│   ├── src/curation.ts       # Curation log (approve, dismiss, remix, batch, reset)
-│   ├── src/ai-chain.ts       # AI instruction chain logging
-│   ├── src/export.ts         # Structured JSON export (includes intent)
-│   ├── src/report.ts         # Project report — Markdown + PDF (pdfmake, Roboto); intent appears under "Project brief"
-│   ├── src/bundle.ts         # Bundle-first Download (JSZip: project.json + reports + snapshots + source + assets)
-│   ├── src/canvas-writes.ts  # Programmatic canvas writes — addShape/addText/addPath/addConnector used by MCP
-│   ├── src/canvas.ts         # Canvas state I/O (one JSON blob per project)
-│   ├── src/live-share.ts     # Live-share transport + per-project-type controllers (canvas/image/pdf)
-│   ├── src/inject.ts         # CLAUDE.md injection/removal
-│   ├── src/mcp/              # MCP server (stdio transport)
-│   │   ├── server.ts         # runMcpServer() — @modelcontextprotocol/sdk StdioServerTransport
-│   │   ├── bridge.ts         # DaemonBridge — WebSocket client bridging stdio tools ↔ running daemon
-│   │   └── tools.ts          # 15 tool definitions + handlers (reads, canvas writes, create_share)
-│   ├── src/share/            # URL share auto-deploy pipeline — v3.3+
-│   │   ├── types.ts          # EnvelopeResult, BundleResult, DetectedSdk, failure codes
-│   │   ├── envelope.ts       # Framework + structural rules + refuse-to-guess detection
-│   │   ├── bundler.ts        # Allowlist file walker (.env.local always refused)
-│   │   ├── env-share.ts      # Minimal dotenv parser for user-supplied overrides
-│   │   ├── encoder-registry.ts  # Registry + generateEncoderEnv() merger
-│   │   ├── sdk-encoders/     # supabase.ts, clerk.ts, stripe.ts, sentry.ts, auth0.ts, posthog.ts
-│   │   ├── preflight.ts      # Build + ephemeral-port start + deterministic smoke + 30s stderr tail
-│   │   ├── injection.ts      # Per-framework root-layout detection + one <script> injection on a COPY
-│   │   ├── overlay-source.ts # OVERLAY_SCRIPT_CONTENT — frank-overlay.js as a TS string (shadow DOM, SSE)
-│   │   ├── vercel-api.ts     # createDeployment / pollDeployment / deleteDeployment / verifyVercelToken / disableDeploymentProtection / streamBuildLogs
-│   │   ├── share-create.ts   # End-to-end orchestration (createShare) + revoke (revokeShare)
-│   │   ├── share-records.ts  # Local ~/.frank/share-records.json persistence + share-builds cleanup (startup sweep + per-revoke removal by buildDirName)
-│   │   ├── revoke-queue.ts   # ~/.frank/revoke-queue.json — pending Vercel-delete retries with 1m/5m/30m/1h/6h/24h backoff
-│   │   └── revoke-worker.ts  # Background worker draining revoke-queue on startup + re-armed on enqueue
-│   ├── src/*.test.ts         # Vitest tests (377 across 29 files; 9 more in the opt-in cloud integration harness)
-│   └── frank-audit.mjs       # End-to-end quality harness for CLI + MCP. Spawns `frank mcp` over stdio, runs 59 quality assertions against every subcommand + every MCP tool (shape round-trips, anchor fields, forbidden-tool absence). Re-run with `node frank-audit.mjs` when touching CLI or MCP surface.
-├── frank-cloud/              # Reference cloud backend — Vercel + Blob (users host their own)
-│   ├── api/                  # Serverless functions (share, comment, health)
-│   ├── public/viewer/        # Share viewer page (iframe OR canvas render via Konva CDN)
-│   ├── vercel.json           # Routes, headers, security
-│   └── README.md             # Deploy guide with security checklist
-├── docs/
-│   ├── frank-v3-direction.md
-│   ├── url-share-auto-deploy-design.md  # URL share auto-deploy design (rev 4, post-calibration)
-│   └── share-guards.md                  # FRANK_SHARE=1 guard patterns per SDK
-├── CLAUDE.md
-├── CLOUD_API.md              # Cloud API contract — required reading if porting to another host
-├── PROGRESS.md
+├── ui-v2/                  # Browser UI — served as-is, no build
+│   ├── index.html          # Entry; Konva <script> tag
+│   ├── app.js              # App shell + view router
+│   ├── core/               # sync.js (WS client), project.js (in-memory state)
+│   ├── views/              # home, viewer, canvas, timeline
+│   ├── canvas/             # Konva: stage, tools, transformer, serialize, shapes, paths,
+│   │                       # connectors, endpoint-edit, anchors, templates, properties,
+│   │                       # comments, image, shortcuts, cursors, history, svg-export, export
+│   ├── overlay/            # iframe overlay: overlay, element-detect, anchoring, pins, highlight, snapshot
+│   ├── components/         # toolbar, curation, intent-button, comments, comment-composer (shared),
+│   │                       # share-popover, ai-routing, url-input, help-panel, settings-panel,
+│   │                       # share-envelope-panel, toast, error-card, confirm
+│   └── styles/             # tokens, app, ui, overlay, comments, curation, timeline, canvas, share-envelope
+├── daemon/                 # Node.js + TypeScript daemon (strict)
+│   ├── src/cli.ts          # frank start / stop / connect / status / export / mcp / share / uninstall
+│   ├── src/server.ts       # HTTP + WS server, all message handlers
+│   ├── src/protocol.ts     # Shared types + constants
+│   ├── src/projects.ts     # CRUD + rename/archive/trash/restore/purge + setProjectIntent
+│   ├── src/{assets,proxy,cloud,snapshots,curation,ai-chain,export,report,bundle}.ts
+│   ├── src/{canvas,canvas-writes,live-share,inject}.ts
+│   ├── src/mcp/            # MCP server (stdio): server.ts, bridge.ts, tools.ts (15 tools)
+│   ├── src/share/          # URL share auto-deploy pipeline (see Architecture § URL Share Auto-Deploy)
+│   ├── src/*.test.ts       # Vitest tests; opt-in cloud-integration harness skipped by default
+│   └── frank-audit.mjs     # CLI + MCP end-to-end harness; `node frank-audit.mjs` after CLI/MCP changes
+├── frank-cloud/            # Reference cloud backend (Vercel + Blob + Redis)
+├── docs/                   # frank-v3-direction.md, url-share-auto-deploy-design.md, share-guards.md
+├── CLOUD_API.md            # Cloud API contract — required reading if porting to another host
+├── PROGRESS.md             # Per-version shipping log
 └── README.md
 ```
 
@@ -232,31 +122,29 @@ frank/
 
 ## Key Rules
 
-- **URL-first or canvas-first**: the input is a URL, file (PDF/image), or a blank canvas — not a JSON schema
-- **Daemon is sole file writer**: UI never touches the filesystem
-- **All data local by default**: nothing leaves the machine unless user hits Share. Frank does not call any AI service itself; routing to AI is clipboard + export only.
-- **Self-hosted cloud**: users deploy their own sharing backend (Vercel reference in `frank-cloud/` or any host implementing `CLOUD_API.md`)
-- **Setup is required for sharing**: Share button warns until cloud is configured via Settings modal or `frank connect`
-- **No build step**: `ui-v2/` must be servable as-is
-- **Smart element detection**: clicks bubble up to meaningful elements, not raw DOM nodes
-- **Triple-anchor comments** for DOM targets; **shape-anchor comments** for canvas shapes (pin follows on drag; orphaned pins survive at last-known position)
-- **Vector exports**: PDF and SVG go through the Konva→SVG translator → svg2pdf for PDF. Raster is only for PNG. "A PDF needs to be vector."
-- **Security first**: sensitive content detection before sharing, input validation, upload allowlists + size caps, secret-aware config writes (0600 for API keys)
-- **No silent failures**: user-facing errors surface as a toast or an inline error card with a retry/action path
-- **URL share never modifies the user's working tree**. Overlay injection happens on a COPY in `~/.frank/share-builds/<shareId>/`. Bundler is a hardcoded allowlist — no flag or config makes it ship `.env.local` or a private key.
-- **Refuse-to-guess beats silent dummy**. If an SDK isn't in the encoder registry and the user hasn't supplied values in `.env.share`, Share refuses with a specific actionable message. Overclaiming is a trust failure.
+- **URL-first or canvas-first.** Input is a URL, file (PDF/image), or blank canvas — not a JSON schema.
+- **Daemon is sole file writer.** UI never touches the filesystem.
+- **All data local by default.** Nothing leaves the machine unless the user hits Share. Frank does not call any AI service itself; AI routing is clipboard + export + MCP only.
+- **Self-hosted cloud.** Share button warns until cloud is configured.
+- **No build step.** `ui-v2/` must be servable as-is.
+- **Triple-anchor comments** for DOM targets; **shape-anchor comments** for canvas (pin follows on drag; orphaned pins survive at last-known position).
+- **Vector exports.** PDF and SVG go through Konva→SVG → svg2pdf for PDF. Raster only for PNG. *A PDF needs to be vector.*
+- **Security first.** Sensitive content detection before sharing, input validation, upload allowlists + size caps, secret-aware config writes (0600 for API keys).
+- **No silent failures.** Every user-facing error surfaces as a toast or inline error card with retry/action path.
+- **URL share never modifies the user's working tree.** Overlay injection is on a COPY. Bundler is a hardcoded allowlist — no flag ships `.env.local` or a private key.
+- **Refuse-to-guess beats silent dummy.** Unknown SDK with no `.env.share` coverage → Share refuses.
 
 ---
 
 ## Coding Conventions
 
-- Plain JavaScript ES modules in the frontend (no TypeScript)
-- Plain DOM — innerHTML for static renders, event listeners for interaction
-- Functions returning HTML strings for rendering
-- CSS custom properties for all design tokens
-- All file I/O goes through the daemon via WebSocket
-- Daemon TypeScript follows strict mode, atomic writes for all file operations
-- User-facing keyboard actions get `:focus-visible` rings; non-trivial focusables gain `role`/`tabindex`/`aria-label`
+- Plain JS ES modules in the frontend (no TypeScript).
+- Plain DOM — innerHTML for static renders, event listeners for interaction. Functions returning HTML strings for rendering.
+- CSS custom properties for all design tokens.
+- Daemon TypeScript: strict mode, atomic writes for all file operations.
+- Keyboard actions get `:focus-visible` rings; non-trivial focusables get `role` / `tabindex` / `aria-label`.
+- **One design system.** One button system (`.btn-primary` / `.btn-secondary` / `.btn-ghost` / `.btn-destructive` + `.btn-sm`); one input system (`.input` + `textarea.input`); checkboxes use `.ui-checkbox`. Radii via `var(--radius-round)` / `var(--radius-sm)` — no hardcoded `border-radius`.
+- **Use `confirm.js`** (Frank-styled confirm dialog) instead of `window.confirm()`. Sharp corners, focus-trapped, Escape/overlay-click resolve false.
 
 ---
 
@@ -264,172 +152,116 @@ frank/
 
 | View | What it shows |
 |---|---|
-| **Home** | Project list + URL/file entry. **Tabs** (Recent / Archived / Deleted) replace the old collapsible sections. Search / sort / type-filter chips below the tab. Cards support **inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete**. Cards also surface share state: red pulsing **LIVE · N** pill for active live sessions, muted **Shared** chip for projects with an active share record. Keyboard: ↑/↓ between cards, Enter to open, Delete to trash, F2 to rename. Header has a **Settings** cog (cloud backend config) and **Help** button. |
-| **Viewer** | Content in iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar. Commenting is **click-anywhere**: crosshair cursor, every click drops a free pin at the click point (no element detection, no hover dashed outline). **Numbered colored pins** render on the overlay; click → draggable Close / Edit / Delete popover (`.canvas-comment-popover`); feedback-row click → pin pulses. The **X** in the top-right of the feedback drawer closes it + exits comment mode; clicking the toolbar comment button a second time does the same. Proxy failures render an inline **error card with Retry**. |
-| **Canvas** | Konva-backed sketching: select, rectangle, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). **Intent pill** (amber/green), **shape-anchored comments** (crosshair cursor — clicking a shape anchors to it; clicking empty canvas drops a free pin), **Bookmark moment** (camera icon — captures canvas state + thumbnail to the timeline), **Share** (link icon, live-share toggle, clickable LIVE·N badge), **Download** (bundle zip), **Export dropdown** (PNG / SVG / PDF / JSON), **undo** (button + Cmd+Z), **timeline** (shared event with viewer), **Cmd+C / Cmd+V / Cmd+D** copy/paste/duplicate shapes, **V/R/T/P/N/A/Esc** tool shortcuts, **drag-and-drop images** → content-addressed asset. State persists to `~/.frank/projects/{id}/canvas-state.json`. |
-| **Timeline** | Chronological view of comments + bookmarks + curations + AI instructions. Canvas bookmarks show a Canvas badge + inline thumbnail. **Show folder** (reveal in Finder/Explorer) + unified **Export** dropdown (JSON / Markdown / PDF). Close (X) returns to canvas or viewer depending on the project. |
+| **Home** | Project list + URL/file entry. Tabs (Recent / Archived / Deleted). Search/sort/type-filter chips. Inline rename (F2), archive, soft-delete (30-day trash), restore, permanent delete. Cards surface red pulsing **LIVE · N** pill (active live sessions) + muted **Shared** chip (active share record). Keyboard: ↑/↓, Enter, Delete, F2. Header: Settings cog + Help. |
+| **Viewer** | iframe (URL/proxy/PDF/image) + commenting overlay + curation sidebar. Click-anywhere commenting: crosshair cursor, every click drops a free pin (no element detection). Numbered colored pins; click → draggable Close/Edit/Delete popover; feedback-row click → pin pulses. X in feedback drawer top-right closes it + exits comment mode (toolbar comment button toggles too). Proxy failures → inline error card with Retry. |
+| **Canvas** | Konva sketching: select, rect, circle, ellipse, triangle, diamond, hexagon, star, cloud, speech, document, cylinder, parallelogram, arrow, elbow, pen, text, sticky. Pan (space+drag), zoom (wheel). Intent pill, shape-anchored comments, **Bookmark moment** (camera — captures state + thumbnail), Share, Download (bundle zip), Export (PNG/SVG/PDF/JSON), undo (button + Cmd+Z), timeline. Cmd+C/V/D for shapes; V/R/T/P/N/A/Esc tool shortcuts. Drag-and-drop images → content-addressed asset. State at `~/.frank/projects/{id}/canvas-state.json`. |
+| **Timeline** | Chronological view of comments + bookmarks + curations + AI instructions. Canvas bookmarks show Canvas badge + thumbnail. Show folder + Export (JSON/MD/PDF). |
 
-## Commenting — unified across canvas, viewer, and URL-share reviewer overlay
+---
 
-As of dev-v3.13 every commenting surface in Frank uses the same UX. A
-reviewer leaving feedback on a Vercel-deployed share sees the same composer
-a user sees inside the Frank viewer or on a canvas. Changes to the commenting
-UX need to land in all three places.
+## Commenting — unified across canvas, viewer, and reviewer overlay
 
-- **Create composer — `ui-v2/components/comment-composer.js`** — a single
-  shared helper. Canvas (`canvas/comments.js openCreateInput`) and viewer
-  (`overlay/overlay.js openComposer`) both call `openCommentComposer({
-  clientX, clientY, onSubmit })`. Renders a 260px floating `.canvas-comment-input`
-  at the click point with a `⋮⋮` drag-grip strip, textarea, and right-aligned
-  **Cancel / Post** buttons. Cmd/Ctrl+Enter submits; Escape cancels; dragging
-  the grip clamps so 40px always stays visible. The **reviewer overlay**
-  (`daemon/src/share/overlay-source.ts`) ships a visual twin inside its shadow
-  DOM — same drag handle, same button labels, matching dark-theme styling —
-  because the shadow root can't reach Frank's stylesheet.
-- **Cursor** — `COMMENT_CURSOR` from `ui-v2/canvas/cursors.js` is plain
-  `'crosshair'`. Applied on the canvas stage container (`canvas/comments.js`)
-  and on the viewer's `.overlay` div via the `comment-mode` class
-  (`app.css` → `.overlay.comment-mode { cursor: crosshair }`). The reviewer
-  overlay's `.intercept` layer uses the same CSS cursor.
-- **Click-anywhere pinning** — every click in comment mode drops a free pin
-  at the click point. No element detection, no hover dashed outline, no
-  "select the thing" rectangle. Canvas emits `{ type: 'pin', x, y }` in world
-  coords (or `{ type: 'shape', shapeId, ... }` when the click lands on an
-  existing shape — shapes are first-class content on canvas). Viewer + reviewer
-  emit `{ type: 'pin', x, y }` with x/y as viewport percentages.
-- **Pin rendering** — canvas uses Konva circles on `uiLayer`; viewer uses
-  absolutely-positioned HTML buttons on `.overlay`; reviewer overlay uses
-  shadow-DOM buttons. All three use the same `PIN_PALETTE` (10 hues cycled by
-  comment index) and the same visual grammar (circle + number, subtle shadow).
-  Stale canvas pins (deleted shape) go dashed/grey.
-- **Read popover (click an existing pin)** — uses the `.canvas-comment-popover`
-  CSS class on canvas + viewer. Draggable by its header, clamped inside the
-  viewport on open. Buttons: Close / Edit / Delete. Edit dispatches
-  `frank:edit-comment` → feedback panel opens, scrolls to the row, enters
-  inline edit mode. Reviewer overlay's read popover uses `.read-popover`
-  inside the shadow DOM with a matching drag strip and a single Close button
-  (reviewers don't edit or delete; that's the author's job).
-- **Feedback drawer** — `renderCuration` mounts into both the viewer sidebar
-  and the canvas curation host. X in the top-right closes it; clicking the
-  toolbar comment button a second time also closes it. Feedback row click
-  focuses the row and triggers a continuous pulse on the matching pin.
-  Status toggles (approve/dismiss) are two-way: clicking the active status
-  resets to pending via the `reset` curation action. Checkbox uses
-  `.ui-checkbox` (sharp-cornered, matches the rest of the design system).
-- **Data flow** — the daemon broadcasts `project-loaded` after every
-  curate/delete/remix action; `app.js` handles the broadcast and calls
-  `projectManager.setFromLoaded()`, which re-renders both the feedback
-  panel and the pins. `syncCloudComments` pulls reviewer comments from both
-  `project.activeShare.id` AND every record in `share-records.json` so URL
-  auto-deploy shares flow back too, and runs once immediately on `load-project`
-  so the author sees fresh state without waiting for the 30s poll tick.
+Every commenting surface uses the same UX: a reviewer on a Vercel-deployed share sees the same composer as the user inside Frank. **Changes to commenting UX must land in all three places.**
 
-Surface-specific features (canvas has undo/export/inspector/shapes; viewer
-has URL proxy / multi-page tracking) are intentional — they reflect
-different tools, not visual drift.
+- **Shared composer** (`ui-v2/components/comment-composer.js`) — 260px floating `.canvas-comment-input` at the click point, `⋮⋮` drag-grip + textarea + Cancel/Post. Cmd/Ctrl+Enter submits; Escape cancels; drag clamps so 40px stays visible. Used by canvas (`canvas/comments.js`) and viewer (`overlay/overlay.js`). Reviewer overlay (`daemon/src/share/overlay-source.ts`) ships a visual twin in its shadow DOM since the shadow root can't reach Frank's stylesheet.
+- **Cursor** — `COMMENT_CURSOR` from `ui-v2/canvas/cursors.js` is plain `'crosshair'`. Canvas stage container, viewer `.overlay.comment-mode`, and reviewer `.intercept` layer all use it.
+- **Click-anywhere pinning** — every click drops a free pin (no element detection, no hover dashed outline, no selection rectangle). Canvas emits `{ type: 'pin', x, y }` in world coords (or `{ type: 'shape', shapeId, ... }` if the click hits an existing shape — shapes are first-class on canvas). Viewer + reviewer emit pins with x/y as viewport percentages.
+- **Pin rendering** — canvas uses Konva circles on `uiLayer`; viewer uses absolutely-positioned HTML buttons; reviewer uses shadow-DOM buttons. All three share `PIN_PALETTE` (10 hues, cycled by index). Stale canvas pins (deleted shape) go dashed/grey.
+- **Read popover** — `.canvas-comment-popover` on canvas + viewer; draggable, viewport-clamped. Edit dispatches `frank:edit-comment` → feedback panel scrolls + enters inline edit. Reviewer uses `.read-popover` in shadow DOM with Close only (reviewers don't edit/delete).
+- **Feedback drawer** — `renderCuration` mounts in viewer sidebar + canvas curation host. Status toggles are two-way (clicking active status → `reset` → pending).
+- **Data flow** — daemon broadcasts `project-loaded` after every curate/delete/remix; `app.js` calls `projectManager.setFromLoaded()` (re-renders feedback + pins). `syncCloudComments` pulls reviewer comments from both `project.activeShare.id` AND every record in `share-records.json` (URL auto-deploy shares write there) and runs once on `load-project` so the author sees fresh state without waiting for the 30s tick.
+
+Surface-specific features (canvas undo/export/inspector/shapes; viewer URL proxy / multi-page) are intentional — different tools, not visual drift.
+
+---
 
 ## AI routing (BYO tool — no in-app chat)
 
-Frank does not bundle an in-app AI chat. That would lock users into one provider and force API-key management inside Frank. Instead, three handoff paths route feedback to whatever AI tool the user already uses:
+Frank does not bundle an in-app AI chat. That would lock users into one provider and force API-key management inside Frank. Three handoff paths instead:
 
-- **MCP server — `daemon/src/mcp/`**: AI connects directly to Frank. The user adds a config snippet (Settings → MCP Setup) that spawns `frank mcp` as a subprocess; stdio-to-WebSocket bridge (`bridge.ts`) forwards tool calls to the running daemon. 15 tools: reads (list_projects, load_project, get_intent, get_comments, get_canvas_state, list_snapshots, get_timeline, export_bundle), canvas writes (add_shape, add_text, add_path, add_connector, insert_template placeholder, add_comment), create_share. Canvas writes broadcast `canvas-state-changed` so open browser tabs re-render live. **Intentionally user-driven (not exposed as MCP tools)**: revoke share, live-share start/resume/pause, delete project, curation actions. These are humans' calls.
-- **Clipboard — `ai-routing.js`**: the "Copy as prompt" button on approved comments puts a structured prompt on the clipboard (including the project's intent if set). User pastes into Claude, Cursor, ChatGPT, a local LLM, whatever.
-- **Export — `daemon/src/export.ts` (JSON) + `daemon/src/report.ts` (MD/PDF) + `daemon/src/bundle.ts` (zip)**: hand off the entire project at once. Every comment, curation, bookmark, and timeline entry is captured. Bundle adds snapshots + source + assets for full-context handoff.
+- **MCP server** (`daemon/src/mcp/`) — AI connects directly to Frank. User adds a config snippet (Settings → MCP Setup) that spawns `frank mcp` as a subprocess; stdio↔WebSocket bridge (`bridge.ts`) forwards calls to the running daemon. **15 tools** — reads (list_projects, load_project, get_intent, get_comments, get_canvas_state, list_snapshots, get_timeline, export_bundle), canvas writes (add_shape, add_text, add_path, add_connector, insert_template, add_comment), create_share. Canvas writes broadcast `canvas-state-changed` so open browser tabs re-render live.
+- **Clipboard** (`ai-routing.js`) — "Copy as prompt" puts a structured prompt on the clipboard (including project intent if set). Paste anywhere.
+- **Export** (`daemon/src/export.ts` + `report.ts` + `bundle.ts`) — hand off the entire project at once.
 
-The `daemon/src/ai-chain.ts` log captures every Copy-as-prompt action so the export includes a decision trail of what was routed to which AI.
+`daemon/src/ai-chain.ts` logs every Copy-as-prompt action so exports include the decision trail.
 
-**MCP projectId discipline:** `activeProjectId` on the daemon is tied to the browser's current view. MCP tools always pass an explicit `projectId` (derived from tool input) so an AI writing to project B never clobbers what the user is looking at in project A.
+**Intentionally NOT exposed as MCP tools:** revoke share, live-share start/resume/pause, delete project, curation actions. These are humans' calls.
 
-Historical note: an earlier v2 version had an in-app Claude panel mounted in the viewer's right sidebar. It was removed pre-v3.0 in favor of the BYO-tool pattern above. The daemon-side `ai-conversations.ts` + `ai-providers/claude.ts` + `@anthropic-ai/sdk` dep + 6 legacy protocol handlers were all dropped in dev-v3.10 (2026-04-23).
+**MCP projectId discipline:** `activeProjectId` on the daemon tracks the browser's current view. MCP tools always pass an explicit `projectId` so an AI writing to project B never clobbers what the user is looking at in project A.
 
 ---
 
 ## Data shape
 
-### Project lifecycle flags + metadata (`ProjectV2`)
-- `archived?: string` — ISO timestamp when archived. Absence = active.
-- `trashed?: string` — ISO timestamp when soft-deleted. Auto-purged after 30 days at daemon startup (`purgeExpiredTrash`).
-- `intent?: string` — free-text project brief, ≤ 2000 chars (trimmed; empty deletes the field). Managed by `setProjectIntent()`. Renders as amber "Add Intent" / green "Intent set" pill in viewer + canvas toolbars; prepended to Copy-for-AI prompts; included in JSON / MD / PDF exports under "Project brief".
+### `ProjectV2` lifecycle + metadata
+- `archived?` / `trashed?` — ISO timestamps. Trashed projects auto-purge after 30 days at startup (`purgeExpiredTrash`).
+- `intent?` — free-text project brief, ≤ 2000 chars (trimmed; empty deletes the field). Renders as amber "Add Intent" / green "Intent set" pill in viewer + canvas. Prepended to Copy-for-AI prompts; included in JSON/MD/PDF exports under "Project brief".
+- `sourceDir?` — absolute path to local project directory for URL share auto-deploy.
 
 ### Comment anchor variants
-- `type: 'element'` — DOM target (viewer). Carries `cssSelector`, `domPath`, visual coords **as percentages of the iframe viewport** (not pixels).
-- `type: 'pin'` — Free-floating pin. On viewer, coords are percentages + optional `pageNumber` (PDF). On canvas, coords are absolute world coords.
-- `type: 'shape'` — Canvas shape target. Carries `shapeId`, world coords, and `shapeLastKnown: { x, y }` that updates on every `dragmove` so deleted-shape pins survive at their final position.
+- `type: 'element'` — DOM target (viewer): `cssSelector`, `domPath`, visual coords as **percentages of the iframe viewport**.
+- `type: 'pin'` — Free-floating: viewer uses percentages + optional `pageNumber` (PDF); canvas uses absolute world coords.
+- `type: 'shape'` — Canvas shape: `shapeId`, world coords, `shapeLastKnown: { x, y }` updated on every `dragmove` so deleted-shape pins survive at their final position.
 
 ### Curation actions
-- `approve` / `dismiss` / `remix` / `batch` — apply a status.
-- `reset` (added v2.04) — sets status back to `pending`. Used by the toggle-style buttons in the feedback panel so clicking the active status undoes it.
+`approve` / `dismiss` / `remix` / `batch` / `reset` (sets back to pending — used by toggle-style buttons).
 
 ### Snapshot variants
-- DOM snapshot: `snapshot.html` + optional screenshot. Used by URL/PDF/image projects.
-- Canvas "Bookmark moment" (`canvasState: true` marker on meta): writes `canvas-state.json` (serialized Konva) + optional `thumbnail.png` (0.5× stage PNG) inside the snapshot dir. User-facing terminology is "Bookmark moment" to distinguish capture-a-point-in-time from the Download bundle; the on-disk layout is unchanged from the v2 "snapshot" concept.
+- DOM snapshot: `snapshot.html` + optional screenshot (URL/PDF/image projects).
+- Canvas "Bookmark moment" (`canvasState: true` on meta): `canvas-state.json` + optional `thumbnail.png` (0.5× stage PNG). User-facing terminology distinguishes capture-a-point-in-time from the Download bundle; on-disk layout matches the v2 "snapshot" concept.
 
-### Download bundle
-- Built by `daemon/src/bundle.ts` via JSZip. Contains: `project.json` (structured export), `report.md` + `report.pdf`, `canvas-state.json` (canvas projects), `snapshots/` (every bookmark moment), `source/` (uploaded PDF / image sources), `assets/` (content-addressed canvas image drops + comment attachments).
+### Download bundle (`daemon/src/bundle.ts` via JSZip)
+`project.json` + `report.md` + `report.pdf` + `canvas-state.json` (canvas) + `snapshots/` + `source/` + `assets/`.
 
 ### Share payload (canvas)
-`{ canvasState: string, assets: Record<url, dataUrl>, preview: string }` — fully self-contained; cloud viewer needs nothing but Konva from CDN to render.
+`{ canvasState: string, assets: Record<url, dataUrl>, preview: string }` — fully self-contained; cloud viewer needs only Konva from CDN.
 
 ---
 
 ## Error surfaces
 
-Every failure path uses one of two components:
-- `toast.js` — transient: info auto-dismisses 4s, warn 6s, error persists until dismissed. Info toasts show a green ✓ icon. Actions supported (e.g. "Retry now").
+- `toast.js` — transient: info auto-dismisses 4s (green ✓), warn 6s, error persists. Actions supported (e.g. "Retry now").
 - `error-card.js` — inline: replaces failed content (viewer proxy failure, future upload-heavy surfaces).
 
-Wired: viewer proxy failure (error card), canvas save double-failure (toast + retry), canvas export failure (toast), project-creation failure (toast), WebSocket disconnect (persistent error toast) + reconnect (info toast), snapshot saved/failed (toast on both canvas and viewer), cloud settings test/save status (inline + toast).
+Wired: viewer proxy failure (error card), canvas save double-failure (toast + retry), canvas export failure, project-creation failure, WebSocket disconnect/reconnect, snapshot save, cloud settings test/save.
 
 ---
 
 ## Testing
 
-The daemon has a Vitest test suite (**310 passing across 27 files**, plus an opt-in cloud integration harness with 9 more tests). Unit tests use temp directories — never touch real `~/.frank/`.
-
 ```bash
 cd daemon
-npm test           # run all unit tests once
+npm test           # unit tests
 npm run test:watch # watch mode
 
-# Opt-in integration harness — exercises the real backend contract.
-# Skipped on a plain `npm test` run. See frank-cloud/INTEGRATION_TESTING.md.
+# Opt-in cloud integration harness — skipped on plain `npm test`.
 FRANK_CLOUD_BASE_URL=http://localhost:3000 \
   FRANK_CLOUD_API_KEY=<key> \
   npm test -- cloud-integration
 ```
 
-Test files live alongside source: `src/*.test.ts`. Each test file mocks `./protocol.js` to redirect `PROJECTS_DIR` to a temp directory. The `inject.test.ts` file additionally mocks `os.homedir()` using `vi.hoisted()`.
-
-**Covered modules:** `projects.ts`, `assets.ts`, `snapshots.ts`, `curation.ts`, `ai-chain.ts`, `export.ts`, `report.ts`, `proxy.ts`, `cloud.ts`, `inject.ts`, `canvas.ts`, `revision-store.ts`, `live-share.ts` (transport + per-project-type controllers for canvas/image/pdf), `share/envelope.ts`, `share/bundler.ts`, `share/preflight.ts` (pure helpers — link extraction, error counting, classification, port finder, start-command selection), `share/encoder-registry.ts` (all six SDK encoder outputs), `share/injection.ts` (layout detection per framework + injection idempotence + copy-doesn't-touch-source), `share/vercel-api.ts` (mocked-fetch unit tests — create / poll / delete / verify-token / disableDeploymentProtection / streamBuildLogs newline-delimited JSON parser), `share/share-records.ts` (write/read/mark-revoked/purge + share-builds sweep with buildDirName matching), `share/revoke-queue.ts` (backoff schedule + enqueue/list/remove/recordAttempt/dueEntries/nextWakeupAt), `share/revoke-worker.ts` (deps-injected timer-driven retry loop + gave-up handling).
-
-After changing any daemon module, run `npm test` to verify nothing broke. For changes that touch the daemon ↔ cloud contract, run the integration harness too — see the "Shipping a phase" section below.
+- Tests live alongside source: `daemon/src/*.test.ts`. Each mocks `./protocol.js` to redirect `PROJECTS_DIR` to a temp dir; `inject.test.ts` also mocks `os.homedir()` via `vi.hoisted()`. **Unit tests never touch real `~/.frank/`.**
+- Integration harness setup: [`frank-cloud/INTEGRATION_TESTING.md`](frank-cloud/INTEGRATION_TESTING.md).
+- For CLI + MCP changes: `node daemon/frank-audit.mjs` (end-to-end harness — spawns `frank mcp` over stdio, runs assertions across every subcommand and tool).
 
 ---
 
 ## Shipping a phase
 
-A phase isn't complete when `daemon/npm test` passes. It's complete when the end-to-end flow it enables works against a real deployment — `vercel dev` locally or a Vercel preview — with the cloud integration harness green.
+A phase isn't complete when `daemon/npm test` passes. It's complete when the end-to-end flow works against a real deployment.
 
 For any phase that touches the daemon ↔ cloud contract:
-
 1. **Daemon unit tests pass** — `cd daemon && npm test`.
-2. **Cloud integration harness passes** — `FRANK_CLOUD_BASE_URL=<url> FRANK_CLOUD_API_KEY=<key> npm test -- cloud-integration` (see [`frank-cloud/INTEGRATION_TESTING.md`](frank-cloud/INTEGRATION_TESTING.md)).
-3. **Manual smoke of the phase's user-visible flow in a browser.**
+2. **Cloud integration harness passes** — see [`frank-cloud/INTEGRATION_TESTING.md`](frank-cloud/INTEGRATION_TESTING.md).
+3. **Manual smoke of the user-visible flow in a browser.**
 
-Steps 1 and 2 are table stakes; step 3 catches UI-layer bugs neither set of tests can see. Skipping any of the three invalidates the "phase complete" claim.
+Steps 1+2 are table stakes; step 3 catches UI-layer bugs neither set of tests can see. Skipping any of the three invalidates the "phase complete" claim.
 
-This rule was written after the v3.0 smoke test surfaced five categorical cloud bugs that had survived Phases 1–5 because only step 1 was enforced. The rule exists because the failure mode is real and recent.
-
-> **Enforcement is currently advisory.** Stronger patterns (a `npm run preflight` script, a pre-merge git hook, a required checkbox in the plan template) are v3.x follow-ups — see the "Out of scope" section of [`docs/superpowers/plans/2026-04-20-v3-phase6-cloud-stabilization.md`](docs/superpowers/plans/2026-04-20-v3-phase6-cloud-stabilization.md).
+This rule exists because v3.0's smoke test surfaced five categorical cloud bugs that survived Phases 1–5 — only step 1 was being enforced. Stronger enforcement (preflight script, pre-merge hook, plan checkbox) is v3.x follow-up.
 
 ---
 
-## After changing UI code
+## After changing code
 
-After any change to files in `ui-v2/`:
-1. Just refresh the browser at `localhost:42068` — no build step needed.
-
-After any change to files in `daemon/src/`:
-1. `cd daemon && npm run build`
-2. Run `npm test` to verify tests pass
-3. Restart the daemon: kill the existing process, run `frank start`. Node does not hot-reload; a running daemon executes what it loaded at startup, not the rebuilt `dist/`.
+- **`ui-v2/`** — refresh the browser at `localhost:42068`. No build step.
+- **`daemon/src/`** — `cd daemon && npm run build && npm test`, then restart the daemon (kill, then `frank start`). Node does not hot-reload — a running daemon executes what it loaded at startup, not the rebuilt `dist/`.
