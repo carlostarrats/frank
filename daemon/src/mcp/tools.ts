@@ -231,7 +231,7 @@ export function buildTools(bridge: DaemonBridge): Tool[] {
 
   tools.push({
     name: 'add_connector',
-    description: 'Draw a connector between two shapes. Kind is "arrow" (straight line with arrowhead) or "elbow" (right-angle path). fromId and toId are shape ids returned by add_shape. Note: AI-authored connectors are positional snapshots — they don\'t follow the shapes if the user drags them afterward. That\'s a known v1 tradeoff; rebuild the connector if endpoints move. Returns { id }.',
+    description: 'Draw a connector between two shapes. Kind is "arrow" (straight line with arrowhead) or "elbow" (right-angle path). fromId and toId are shape ids returned by add_shape. Endpoints snap to the nearest of 8 anchor points on each shape (corners + edge midpoints) — same scheme as user-drawn connectors — and the connector binds to its source/target so it follows the shapes when the user moves or rotates them. Returns { id }.',
     inputSchema: {
       type: 'object',
       properties: {
