@@ -40,7 +40,6 @@ let lastProjects = [];
 export function renderHome(container, { onOpenProject, onCreateProject }) {
   container.innerHTML = `
     <div class="home">
-      <div class="home-stats-bar" id="home-stats-bar" role="status" aria-label="Project stats"></div>
       <header class="home-masthead">
         <img src="frank-logo.svg" alt="Frank" class="home-logo">
         <span class="home-version">v3.0</span>
@@ -61,6 +60,8 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
           <span>GitHub</span>
         </a>
       </header>
+
+      <div class="home-stats-bar" id="home-stats-bar" role="status" aria-label="Project stats"></div>
 
       <div class="home-grid">
         <div class="home-col home-col-left">
