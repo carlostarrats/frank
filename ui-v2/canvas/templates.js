@@ -45,6 +45,44 @@ function centerOfViewport(stage) {
   };
 }
 
+// Konva.Text centered inside a bounding box. Used by templates so labels
+// sit in the middle of their host shape regardless of font width.
+function centeredLabel({ x, y, w, h, text, fontSize }) {
+  const node = createText({ x, y, text, fontSize });
+  node.width(w);
+  node.height(h);
+  node.align('center');
+  node.verticalAlign('middle');
+  return node;
+}
+
+// Mirror anchors.js's 8-point anchor scheme (4 corners + 4 edge midpoints)
+// in template-local coords so static template arrows snap to the same
+// points an interactively-drawn connector would. Returns layer-space
+// points relative to the template group's origin.
+function bboxAnchors(cx, cy, hw, hh) {
+  return [
+    { x: cx - hw, y: cy - hh }, // tl
+    { x: cx,      y: cy - hh }, // tm
+    { x: cx + hw, y: cy - hh }, // tr
+    { x: cx + hw, y: cy      }, // rm
+    { x: cx + hw, y: cy + hh }, // br
+    { x: cx,      y: cy + hh }, // bm
+    { x: cx - hw, y: cy + hh }, // bl
+    { x: cx - hw, y: cy      }, // lm
+  ];
+}
+
+function nearest(points, target) {
+  let best = points[0];
+  let bestD = Infinity;
+  for (const p of points) {
+    const d = (p.x - target.x) ** 2 + (p.y - target.y) ** 2;
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  return best;
+}
+
 // ── Kanban ───────────────────────────────────────────────────────────────────
 
 export function insertKanban(layer) {
@@ -87,67 +125,103 @@ export function insertKanban(layer) {
 // ── Mind map ─────────────────────────────────────────────────────────────────
 
 export function insertMindMap(layer) {
-  const children = [];
-  const centerNode = createEllipse({ x: 0, y: 0, radiusX: 80, radiusY: 40 });
-  centerNode.fill('#3b3b3b');
-  children.push(centerNode);
-  // Text label for center
-  const centerText = createText({ x: -60, y: -10, text: 'Main idea', fontSize: 16 });
-  children.push(centerText);
+  // Three buckets so we can compose final draw order: arrows behind shapes,
+  // text on top. Mixed insertion would let arrows draw over earlier shapes
+  // and text labels — that's what this fixes.
+  const arrows = [];
+  const shapes = [];
+  const labels = [];
 
-  const branchLabels = ['Branch A', 'Branch B', 'Branch C', 'Branch D', 'Branch E', 'Branch F'];
-  const radius = 200;
-  branchLabels.forEach((label, i) => {
-    const angle = (i / branchLabels.length) * Math.PI * 2 - Math.PI / 2;
+  const cRX = 80, cRY = 40;       // center ellipse radii
+  const bW = 120, bH = 44;        // branch rect size
+  const radius = 200;             // distance from center to branch center
+
+  const centerNode = createEllipse({ x: 0, y: 0, radiusX: cRX, radiusY: cRY });
+  centerNode.fill('#3b3b3b');
+  shapes.push(centerNode);
+  labels.push(centeredLabel({ x: -cRX, y: -cRY, w: cRX * 2, h: cRY * 2, text: 'Main idea', fontSize: 16 }));
+
+  const branchNames = ['Branch A', 'Branch B', 'Branch C', 'Branch D', 'Branch E', 'Branch F'];
+  // Pre-compute the center node's anchors once — they don't depend on the branch.
+  const centerAnchors = bboxAnchors(0, 0, cRX, cRY);
+
+  branchNames.forEach((label, i) => {
+    const angle = (i / branchNames.length) * Math.PI * 2 - Math.PI / 2;
     const bx = Math.cos(angle) * radius;
     const by = Math.sin(angle) * radius;
-    const node = createRect({ x: bx - 60, y: by - 22, width: 120, height: 44 });
-    children.push(node);
-    children.push(createText({ x: bx - 40, y: by - 8, text: label, fontSize: 13 }));
-    // Arrow from center edge to branch — in template coordinates. Not bound to
-    // source/target here because they're inside the group; the group's
-    // internal layout is static.
-    children.push(createArrow({ points: [0, 0, bx, by] }));
+    // Source: center-node anchor closest to the branch's center.
+    // Target: branch-rect anchor closest to the canvas origin (where the
+    // center node sits). Result mirrors the snap behavior of an
+    // interactively-drawn connector: arrows land on a corner or
+    // edge-midpoint, never inside the shape body.
+    const start = nearest(centerAnchors, { x: bx, y: by });
+    const branchAnchors = bboxAnchors(bx, by, bW / 2, bH / 2);
+    const end = nearest(branchAnchors, { x: 0, y: 0 });
+    arrows.push(createArrow({ points: [start.x, start.y, end.x, end.y] }));
+    shapes.push(createRect({ x: bx - bW / 2, y: by - bH / 2, width: bW, height: bH }));
+    labels.push(centeredLabel({ x: bx - bW / 2, y: by - bH / 2, w: bW, h: bH, text: label, fontSize: 13 }));
   });
 
-  return insertGroup(layer, children);
+  return insertGroup(layer, [...arrows, ...shapes, ...labels]);
 }
 
 // ── Flowchart starter ────────────────────────────────────────────────────────
 
 export function insertFlowchart(layer) {
-  const children = [];
+  const arrows = [];
+  const shapes = [];
+  const labels = [];
 
-  const start = createEllipse({ x: 0, y: -180, radiusX: 60, radiusY: 28 });
-  start.fill('#1f3f6b');
-  children.push(start);
-  children.push(createText({ x: -20, y: -188, text: 'Start', fontSize: 14 }));
+  // Shape descriptors — center + half-extents. Drive both the centered
+  // label call and the anchor-snap arrow lookup, so the same numbers
+  // can't drift apart.
+  const startD    = { cx: 0,    cy: -180, hw: 60, hh: 28 };
+  const stepD     = { cx: 0,    cy: -42,  hw: 80, hh: 28 };
+  const decisionD = { cx: 0,    cy: 70,   hw: 80, hh: 48 };
+  const yesD      = { cx: -140, cy: 210,  hw: 60, hh: 28 };
+  const noD       = { cx: 140,  cy: 210,  hw: 60, hh: 28 };
 
-  const step = createRect({ x: -80, y: -70, width: 160, height: 56 });
-  children.push(step);
-  children.push(createText({ x: -30, y: -50, text: 'Step 1', fontSize: 14 }));
+  // Shapes
+  const startNode = createEllipse({ x: startD.cx, y: startD.cy, radiusX: startD.hw, radiusY: startD.hh });
+  startNode.fill('#1f3f6b');
+  shapes.push(startNode);
+  shapes.push(createRect({ x: stepD.cx - stepD.hw, y: stepD.cy - stepD.hh, width: stepD.hw * 2, height: stepD.hh * 2 }));
+  shapes.push(createDiamond({ x: decisionD.cx, y: decisionD.cy, width: decisionD.hw * 2, height: decisionD.hh * 2 }));
+  const yesNode = createEllipse({ x: yesD.cx, y: yesD.cy, radiusX: yesD.hw, radiusY: yesD.hh });
+  yesNode.fill('#2a5a2a');
+  shapes.push(yesNode);
+  const noNode = createEllipse({ x: noD.cx, y: noD.cy, radiusX: noD.hw, radiusY: noD.hh });
+  noNode.fill('#6a2a2a');
+  shapes.push(noNode);
 
-  const decision = createDiamond({ x: 0, y: 70, width: 160, height: 96 });
-  children.push(decision);
-  children.push(createText({ x: -38, y: 60, text: 'Decision?', fontSize: 13 }));
+  // Labels — centeredLabel takes the bbox top-left + width/height.
+  const labelFor = (d, text, fontSize) => centeredLabel({
+    x: d.cx - d.hw, y: d.cy - d.hh,
+    w: d.hw * 2, h: d.hh * 2,
+    text, fontSize,
+  });
+  labels.push(labelFor(startD, 'Start', 14));
+  labels.push(labelFor(stepD, 'Step 1', 14));
+  labels.push(labelFor(decisionD, 'Decision?', 13));
+  labels.push(labelFor(yesD, 'End (yes)', 13));
+  labels.push(labelFor(noD, 'End (no)', 13));
 
-  const endYes = createEllipse({ x: -140, y: 210, radiusX: 60, radiusY: 28 });
-  endYes.fill('#2a5a2a');
-  children.push(endYes);
-  children.push(createText({ x: -160, y: 202, text: 'End (yes)', fontSize: 13 }));
+  // Anchor-snapped arrows: source endpoint = source's anchor closest to
+  // target's center, and vice versa. Same 8-point scheme used by the
+  // mindmap template and by interactively-drawn / MCP-drawn connectors,
+  // so connector endpoints land on the same named anchors regardless of
+  // who drew them.
+  const arrowBetween = (from, to) => {
+    const a = nearest(bboxAnchors(from.cx, from.cy, from.hw, from.hh), { x: to.cx, y: to.cy });
+    const b = nearest(bboxAnchors(to.cx, to.cy, to.hw, to.hh), { x: from.cx, y: from.cy });
+    return createArrow({ points: [a.x, a.y, b.x, b.y] });
+  };
+  arrows.push(arrowBetween(startD, stepD));
+  arrows.push(arrowBetween(stepD, decisionD));
+  arrows.push(arrowBetween(decisionD, yesD));
+  arrows.push(arrowBetween(decisionD, noD));
 
-  const endNo = createEllipse({ x: 140, y: 210, radiusX: 60, radiusY: 28 });
-  endNo.fill('#6a2a2a');
-  children.push(endNo);
-  children.push(createText({ x: 120, y: 202, text: 'End (no)', fontSize: 13 }));
-
-  // Arrows — static within the template group.
-  children.push(createArrow({ points: [0, -152, 0, -70] }));
-  children.push(createArrow({ points: [0, -14, 0, 20] }));
-  children.push(createArrow({ points: [-50, 110, -140, 182] }));
-  children.push(createArrow({ points: [50, 110, 140, 182] }));
-
-  return insertGroup(layer, children);
+  return insertGroup(layer, [...arrows, ...shapes, ...labels]);
 }
 
 // ── Calendar / weekly grid ───────────────────────────────────────────────────

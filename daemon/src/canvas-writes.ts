@@ -221,38 +221,99 @@ export function addPath(projectId: string, points: number[], stroke?: string): {
 
 // ─── Connectors (arrow / elbow) ──────────────────────────────────────────────
 
+// Connector defaults match ui-v2/canvas/shapes.js:
+//   ARROW_POINTER (8) and CONNECTOR_HIT_STROKE (16). Keeping these in sync
+//   is what lets MCP-authored connectors look and click identically to
+//   user-drawn ones.
+const ARROW_POINTER = 8;
+const CONNECTOR_HIT_STROKE = 16;
+
+// 8-point anchor scheme: 4 corners + 4 edge midpoints. Mirrors
+// ui-v2/canvas/anchors.js so MCP-authored connectors snap to the same
+// points the user gets when drawing a connector by hand. Returns
+// { id, x, y } per anchor; the id is persisted on the connector so
+// rebindAll re-resolves it after future shape moves/rotations.
+function bboxAnchors(bounds: { x: number; y: number; width: number; height: number }) {
+  const x0 = bounds.x;
+  const y0 = bounds.y;
+  const x1 = x0 + bounds.width;
+  const y1 = y0 + bounds.height;
+  const mx = (x0 + x1) / 2;
+  const my = (y0 + y1) / 2;
+  return [
+    { id: 'tl', x: x0, y: y0 },
+    { id: 'tm', x: mx, y: y0 },
+    { id: 'tr', x: x1, y: y0 },
+    { id: 'rm', x: x1, y: my },
+    { id: 'br', x: x1, y: y1 },
+    { id: 'bm', x: mx, y: y1 },
+    { id: 'bl', x: x0, y: y1 },
+    { id: 'lm', x: x0, y: my },
+  ];
+}
+
+function nearestAnchor(anchors: { id: string; x: number; y: number }[], target: { x: number; y: number }) {
+  let best = anchors[0];
+  let bestD = Infinity;
+  for (const a of anchors) {
+    const d = (a.x - target.x) ** 2 + (a.y - target.y) ** 2;
+    if (d < bestD) { bestD = d; best = a; }
+  }
+  return best;
+}
+
 export function addConnector(projectId: string, fromId: string, toId: string, kind: 'arrow' | 'elbow'): { id: string } {
   const doc = load(projectId);
   const from = findNode(doc.children!, fromId);
   const to = findNode(doc.children!, toId);
   if (!from) throw new Error(`from shape not found: ${fromId}`);
   if (!to) throw new Error(`to shape not found: ${toId}`);
+
   const fromCenter = nodeCenter(from);
   const toCenter = nodeCenter(to);
-  // Clip both endpoints to the shape edge along the line between centers,
-  // so the arrowhead lands on the target shape's edge instead of overlapping
-  // its interior. Without this, arrows between close shapes get crushed.
-  const a = clipCenterToEdge(fromCenter, toCenter, nodeBounds(from));
-  const b = clipCenterToEdge(toCenter, fromCenter, nodeBounds(to));
+  // Source endpoint = source's anchor closest to target's center.
+  // Target endpoint = target's anchor closest to source's center.
+  // Same scheme an interactively-drawn connector uses, so AI-drawn
+  // connectors snap to the same 8 named points (tl/tm/tr/rm/br/bm/bl/lm)
+  // a user gets when they drop a connector endpoint on a shape.
+  const fromAnchor = nearestAnchor(bboxAnchors(nodeBounds(from)), toCenter);
+  const toAnchor = nearestAnchor(bboxAnchors(nodeBounds(to)), fromCenter);
+
   const id = newId('c');
-  // Simple straight-line arrow. Elbow routes with a midpoint. Full live
-  // follow-shape logic lives in the browser (ui-v2/canvas/connectors.js);
-  // AI-authored connectors are snapshotted, not live-following — if the user
-  // moves the endpoints, the connector won't chase. That's a v1 tradeoff.
-  const points = kind === 'elbow'
-    ? [a.x, a.y, (a.x + b.x) / 2, a.y, (a.x + b.x) / 2, b.y, b.x, b.y]
-    : [a.x, a.y, b.x, b.y];
+  const isElbow = kind === 'elbow';
+  // Elbow routing matches ui-v2/canvas/connectors.js#recomputeConnector:
+  // 3 points with the corner at (target.x, source.y).
+  const points = isElbow
+    ? [fromAnchor.x, fromAnchor.y, toAnchor.x, fromAnchor.y, toAnchor.x, toAnchor.y]
+    : [fromAnchor.x, fromAnchor.y, toAnchor.x, toAnchor.y];
+
   doc.children!.push({
     className: 'Arrow',
-    attrs: commonAttrs({
+    attrs: {
       id,
       points,
       stroke: STROKE,
       fill: STROKE,
-      strokeWidth: 1.5,
-      pointerLength: 10,
-      pointerWidth: 10,
-    }),
+      strokeWidth: 2,
+      pointerLength: ARROW_POINTER,
+      pointerWidth: ARROW_POINTER,
+      // hitStrokeWidth gives the thin connector line a generous click zone —
+      // matches what user-drawn connectors get (see shapes.js).
+      hitStrokeWidth: CONNECTOR_HIT_STROKE,
+      // Bound connectors aren't whole-line draggable — endpoints handle reroute.
+      draggable: false,
+      // The 'connector' tag is what rebindAll() filters on at load time.
+      // 'connector-elbow' triggers the L-bend recompute path.
+      name: isElbow ? 'shape connector connector-elbow' : 'shape connector',
+      // Bind metadata: rebindAll(contentLayer) reads these on canvas load
+      // and reattaches dragmove listeners, so AI-drawn arrows follow shape
+      // moves identically to user-drawn ones — no more positional snapshots.
+      sourceId: fromId,
+      targetId: toId,
+      sourceAnchorId: fromAnchor.id,
+      targetAnchorId: toAnchor.id,
+      ...(isElbow ? { tension: 0, lineJoin: 'round' } : {}),
+    },
   });
   save(projectId, doc);
   return { id };
@@ -271,39 +332,6 @@ function nodeBounds(node: CanvasNode): { x: number; y: number; width: number; he
   const rx = a.radiusX ?? a.radius ?? 0;
   const ry = a.radiusY ?? a.radius ?? 0;
   return { x: x - rx, y: y - ry, width: rx * 2, height: ry * 2 };
-}
-
-// Project a ray from `from` toward `target`, return the point where it
-// exits the bounding box. Used to clip arrow endpoints to shape edges.
-function clipCenterToEdge(
-  from: { x: number; y: number },
-  target: { x: number; y: number },
-  bounds: { x: number; y: number; width: number; height: number },
-): { x: number; y: number } {
-  const dx = target.x - from.x;
-  const dy = target.y - from.y;
-  if (dx === 0 && dy === 0) return from;
-  // Parametric form: p = from + t * (dx, dy). Find smallest positive t
-  // where p lies on one of the four edges, inside the other axis's range.
-  const ts: number[] = [];
-  if (dx !== 0) {
-    ts.push((bounds.x + bounds.width - from.x) / dx);
-    ts.push((bounds.x - from.x) / dx);
-  }
-  if (dy !== 0) {
-    ts.push((bounds.y + bounds.height - from.y) / dy);
-    ts.push((bounds.y - from.y) / dy);
-  }
-  const epsilon = 0.01;
-  const valid = ts
-    .filter((t) => t > epsilon)
-    .map((t) => ({ t, x: from.x + t * dx, y: from.y + t * dy }))
-    .filter((p) =>
-      p.x >= bounds.x - epsilon && p.x <= bounds.x + bounds.width + epsilon &&
-      p.y >= bounds.y - epsilon && p.y <= bounds.y + bounds.height + epsilon,
-    )
-    .sort((a, b) => a.t - b.t);
-  return valid[0] ? { x: valid[0].x, y: valid[0].y } : from;
 }
 
 export function findNode(children: CanvasNode[], id: string): CanvasNode | null {
