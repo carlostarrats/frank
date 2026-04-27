@@ -41,8 +41,7 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
   container.innerHTML = `
     <div class="home">
       <header class="home-masthead">
-        <img src="frank-logo.svg" alt="Frank" class="home-logo">
-        <span class="home-version">v3.0</span>
+        <div class="home-stats-bar" id="home-stats-bar" role="status" aria-label="Project stats"></div>
         <div class="home-masthead-spacer"></div>
         <button class="home-icon-btn" id="home-settings-btn" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -61,7 +60,10 @@ export function renderHome(container, { onOpenProject, onCreateProject }) {
         </a>
       </header>
 
-      <div class="home-stats-bar" id="home-stats-bar" role="status" aria-label="Project stats"></div>
+      <div class="home-logo-row">
+        <img src="frank-logo.svg" alt="Frank" class="home-logo">
+        <span class="home-version">v3.0</span>
+      </div>
 
       <div class="home-grid">
         <div class="home-col home-col-left">

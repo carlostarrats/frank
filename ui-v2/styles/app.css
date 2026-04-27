@@ -600,14 +600,14 @@ textarea.input,
   color: var(--muted-foreground);
 }
 
-/* Stats line under the masthead — display-only. Counts come from
- * renderStatsBar() in views/home.js. No box / no border — just text. */
+/* Stats line — sits inside the top bar (.home-masthead) on the left, with
+ * the Settings/Help/GitHub buttons on the right. Display-only. Counts come
+ * from renderStatsBar() in views/home.js. */
 .home-stats-bar {
   display: flex;
   align-items: baseline;
   gap: var(--space-5);
   flex-wrap: wrap;
-  margin-bottom: var(--space-8);
   color: var(--foreground);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -633,9 +633,15 @@ textarea.input,
 
 .home-masthead {
   display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+.home-logo-row {
+  display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-8);
 }
 .home-masthead-spacer { flex: 1; }
 .home-icon-btn {
