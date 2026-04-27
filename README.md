@@ -15,7 +15,7 @@ Frank is a local-first collaboration layer for things that aren't on the interne
 
 Most review tools assume the thing being reviewed is already deployed somewhere. Frank assumes it's still private, still evolving, still on your machine.
 
-<img width="1312" height="1061" alt="Screenshot 2026-04-21 at 11 00 41 AM" src="https://github.com/user-attachments/assets/03fb10d7-3782-4345-84e7-b73ce3afa84a" />
+<img width="1312" height="1061" alt="Screenshot 2026-04-27 at 9 44 51 AM" src="https://github.com/user-attachments/assets/98822ace-7f60-4001-89f4-7b9cdd51f02c" />
 
 **Frank is a terminal tool.** You start it from the command line and it opens a browser-based UI at `localhost:42068`. Requires [Node.js](https://nodejs.org/) (v18+).
 
