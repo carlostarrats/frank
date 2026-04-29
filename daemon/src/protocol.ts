@@ -27,6 +27,17 @@ export interface ProjectV2 {
   // want to use URL-share auto-deploy. Remembered per project so users don't
   // re-type it every share. Absence = prompt on first share.
   sourceDir?: string;
+  // v3.18: v0 Platform API targets — which v0 chat(s) this Frank project
+  // routes Send-to-v0 clicks into. First chat is auto-promoted to default;
+  // most-recently-used wins on subsequent sends. Absence = no chats yet.
+  v0Chats?: V0ChatTarget[];
+}
+
+export interface V0ChatTarget {
+  chatId: string;          // v0's chat ID (parsed from chat URL)
+  label: string;           // v0's `name` field at time of add — display only
+  lastUsedAt: string;      // ISO; updated on each successful send
+  addedAt: string;         // ISO; immutable
 }
 
 export interface ScreenV2 {
@@ -84,6 +95,30 @@ export interface DeleteProjectRequest { type: 'delete-project'; projectId: strin
 export interface RenameProjectRequest { type: 'rename-project'; projectId: string; name: string; requestId?: number; }
 export interface SetProjectIntentRequest { type: 'set-project-intent'; projectId: string; intent: string; requestId?: number; }
 export interface SetProjectSourceDirRequest { type: 'set-project-source-dir'; projectId: string; sourceDir: string; requestId?: number; }
+export interface GetV0ConfigRequest { type: 'get-v0-config'; requestId?: number; }
+export interface SetV0ConfigRequest { type: 'set-v0-config'; apiKey: string; requestId?: number; }
+export interface ClearV0ConfigRequest { type: 'clear-v0-config'; requestId?: number; }
+export interface TestV0TokenRequest { type: 'test-v0-token'; apiKey: string; requestId?: number; }
+export interface AddV0ChatRequest { type: 'add-v0-chat'; projectId: string; chatUrl: string; requestId?: number; }
+export interface RemoveV0ChatRequest { type: 'remove-v0-chat'; projectId: string; chatId: string; requestId?: number; }
+export interface SendToV0ChatRequest { type: 'send-to-v0-chat'; projectId: string; chatId: string; message: string; commentIds: string[]; requestId?: number; }
+
+export interface V0ConfigResponse {
+  type: 'v0-config';
+  hasKey: boolean;
+  configuredAt: string | null;
+  requestId?: number;
+}
+
+export interface V0SendResponse {
+  type: 'v0-send-result';
+  ok: boolean;
+  webUrl?: string;
+  errorCode?: 'no_token' | 'invalid_token' | 'chat_not_found' | 'rate_limit' | 'network' | 'unknown';
+  errorMessage?: string;
+  requestId?: number;
+}
+
 export interface ArchiveProjectRequest { type: 'archive-project'; projectId: string; requestId?: number; }
 export interface UnarchiveProjectRequest { type: 'unarchive-project'; projectId: string; requestId?: number; }
 export interface TrashProjectRequest { type: 'trash-project'; projectId: string; requestId?: number; }
@@ -249,6 +284,13 @@ export type AppMessage =
   | RenameProjectRequest
   | SetProjectIntentRequest
   | SetProjectSourceDirRequest
+  | GetV0ConfigRequest
+  | SetV0ConfigRequest
+  | ClearV0ConfigRequest
+  | TestV0TokenRequest
+  | AddV0ChatRequest
+  | RemoveV0ChatRequest
+  | SendToV0ChatRequest
   | ArchiveProjectRequest
   | UnarchiveProjectRequest
   | TrashProjectRequest
@@ -550,7 +592,9 @@ export type DaemonMessage =
   | ShareRevokedMessage
   | CanvasStateChangedMessage
   | McpWriteAckMessage
-  | McpShareCreatedMessage;
+  | McpShareCreatedMessage
+  | V0ConfigResponse
+  | V0SendResponse;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
