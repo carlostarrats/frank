@@ -387,7 +387,6 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
               <input type="password" id="v0-key" class="input" placeholder="Paste your v0 API key" autocomplete="off" spellcheck="false">
             </label>
             <div class="settings-actions">
-              <button class="btn-secondary" id="v0-test">Test</button>
               <button class="btn-primary" id="v0-save">Save</button>
               <button class="btn-ghost" id="v0-clear">Clear</button>
             </div>
@@ -550,7 +549,6 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
   // ── v0 Platform API section ──────────────────────────────────────────────
   const v0KeyEl = overlay.querySelector('#v0-key');
   const v0StatusEl = overlay.querySelector('#v0-status');
-  const v0TestBtn = overlay.querySelector('#v0-test');
   const v0SaveBtn = overlay.querySelector('#v0-save');
   const v0ClearBtn = overlay.querySelector('#v0-clear');
 
@@ -575,35 +573,6 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
       v0StatusEl.textContent = 'Not configured — Send to v0 will fall back to opening v0.dev in a new tab.';
     });
   }
-
-  v0TestBtn.addEventListener('click', async () => {
-    const key = (v0KeyEl.value || '').trim();
-    if (!key) {
-      // Empty input — if a key is already saved, it was validated on Save.
-      // Tell the user that instead of erroring; they only need to re-test if
-      // they're swapping in a different key.
-      const cfg = await sync.getV0Config().catch(() => null);
-      if (cfg?.hasKey) {
-        toastInfo('Saved key was validated when you saved it. Paste a new key to test a different one.');
-      } else {
-        toastError('Paste a key first');
-      }
-      return;
-    }
-    v0TestBtn.disabled = true;
-    try {
-      const result = await sync.testV0Token(key);
-      if (result?.ok) {
-        toastInfo('v0 accepted the key');
-      } else {
-        toastError('v0 rejected the key');
-      }
-    } catch {
-      toastError('v0 rejected the key');
-    } finally {
-      v0TestBtn.disabled = false;
-    }
-  });
 
   v0SaveBtn.addEventListener('click', async () => {
     const key = (v0KeyEl.value || '').trim();
