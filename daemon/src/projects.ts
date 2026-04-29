@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { PROJECTS_DIR, type ProjectV2, type Comment, type ProjectSummary } from './protocol.js';
+import { PROJECTS_DIR, type ProjectV2, type Comment, type ProjectSummary, type V0ChatTarget } from './protocol.js';
 
 // Soft-deleted projects live on disk for 30 days before auto-purge.
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -176,6 +176,44 @@ export function setProjectSourceDir(projectId: string, sourceDir: string): Proje
   else delete project.sourceDir;
   saveProject(projectId, project);
   return project;
+}
+
+/**
+ * Append a v0 chat target to the project's list, or update label/lastUsedAt
+ * in place if the chatId is already present. `addedAt` is always set by this
+ * function — the caller's value is ignored.
+ */
+export function addV0Chat(projectId: string, target: V0ChatTarget): void {
+  const project = loadProject(projectId);
+  const list = project.v0Chats ?? [];
+  const existing = list.findIndex(c => c.chatId === target.chatId);
+  if (existing >= 0) {
+    // Preserve the original addedAt; overwrite the rest
+    list[existing] = { ...target, addedAt: list[existing].addedAt };
+  } else {
+    list.push({ ...target, addedAt: new Date().toISOString() });
+  }
+  project.v0Chats = list;
+  saveProject(projectId, project);
+}
+
+export function removeV0Chat(projectId: string, chatId: string): void {
+  const project = loadProject(projectId);
+  if (!project.v0Chats) return;
+  const before = project.v0Chats.length;
+  project.v0Chats = project.v0Chats.filter(c => c.chatId !== chatId);
+  if (project.v0Chats.length === before) return;       // no-op when chatId wasn't present
+  if (project.v0Chats.length === 0) delete project.v0Chats;
+  saveProject(projectId, project);
+}
+
+export function touchV0Chat(projectId: string, chatId: string): void {
+  const project = loadProject(projectId);
+  if (!project.v0Chats) return;
+  const target = project.v0Chats.find(c => c.chatId === chatId);
+  if (!target) return;
+  target.lastUsedAt = new Date().toISOString();
+  saveProject(projectId, project);
 }
 
 export function archiveProject(projectId: string): ProjectV2 {

@@ -42,6 +42,14 @@ Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 - Canvas share payload is self-contained: canvas state + every referenced asset as inline data URLs. Cloud viewer renders with Konva from CDN alone.
 - Live share opens a long-lived SSE connection to `/api/share/:id/author-stream` per active live share, POSTs state with monotonic revisions to `/api/share/:id/state`. Viewers open `/api/share/:id/stream` and get either a full state (cold open or 30s stale) or diff replay from the 60s buffer. All three per-project-type controllers (canvas/image/pdf) share the transport; only canvas surfaces it as a user-facing feature.
 
+### v0 Platform API integration (Send-to-v0)
+- Account-level token in `~/.frank/config.json` under `v0.apiKey` + `v0ConfiguredAt` ISO timestamp (mode 0600). Per-project chat targets in `ProjectV2.v0Chats: V0ChatTarget[]` — `{ chatId, label, lastUsedAt, addedAt }`. `addedAt` is minted by the daemon, never trusted from the caller.
+- Save validates with `/v1/user` (free, no credits) before storing — bad keys never persist. Test button removed because Save is now the validation moment.
+- `parseChatUrl` strips v0's `<title-slug>-<id>` URL prefix because the API at `/v1/chats/{chatId}` accepts only the bare ID. Pasting `https://v0.app/chat/hello-v5OwxWmtD8F` → stored chatId is `v5OwxWmtD8F`.
+- `sendMessage` uses `responseMode: 'async'` so the WS request returns sub-second; v0 generates the response asynchronously and the user follows `webUrl` to read it. Sync mode would block 30–60s and exceed the WS timeout.
+- Curation panel renders three button states: no-token → deep-link fallback (opens `v0.dev/chat?q=...` in new tab); token + no chats → ellipsis paste button → inline form; token + chats → split button (`Send to v0 (N) → <label>` + `⌄` chevron picker). Picker supports switch / add / remove. Most-recently-used wins on subsequent sends. Switching projects switches chat lists automatically — no global state.
+- Errors mapped through stable `V0ErrorCode` (`invalid_token`, `chat_not_found`, `rate_limit`, `network`, `unknown`); plus `'no_token'` emitted only by the daemon WS handler when no key is saved (never raised by the API client).
+
 ### URL Share Auto-Deploy
 - URL shares are **NOT static snapshots** — Frank deploys a real preview to the user's own Vercel; reviewer interacts with the running app.
 - Pipeline (`daemon/src/share/`): envelope check → preflight build + 30s smoke tail → encoder registry generates safe-dummy env → overlay injected into root layout on a COPY → Vercel Deployments API upload + poll → frank-cloud share record → revoke contract.
@@ -69,7 +77,7 @@ Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 | Browser UI | Plain JS ES modules (no framework, no build step) |
 | Canvas | [Konva](https://konvajs.org/) 9 via `<script>` tag |
 | Daemon | Node.js + TypeScript — HTTP (42068) + WebSocket (42069) |
-| AI | BYO — MCP server (stdio, `frank mcp`), clipboard "Copy as prompt", JSON / MD / PDF export. **No in-app AI chat.** |
+| AI | BYO — MCP server (stdio, `frank mcp`), v0 Platform API (opt-in token, posts into existing v0 chat), clipboard "Copy as prompt", JSON / MD / PDF export. **No in-app AI chat.** |
 | Content wrapping | iframe + transparent overlay + content proxy |
 | Cloud sharing | Vercel functions + Vercel Blob + Upstash Redis (self-hosted) |
 | Project storage | JSON files in `~/.frank/projects/` |
@@ -96,8 +104,8 @@ frank/
 │   │                       # connectors, endpoint-edit, anchors, templates, properties,
 │   │                       # comments, image, shortcuts, cursors, history, svg-export, export
 │   ├── overlay/            # iframe overlay: overlay, element-detect, anchoring, pins, highlight, snapshot
-│   ├── components/         # toolbar, curation, intent-button, comments, comment-composer (shared),
-│   │                       # share-popover, ai-routing, url-input, help-panel, settings-panel,
+│   ├── components/         # toolbar, curation (Send-to-v0 picker), intent-button, comments, comment-composer (shared),
+│   │                       # share-popover, ai-routing, url-input, help-panel, settings-panel (v0 API tab),
 │   │                       # share-envelope-panel, toast, error-card, confirm
 │   └── styles/             # tokens, app, ui, overlay, comments, curation, timeline, canvas, share-envelope
 ├── daemon/                 # Node.js + TypeScript daemon (strict)
@@ -107,6 +115,7 @@ frank/
 │   ├── src/projects.ts     # CRUD + rename/archive/trash/restore/purge + setProjectIntent
 │   ├── src/{assets,proxy,cloud,snapshots,curation,ai-chain,export,report,bundle}.ts
 │   ├── src/{canvas,canvas-writes,live-share,inject}.ts
+│   ├── src/v0.ts           # v0 Platform API client — parseChatUrl, testToken, getChat, sendMessage
 │   ├── src/mcp/            # MCP server (stdio): server.ts, bridge.ts, tools.ts (15 tools)
 │   ├── src/share/          # URL share auto-deploy pipeline (see Architecture § URL Share Auto-Deploy)
 │   ├── src/*.test.ts       # Vitest tests; opt-in cloud-integration harness skipped by default
@@ -124,7 +133,7 @@ frank/
 
 - **URL-first or canvas-first.** Input is a URL, file (PDF/image), or blank canvas — not a JSON schema.
 - **Daemon is sole file writer.** UI never touches the filesystem.
-- **All data local by default.** Nothing leaves the machine unless the user hits Share. Frank does not call any AI service itself; AI routing is clipboard + export + MCP only.
+- **All data local by default.** Nothing leaves the machine unless the user hits Share or Send-to-v0. AI routing is clipboard + export + MCP + v0 (opt-in token). Frank still doesn't host an AI chat surface — v0 sends append into a chat the user owns and reads in v0 itself.
 - **Self-hosted cloud.** Share button warns until cloud is configured.
 - **No build step.** `ui-v2/` must be servable as-is.
 - **Triple-anchor comments** for DOM targets; **shape-anchor comments** for canvas (pin follows on drag; orphaned pins survive at last-known position).
@@ -177,15 +186,16 @@ Surface-specific features (canvas undo/export/inspector/shapes; viewer URL proxy
 
 ## AI routing (BYO tool — no in-app chat)
 
-Frank does not bundle an in-app AI chat. That would lock users into one provider and force API-key management inside Frank. Three handoff paths instead:
+Frank does not bundle an in-app AI chat. That would lock users into one provider and force Frank to host a chat surface. Four handoff paths instead — three bring AI to the user's data, one delivers Frank's data into the user's existing AI chat:
 
 - **MCP server** (`daemon/src/mcp/`) — AI connects directly to Frank. User adds a config snippet (Settings → MCP Setup) that spawns `frank mcp` as a subprocess; stdio↔WebSocket bridge (`bridge.ts`) forwards calls to the running daemon. **15 tools** — reads (list_projects, load_project, get_intent, get_comments, get_canvas_state, list_snapshots, get_timeline, export_bundle), canvas writes (add_shape, add_text, add_path, add_connector, insert_template, add_comment), create_share. Canvas writes broadcast `canvas-state-changed` so open browser tabs re-render live.
+- **v0 Platform API** (`daemon/src/v0.ts` + `daemon/src/server.ts` v0 handlers + `ui-v2/components/curation.js` Send-to-v0) — opt-in. User saves a v0 API key in Settings → **v0 API** (validated via `/v1/user` before storing, persisted at `~/.frank/config.json` mode 0600, never sent to the browser). User pastes a v0 chat URL once per Frank project; Send-to-v0 then POSTs an action-led, anchor-led prompt to `POST /v1/chats/{chatId}/messages` with `responseMode: 'async'` so the WS request returns sub-second. Multiple chats per project supported with last-used default + chevron picker. `parseChatUrl` strips v0's `<title-slug>-<id>` URL prefix because the API only accepts the bare ID. No-token state preserved as a deep-link fallback (`v0.dev/chat?q=...`). Errors are mapped through stable `V0ErrorCode` (`invalid_token`, `chat_not_found`, `rate_limit`, `network`, `unknown`) plus daemon-only `no_token`.
 - **Clipboard** (`ai-routing.js`) — "Copy as prompt" puts a structured prompt on the clipboard (including project intent if set). Paste anywhere.
 - **Export** (`daemon/src/export.ts` + `report.ts` + `bundle.ts`) — hand off the entire project at once.
 
 `daemon/src/ai-chain.ts` logs every Copy-as-prompt action so exports include the decision trail.
 
-**Intentionally NOT exposed as MCP tools:** revoke share, live-share start/resume/pause, delete project, curation actions. These are humans' calls.
+**Intentionally NOT exposed as MCP tools:** revoke share, live-share start/resume/pause, delete project, curation actions, **Send-to-v0 (and chat list mutations)**. These are humans' calls — an AI shouldn't be deciding which v0 chat to post curated feedback into, or burning the user's v0 credits autonomously.
 
 **MCP projectId discipline:** `activeProjectId` on the daemon tracks the browser's current view. MCP tools always pass an explicit `projectId` so an AI writing to project B never clobbers what the user is looking at in project A.
 

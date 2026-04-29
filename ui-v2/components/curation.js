@@ -12,6 +12,7 @@ let focusedId = null;  // id of the comment currently "focused" (pulsing pin)
 // the click handler — awaiting inside the handler expires the user-gesture
 // that clipboard APIs require.
 let cachedCanvasState = null;
+let v0HasToken = false;
 
 // Must match PIN_PALETTE in canvas/comments.js so the badge color next to
 // a feedback item matches its canvas pin.
@@ -91,9 +92,30 @@ export function renderCuration(container, { screenId, onClose }) {
           // for an AI handoff). Delete only appears when the user has a
           // selection, mirroring the old batch behavior.
           const approvedCount = allComments.filter(c => c.status === 'approved').length;
+          const project = projectManager.get() || {};
+          // v0 is a component generator — only meaningful for URL projects
+          // (v0-built previews) or canvas projects (component sketches).
+          // PDFs and standalone images aren't UI to iterate on.
+          const v0Eligible = project.contentType === 'url' || project.contentType === 'canvas';
           return `
           <div class="curation-batch">
             <button class="btn-primary" id="batch-send" ${approvedCount === 0 ? 'disabled' : ''} title="${approvedCount === 0 ? 'Approve at least one comment to copy for AI' : `Copy ${approvedCount} approved comment${approvedCount === 1 ? '' : 's'} + project context for AI`}">Copy approved for AI${approvedCount > 0 ? ` (${approvedCount})` : ''}</button>
+            ${v0Eligible ? (() => {
+              if (!v0HasToken) {
+                return `<button class="btn-secondary" id="batch-v0-deeplink" ${approvedCount === 0 ? 'disabled' : ''} title="${approvedCount === 0 ? 'Approve a comment first' : 'Open v0.dev with the prompt prefilled (configure a v0 API key in Settings for one-click append)'}">Send to v0${approvedCount > 0 ? ` (${approvedCount})` : ''}</button>`;
+              }
+              const chats = (project.v0Chats ?? []).slice().sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt));
+              const target = chats[0];
+              if (!target) {
+                return `<button class="btn-secondary" id="batch-v0-paste" ${approvedCount === 0 ? 'disabled' : ''} title="${approvedCount === 0 ? 'Approve a comment first' : 'Paste a v0 chat URL to start'}">Send to v0${approvedCount > 0 ? ` (${approvedCount})` : ''}…</button>`;
+              }
+              return `
+                <span class="v0-send-group">
+                  <button class="btn-secondary v0-send-btn" id="batch-v0-send" ${approvedCount === 0 ? 'disabled' : ''} title="${approvedCount === 0 ? 'Approve a comment first' : `Append ${approvedCount} approved comment${approvedCount === 1 ? '' : 's'} to v0 chat &quot;${target.label}&quot;`}">Send to v0${approvedCount > 0 ? ` (${approvedCount})` : ''} → ${esc(target.label)}</button>
+                  <button class="btn-secondary v0-picker-btn" id="batch-v0-picker" aria-label="Change v0 chat target" title="Change v0 chat target">⌄</button>
+                </span>
+              `;
+            })() : ''}
             ${selectedIds.size > 0 ? `
               <button class="btn-ghost curation-batch-delete" id="batch-delete">Delete ${selectedIds.size}</button>
             ` : ''}
@@ -221,6 +243,36 @@ export function renderCuration(container, { screenId, onClose }) {
       if (approvedIds.length === 0) return;
       copyCommentsForAi(approvedIds);
     });
+    // Deep-link fallback (no token configured) — preserves existing behavior
+    container.querySelector('#batch-v0-deeplink')?.addEventListener('click', (e) => {
+      if (e.currentTarget.disabled) return;
+      const ids = allComments.filter(c => c.status === 'approved').map(c => c.id);
+      if (ids.length === 0) return;
+      sendCommentsToV0DeepLink(ids);
+    });
+
+    // Empty-state inline paste form (token configured, no chat yet)
+    container.querySelector('#batch-v0-paste')?.addEventListener('click', (e) => {
+      if (e.currentTarget.disabled) return;
+      showV0PastePopover(e.currentTarget, /* sendAfterAdd */ true, allComments);
+    });
+
+    // One-click append to last-used chat
+    container.querySelector('#batch-v0-send')?.addEventListener('click', async (e) => {
+      if (e.currentTarget.disabled) return;
+      const proj = projectManager.get() || {};
+      const chats = (proj.v0Chats ?? []).slice().sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt));
+      const target = chats[0];
+      if (!target) return;
+      const approvedIds = allComments.filter(c => c.status === 'approved').map(c => c.id);
+      await sendApprovedToV0Chat(target.chatId, approvedIds);
+    });
+
+    // Picker popover
+    container.querySelector('#batch-v0-picker')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showV0PickerPopover(e.currentTarget, allComments);
+    });
     container.querySelector('#batch-delete')?.addEventListener('click', async () => {
       const ids = [...selectedIds];
       if (ids.length === 0) return;
@@ -236,6 +288,15 @@ export function renderCuration(container, { screenId, onClose }) {
       render();
     });
   }
+
+  // Cache v0 token status on mount so the render closure can switch button
+  // state synchronously. Re-checks whenever the project changes (e.g. after
+  // the user saves a v0 API key in Settings).
+  const refreshV0Token = async () => {
+    try { v0HasToken = !!(await sync.getV0Config()).hasKey; } catch { v0HasToken = false; }
+    render();
+  };
+  refreshV0Token();
 
   render();
   projectManager.onChange(render);
@@ -372,6 +433,248 @@ function copyCommentsForAi(commentIds) {
   } else {
     toastError('Clipboard copy failed — check browser permissions');
   }
+}
+
+// Format the given comments as a v0-flavored component edit prompt and hand
+// off to v0.dev. The framing differs from copyCommentsForAi:
+//   • Action-led ("Update the UI to apply…") — v0 expects a build/edit ask
+//   • Anchor-first (CSS selector or shape descriptor) — v0 acts on DOM/JSX
+//   • No Konva JSON dump — v0 generates React, can't ingest serialized canvas
+//   • Project intent included as short "Context" footer, not lead
+// Always copies to clipboard so the user has a paste fallback if the prefill
+// URL is blocked or v0 changes its query-param contract.
+function sendCommentsToV0DeepLink(commentIds) {
+  const allComments = projectManager.getComments();
+  const comments = allComments.filter(c => commentIds.includes(c.id));
+  if (comments.length === 0) return;
+
+  const project = projectManager.get() || {};
+  const lines = [];
+
+  lines.push('Update the UI to apply this reviewer feedback:');
+  lines.push('');
+
+  let shapeIndex = null;
+  if (project.contentType === 'canvas' && cachedCanvasState) {
+    shapeIndex = buildShapeIndex(cachedCanvasState);
+  }
+
+  for (const c of comments) {
+    const pinIdx = allComments.findIndex(x => x.id === c.id);
+    const pinNum = pinIdx >= 0 ? pinIdx + 1 : '?';
+    const body = (c.remixedText || c.text || '').trim().replace(/\s+/g, ' ');
+    let anchor = '';
+    if (c.anchor?.type === 'shape') {
+      const target = shapeIndex?.get(c.anchor.shapeId);
+      anchor = target ? ` (on ${describeShape(target)})` : ` (on shape ${c.anchor.shapeId})`;
+    } else if (c.anchor?.cssSelector) {
+      anchor = ` (on \`${c.anchor.cssSelector}\`)`;
+    }
+    lines.push(`- Pin ${pinNum}${anchor}: ${body}`);
+  }
+
+  if (project.intent && project.intent.trim()) {
+    lines.push('');
+    lines.push(`Context: ${project.intent.trim()}`);
+  }
+
+  if (project.contentType === 'url' && project.url) {
+    lines.push('');
+    lines.push(`Source preview: ${project.url}`);
+  }
+
+  const prompt = lines.join('\n');
+
+  // Always seed the clipboard so the user has a fallback path. v0's URL
+  // prefill is best-effort — long prompts blow past browser URL limits and
+  // some v0 routes change over time.
+  copyTextToClipboard(prompt);
+
+  // 6000 chars leaves headroom under the ~8KB practical browser URL cap.
+  const PREFILL_LIMIT = 6000;
+  let url = 'https://v0.dev/';
+  let prefilled = false;
+  if (prompt.length <= PREFILL_LIMIT) {
+    url = `https://v0.dev/chat?q=${encodeURIComponent(prompt)}`;
+    prefilled = true;
+  }
+
+  const opened = window.open(url, '_blank', 'noopener,noreferrer');
+  sync.logAiInstruction(commentIds, [], prompt).catch(() => {});
+
+  if (!opened) {
+    toastError('Popup blocked — prompt is on your clipboard, paste into v0.dev');
+    return;
+  }
+  toastInfo(prefilled
+    ? `Sent ${comments.length} comment${comments.length === 1 ? '' : 's'} to v0 (also copied)`
+    : `Opened v0 — prompt is on your clipboard (too long to prefill)`);
+}
+
+// One-click append: format a v0-flavored prompt, hand to daemon, toast result.
+async function sendApprovedToV0Chat(chatId, commentIds) {
+  const allComments = projectManager.getComments();
+  const comments = allComments.filter(c => commentIds.includes(c.id));
+  if (comments.length === 0) return;
+  const message = formatV0Prompt(comments, allComments);
+  const projectId = projectManager.getId();
+  let res;
+  try {
+    res = await sync.sendToV0Chat(projectId, chatId, message, commentIds);
+  } catch (e) {
+    toastError('Send failed — check daemon connection');
+    return;
+  }
+  if (res.ok) {
+    toastInfo(`Sent ${comments.length} comment${comments.length === 1 ? '' : 's'} to v0`, {
+      action: { label: 'View in v0', onClick: () => window.open(res.webUrl, '_blank', 'noopener,noreferrer') },
+    });
+  } else {
+    const map = {
+      no_token: 'Configure v0 in Settings first',
+      invalid_token: 'v0 rejected your API key — re-paste in Settings',
+      chat_not_found: 'That v0 chat no longer exists — remove it from the picker',
+      rate_limit: 'v0 rate limit hit — try again later',
+      network: 'Network error — check your connection',
+    };
+    toastError(map[res.errorCode] || res.errorMessage || 'Send failed');
+  }
+}
+
+// Build the v0-flavored prompt string from a list of comments. Used by
+// sendApprovedToV0Chat (API path). The deep-link path (sendCommentsToV0DeepLink)
+// has its own inline formatter because it applies a URL-length cap that doesn't
+// apply here.
+function formatV0Prompt(comments, allComments) {
+  const project = projectManager.get() || {};
+  const lines = ['Update the UI to apply this reviewer feedback:', ''];
+  let shapeIndex = null;
+  if (project.contentType === 'canvas' && cachedCanvasState) {
+    shapeIndex = buildShapeIndex(cachedCanvasState);
+  }
+  for (const c of comments) {
+    const pinIdx = allComments.findIndex(x => x.id === c.id);
+    const pinNum = pinIdx >= 0 ? pinIdx + 1 : '?';
+    const body = (c.remixedText || c.text || '').trim().replace(/\s+/g, ' ');
+    let anchor = '';
+    if (c.anchor?.type === 'shape') {
+      const target = shapeIndex?.get(c.anchor.shapeId);
+      anchor = target ? ` (on ${describeShape(target)})` : ` (on shape ${c.anchor.shapeId})`;
+    } else if (c.anchor?.cssSelector) {
+      anchor = ` (on \`${c.anchor.cssSelector}\`)`;
+    }
+    lines.push(`- Pin ${pinNum}${anchor}: ${body}`);
+  }
+  if (project.intent && project.intent.trim()) {
+    lines.push('', `Context: ${project.intent.trim()}`);
+  }
+  if (project.contentType === 'url' && project.url) {
+    lines.push('', `Source preview: ${project.url}`);
+  }
+  return lines.join('\n');
+}
+
+function showV0PastePopover(anchorEl, sendAfterAdd, allComments) {
+  document.querySelector('.v0-popover')?.remove();
+  const pop = document.createElement('div');
+  pop.className = 'v0-popover';
+  pop.innerHTML = `
+    <label class="v0-popover-label">Paste your v0 chat URL</label>
+    <input type="text" class="input" placeholder="https://v0.dev/chat/..." />
+    <div class="v0-popover-actions">
+      <button class="btn-ghost v0-cancel">Cancel</button>
+      <button class="btn-primary v0-add">Add ${sendAfterAdd ? '& Send' : 'chat'}</button>
+    </div>
+  `;
+  positionPopover(pop, anchorEl);
+  document.body.appendChild(pop);
+  const input = pop.querySelector('input');
+  input.focus();
+  pop.querySelector('.v0-cancel').addEventListener('click', () => pop.remove());
+  pop.querySelector('.v0-add').addEventListener('click', async () => {
+    const url = input.value.trim();
+    if (!url) return;
+    const projectId = projectManager.getId();
+    let res;
+    try { res = await sync.addV0Chat(projectId, url); } catch (e) {
+      toastError('Failed to validate chat URL'); return;
+    }
+    if (res.type === 'error') {
+      toastError(res.error || 'Invalid chat URL');
+      return;
+    }
+    pop.remove();
+    if (sendAfterAdd) {
+      const chat = (res.project.v0Chats ?? []).slice(-1)[0];
+      const approvedIds = allComments.filter(c => c.status === 'approved').map(c => c.id);
+      await sendApprovedToV0Chat(chat.chatId, approvedIds);
+    } else {
+      toastInfo('v0 chat added');
+    }
+  });
+  document.addEventListener('click', function close(e) {
+    if (!pop.contains(e.target) && e.target !== anchorEl) {
+      pop.remove();
+      document.removeEventListener('click', close);
+    }
+  });
+}
+
+function showV0PickerPopover(anchorEl, allComments) {
+  document.querySelector('.v0-popover')?.remove();
+  const project = projectManager.get();
+  const chats = (project.v0Chats ?? []).slice().sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt));
+  const pop = document.createElement('div');
+  pop.className = 'v0-popover';
+  pop.innerHTML = `
+    <label class="v0-popover-label">Send to which v0 chat?</label>
+    <ul class="v0-chat-list">
+      ${chats.map(c => `
+        <li data-chat-id="${esc(c.chatId)}">
+          <button class="v0-chat-pick">${esc(c.label)}</button>
+          <button class="v0-chat-remove" aria-label="Remove">✕</button>
+        </li>
+      `).join('')}
+    </ul>
+    <button class="btn-ghost v0-add-chat">+ Add another chat</button>
+  `;
+  positionPopover(pop, anchorEl);
+  document.body.appendChild(pop);
+  pop.querySelectorAll('.v0-chat-pick').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const chatId = btn.closest('li').dataset.chatId;
+      pop.remove();
+      const approvedIds = allComments.filter(c => c.status === 'approved').map(c => c.id);
+      await sendApprovedToV0Chat(chatId, approvedIds);
+    });
+  });
+  pop.querySelectorAll('.v0-chat-remove').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const chatId = btn.closest('li').dataset.chatId;
+      const ok = await showConfirm({ title: 'Remove this v0 chat from the project?', confirmLabel: 'Remove' });
+      if (!ok) return;
+      await sync.removeV0Chat(projectManager.getId(), chatId);
+      pop.remove();
+    });
+  });
+  pop.querySelector('.v0-add-chat').addEventListener('click', () => {
+    pop.remove();
+    showV0PastePopover(anchorEl, false, allComments);
+  });
+  document.addEventListener('click', function close(e) {
+    if (!pop.contains(e.target) && e.target !== anchorEl) {
+      pop.remove();
+      document.removeEventListener('click', close);
+    }
+  });
+}
+
+function positionPopover(pop, anchorEl) {
+  const r = anchorEl.getBoundingClientRect();
+  pop.style.position = 'fixed';
+  pop.style.top = `${r.bottom + 4}px`;
+  pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 280, r.left))}px`;
 }
 
 // Robust clipboard copy that works even when called after an async gap that

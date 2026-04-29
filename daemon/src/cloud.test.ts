@@ -16,7 +16,7 @@ vi.mock('./protocol.js', () => {
   };
 });
 
-import { saveCloudConfig, isCloudConnected, getCloudUrl, getCloudConfiguredAt } from './cloud.js';
+import { saveCloudConfig, isCloudConnected, getCloudUrl, getCloudConfiguredAt, getV0Config, saveV0Config, clearV0Config, getV0ConfiguredAt } from './cloud.js';
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'frank-test-cloud-'));
@@ -102,5 +102,27 @@ describe('getCloudConfiguredAt', () => {
     saveCloudConfig('https://b.com', 'k2');
     const second = getCloudConfiguredAt() as string;
     expect(Date.parse(second)).toBeGreaterThan(Date.parse(first));
+  });
+});
+
+describe('v0 token storage', () => {
+  it('round-trips the v0 API key', () => {
+    expect(getV0Config()).toBeNull();
+    saveV0Config('v0_test_key_abc');
+    expect(getV0Config()).toEqual({ apiKey: 'v0_test_key_abc' });
+    expect(getV0ConfiguredAt()).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('clears cleanly', () => {
+    saveV0Config('v0_test_key_abc');
+    clearV0Config();
+    expect(getV0Config()).toBeNull();
+    expect(getV0ConfiguredAt()).toBeNull();
+  });
+
+  it('writes config at mode 0600', () => {
+    saveV0Config('v0_test_key_abc');
+    const stat = fs.statSync(configPath);
+    expect(stat.mode & 0o777).toBe(0o600);
   });
 });
