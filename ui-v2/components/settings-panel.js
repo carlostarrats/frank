@@ -578,7 +578,18 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
 
   v0TestBtn.addEventListener('click', async () => {
     const key = (v0KeyEl.value || '').trim();
-    if (!key) { toastError('Paste a key first'); return; }
+    if (!key) {
+      // Empty input — if a key is already saved, it was validated on Save.
+      // Tell the user that instead of erroring; they only need to re-test if
+      // they're swapping in a different key.
+      const cfg = await sync.getV0Config().catch(() => null);
+      if (cfg?.hasKey) {
+        toastInfo('Saved key was validated when you saved it. Paste a new key to test a different one.');
+      } else {
+        toastError('Paste a key first');
+      }
+      return;
+    }
     v0TestBtn.disabled = true;
     try {
       const result = await sync.testV0Token(key);
@@ -599,9 +610,16 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
     if (!key) { toastError('Paste a key first'); return; }
     v0SaveBtn.disabled = true;
     try {
+      // Validate the key before storing it. /v1/user is free (no credit cost)
+      // and prevents bad keys from being silently saved.
+      const test = await sync.testV0Token(key);
+      if (!test?.ok) {
+        toastError('v0 rejected the key — not saving');
+        return;
+      }
       await sync.setV0Config(key);
       v0KeyEl.value = '';
-      toastInfo('v0 key saved');
+      toastInfo('v0 key saved and validated');
       refreshV0Status();
     } catch {
       toastError('Could not save v0 key');
