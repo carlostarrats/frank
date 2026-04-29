@@ -88,4 +88,13 @@ describe('sendMessage', () => {
     await expect(sendMessage('v0_good', 'abc', 'x', fetchStub as any))
       .rejects.toMatchObject({ code: 'chat_not_found' });
   });
+  it('wraps network error as V0Error', async () => {
+    const fetchStub = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    await expect(sendMessage('v0_good', 'abc', 'x', fetchStub as any)).rejects.toBeInstanceOf(V0Error);
+  });
+  it('maps 401 to invalid_token', async () => {
+    const fetchStub = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }));
+    await expect(sendMessage('v0_good', 'abc', 'x', fetchStub as any))
+      .rejects.toMatchObject({ code: 'invalid_token' });
+  });
 });

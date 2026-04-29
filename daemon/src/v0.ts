@@ -102,7 +102,8 @@ export async function getChat(apiKey: string, chatId: string, f: Fetch = fetch):
 }
 
 export interface V0SendResult {
-  id: string;
+  /** v0's message ID. Optional because the API may omit it on async responses. */
+  id?: string;
   webUrl: string;
 }
 
@@ -131,7 +132,7 @@ export async function sendMessage(
   if (!res.ok) throw new V0Error(mapStatus(res.status), `v0 returned ${res.status}`);
   const body = await res.json() as { id?: string; webUrl?: string };
   return {
-    id: body.id || '',
+    ...(body.id ? { id: body.id } : {}),
     webUrl: body.webUrl || `https://v0.dev/chat/${chatId}`,
   };
 }
