@@ -196,6 +196,18 @@ const sync = {
   setVercelDeployConfig(token, teamId) { return send({ type: 'set-vercel-deploy-config', token, teamId }); },
   clearVercelDeployConfig() { return send({ type: 'clear-vercel-deploy-config' }); },
   testVercelToken(token) { return send({ type: 'test-vercel-token', token }); },
+
+  // ── v0 Platform API ──
+  getV0Config() { return send({ type: 'get-v0-config' }); },
+  setV0Config(apiKey) { return send({ type: 'set-v0-config', apiKey }); },
+  clearV0Config() { return send({ type: 'clear-v0-config' }); },
+  testV0Token(apiKey) { return send({ type: 'test-v0-token', apiKey }); },
+  addV0Chat(projectId, chatUrl) { return send({ type: 'add-v0-chat', projectId, chatUrl }); },
+  removeV0Chat(projectId, chatId) { return send({ type: 'remove-v0-chat', projectId, chatId }); },
+  sendToV0Chat(projectId, chatId, message, commentIds) {
+    return send({ type: 'send-to-v0-chat', projectId, chatId, message, commentIds });
+  },
+
   loadCanvasState() { return send({ type: 'load-canvas-state' }); },
   saveCanvasState(state) { return send({ type: 'save-canvas-state', state }); },
 };

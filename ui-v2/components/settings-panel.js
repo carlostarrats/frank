@@ -8,6 +8,7 @@
 import sync from '../core/sync.js';
 import { toastInfo, toastError } from './toast.js';
 import { mountShareDiagnostics } from './share-envelope-panel.js';
+import { showConfirm } from './confirm.js';
 
 export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
   const overlay = document.createElement('div');
@@ -30,6 +31,7 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
           <button class="settings-toptab active" role="tab" data-toptab="cloud" aria-selected="true">Cloud Backend</button>
           <button class="settings-toptab" role="tab" data-toptab="mcp" aria-selected="false">MCP Setup</button>
           <button class="settings-toptab" role="tab" data-toptab="share-diag" aria-selected="false">Share Preview</button>
+          <button class="settings-toptab" role="tab" data-toptab="v0" aria-selected="false">v0 API</button>
         </div>
 
         <div class="settings-toptab-panel" data-toptab="cloud" role="tabpanel">
@@ -372,6 +374,24 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
             <div id="share-diagnostics-host"></div>
           </section>
         </div>
+
+        <div class="settings-toptab-panel" data-toptab="v0" role="tabpanel" hidden>
+          <section class="settings-section">
+            <p class="settings-hint">
+              Lets the &ldquo;Send to v0&rdquo; button post curated feedback as a follow-up message into an existing v0 chat.
+              Get your key at <a href="https://v0.dev/chat/settings/keys" target="_blank" rel="noopener">v0.dev/chat/settings/keys</a>.
+            </p>
+            <div class="settings-status" id="v0-status" aria-live="polite">Not configured — Send to v0 will fall back to opening v0.dev in a new tab.</div>
+            <label class="settings-field">
+              <span class="settings-label">v0 API key</span>
+              <input type="password" id="v0-key" class="input" placeholder="Paste your v0 API key" autocomplete="off" spellcheck="false">
+            </label>
+            <div class="settings-actions">
+              <button class="btn-primary" id="v0-save">Save</button>
+              <button class="btn-ghost" id="v0-clear">Clear</button>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   `;
@@ -525,6 +545,78 @@ export function showSettingsPanel({ initialTopTab = 'cloud' } = {}) {
       }
     });
   }
+
+  // ── v0 Platform API section ──────────────────────────────────────────────
+  const v0KeyEl = overlay.querySelector('#v0-key');
+  const v0StatusEl = overlay.querySelector('#v0-status');
+  const v0SaveBtn = overlay.querySelector('#v0-save');
+  const v0ClearBtn = overlay.querySelector('#v0-clear');
+
+  function refreshV0Status() {
+    sync.getV0Config().then((config) => {
+      if (config?.hasKey && config?.configuredAt) {
+        const when = new Date(config.configuredAt);
+        const dateStr = Number.isNaN(when.getTime())
+          ? config.configuredAt
+          : when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        v0StatusEl.className = 'settings-status settings-status-ok';
+        v0StatusEl.textContent = `Configured ${dateStr}`;
+      } else if (config?.hasKey) {
+        v0StatusEl.className = 'settings-status settings-status-ok';
+        v0StatusEl.textContent = 'Configured';
+      } else {
+        v0StatusEl.className = 'settings-status';
+        v0StatusEl.textContent = 'Not configured — Send to v0 will fall back to opening v0.dev in a new tab.';
+      }
+    }).catch(() => {
+      v0StatusEl.className = 'settings-status';
+      v0StatusEl.textContent = 'Not configured — Send to v0 will fall back to opening v0.dev in a new tab.';
+    });
+  }
+
+  v0SaveBtn.addEventListener('click', async () => {
+    const key = (v0KeyEl.value || '').trim();
+    if (!key) { toastError('Paste a key first'); return; }
+    v0SaveBtn.disabled = true;
+    try {
+      // Validate the key before storing it. /v1/user is free (no credit cost)
+      // and prevents bad keys from being silently saved.
+      const test = await sync.testV0Token(key);
+      if (!test?.ok) {
+        toastError('v0 rejected the key — not saving');
+        return;
+      }
+      await sync.setV0Config(key);
+      v0KeyEl.value = '';
+      toastInfo('v0 key saved and validated');
+      refreshV0Status();
+    } catch {
+      toastError('Could not save v0 key');
+    } finally {
+      v0SaveBtn.disabled = false;
+    }
+  });
+
+  v0ClearBtn.addEventListener('click', () => {
+    showConfirm({
+      title: 'Clear v0 API key?',
+      message: 'The saved key will be removed. Send to v0 will fall back to opening v0.dev in a new tab.',
+      destructive: true,
+      confirmLabel: 'Clear',
+    }).then(async (confirmed) => {
+      if (!confirmed) return;
+      try {
+        await sync.clearV0Config();
+        toastInfo('v0 key cleared');
+        refreshV0Status();
+      } catch {
+        toastError('Could not clear v0 key');
+      }
+    });
+  });
+
+  // Populate status on open.
+  refreshV0Status();
 
   // Copy-to-clipboard for command snippets.
   overlay.querySelectorAll('.settings-cmd-copy').forEach((btn) => {

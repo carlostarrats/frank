@@ -36,6 +36,9 @@ import {
   restoreProject,
   purgeExpiredTrash,
   TRASH_RETENTION_MS,
+  addV0Chat,
+  removeV0Chat,
+  touchV0Chat,
 } from './projects.js';
 
 beforeEach(() => {
@@ -487,5 +490,66 @@ describe('purgeExpiredTrash', () => {
     const purged = purgeExpiredTrash();
     expect(purged).not.toContain(projectId);
     expect(fs.existsSync(path.join(tmpDir, projectId))).toBe(true);
+  });
+});
+
+describe('v0 chat list', () => {
+  it('addV0Chat appends a new target', () => {
+    const id = createProject('v0-list', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'Header', lastUsedAt: '2026-04-29T00:00:00Z', addedAt: '2026-04-29T00:00:00Z' });
+    const list = loadProject(id).v0Chats!;
+    expect(list).toHaveLength(1);
+    expect(list[0].chatId).toBe('c1');
+    expect(list[0].label).toBe('Header');
+    expect(list[0].lastUsedAt).toBe('2026-04-29T00:00:00Z');
+    // addedAt is minted by addV0Chat — caller's value is ignored
+    expect(new Date(list[0].addedAt).getTime()).toBeGreaterThan(new Date('2026-04-01').getTime());
+  });
+  it('addV0Chat is idempotent on chatId — overwrites label/timestamps', () => {
+    const id = createProject('v0-idem', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'Old', lastUsedAt: 't1', addedAt: 't1' });
+    const firstAddedAt = loadProject(id).v0Chats![0].addedAt;
+    addV0Chat(id, { chatId: 'c1', label: 'New', lastUsedAt: 't2', addedAt: 'ignored' });
+    const list = loadProject(id).v0Chats!;
+    expect(list).toHaveLength(1);
+    expect(list[0].label).toBe('New');
+    expect(list[0].addedAt).toBe(firstAddedAt);
+  });
+  it('removeV0Chat drops the entry', () => {
+    const id = createProject('v0-rm', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'A', lastUsedAt: 't', addedAt: 't' });
+    addV0Chat(id, { chatId: 'c2', label: 'B', lastUsedAt: 't', addedAt: 't' });
+    removeV0Chat(id, 'c1');
+    expect(loadProject(id).v0Chats!.map(c => c.chatId)).toEqual(['c2']);
+  });
+  it('touchV0Chat bumps lastUsedAt', () => {
+    const id = createProject('v0-touch', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'A', lastUsedAt: '2026-01-01T00:00:00Z', addedAt: '2026-01-01T00:00:00Z' });
+    touchV0Chat(id, 'c1');
+    const list = loadProject(id).v0Chats!;
+    expect(new Date(list[0].lastUsedAt).getTime()).toBeGreaterThan(new Date('2026-01-01T00:00:00Z').getTime());
+  });
+  it('removeV0Chat cleans up the field when the last entry is removed', () => {
+    const id = createProject('v0-rm-last', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'A', lastUsedAt: 't', addedAt: 't' });
+    removeV0Chat(id, 'c1');
+    expect(loadProject(id).v0Chats).toBeUndefined();
+  });
+  it('touchV0Chat is a no-op for an unknown chatId', () => {
+    const id = createProject('v0-touch-noop', 'url', 'http://x').projectId;
+    expect(() => touchV0Chat(id, 'nonexistent')).not.toThrow();
+    expect(loadProject(id).v0Chats).toBeUndefined();
+  });
+  it('re-adding a removed chatId gets a fresh addedAt', () => {
+    const id = createProject('v0-readd', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'A', lastUsedAt: 't1', addedAt: '2026-01-01T00:00:00Z' });
+    removeV0Chat(id, 'c1');
+    addV0Chat(id, { chatId: 'c1', label: 'B', lastUsedAt: 't2', addedAt: '2026-01-01T00:00:00Z' });
+    const list = loadProject(id).v0Chats!;
+    expect(list).toHaveLength(1);
+    expect(list[0].label).toBe('B');
+    // addedAt should be a fresh ISO timestamp from this run, NOT the caller-supplied 2026-01-01
+    expect(list[0].addedAt).not.toBe('2026-01-01T00:00:00Z');
+    expect(new Date(list[0].addedAt).getTime()).toBeGreaterThan(new Date('2026-04-01').getTime());
   });
 });
