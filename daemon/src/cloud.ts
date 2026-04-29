@@ -391,6 +391,39 @@ export async function postState(
   }
 }
 
+// ─── v0 Platform API token (per-project chat IDs live on the project; only
+//     the account-level API key lives in config.json) ──────────────────────
+
+export interface V0Config {
+  apiKey: string;
+}
+
+export function getV0Config(): V0Config | null {
+  const config = readRawConfig();
+  const block = config.v0 as { apiKey?: string } | undefined;
+  if (!block || !block.apiKey) return null;
+  return { apiKey: block.apiKey };
+}
+
+export function saveV0Config(apiKey: string): void {
+  const config = readRawConfig();
+  config.v0 = { apiKey };
+  config.v0ConfiguredAt = new Date().toISOString();
+  writeConfigSecure(config);
+}
+
+export function clearV0Config(): void {
+  const config = readRawConfig();
+  delete config.v0;
+  delete config.v0ConfiguredAt;
+  writeConfigSecure(config);
+}
+
+export function getV0ConfiguredAt(): string | null {
+  const config = readRawConfig();
+  return (config.v0ConfiguredAt as string) || null;
+}
+
 export async function revokeShare(shareId: string, revokeToken: string): Promise<{ ok: boolean; error?: string }> {
   const config = loadConfig();
   if (!config) return { ok: false, error: 'Not connected to cloud' };
