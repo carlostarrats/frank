@@ -13,6 +13,7 @@ import {
   addScreen, loadComments, addComment, deleteComment, saveProject,
   renameProject, setProjectIntent, setProjectSourceDir, archiveProject, unarchiveProject,
   trashProject, restoreProject, purgeExpiredTrash,
+  addV0Chat, removeV0Chat, touchV0Chat,
 } from './projects.js';
 import { saveAsset, ALLOWED_MIME_TYPES } from './assets.js';
 
@@ -23,6 +24,7 @@ import {
   saveCloudConfig, healthCheck, getCloudConfiguredAt, revokeShare,
   getVercelDeployConfig, saveVercelDeployConfig, clearVercelDeployConfig,
   getVercelDeployConfiguredAt,
+  getV0Config, saveV0Config, clearV0Config, getV0ConfiguredAt,
 } from './cloud.js';
 import { LiveShareController } from './live-share.js';
 import { mergeCloudComments } from './projects.js';
@@ -55,6 +57,7 @@ import { startRevokeWorker, notifyRevokeEnqueued } from './share/revoke-worker.j
 import { deleteDeployment as vercelDeleteDeployment } from './share/vercel-api.js';
 import { verifyVercelToken } from './share/vercel-api.js';
 import { uploadUrlShareRecord } from './cloud.js';
+import { parseChatUrl, testToken as testV0Token, getChat as getV0Chat, sendMessage as sendV0Message, V0Error } from './v0.js';
 import { loadCanvasState, saveCanvasState } from './canvas.js';
 import { addShape, addText, addPath, addConnector, findNode, nodeCenter } from './canvas-writes.js';
 import { buildCanvasLivePayload } from './canvas-live.js';
@@ -1052,6 +1055,87 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           reply({ type: 'cloud-test-result', ok: result.ok, error: result.error });
         } catch (e: any) {
           reply({ type: 'cloud-test-result', ok: false, error: e.message });
+        }
+      })();
+      break;
+    }
+
+    case 'get-v0-config': {
+      reply({ type: 'v0-config', hasKey: !!getV0Config(), configuredAt: getV0ConfiguredAt() });
+      break;
+    }
+
+    case 'set-v0-config': {
+      if (!msg.apiKey) { reply({ type: 'error', error: 'apiKey required' }); break; }
+      saveV0Config(msg.apiKey);
+      reply({ type: 'v0-config', hasKey: true, configuredAt: getV0ConfiguredAt() });
+      break;
+    }
+
+    case 'clear-v0-config': {
+      clearV0Config();
+      reply({ type: 'v0-config', hasKey: false, configuredAt: null });
+      break;
+    }
+
+    case 'test-v0-token': {
+      (async () => {
+        try {
+          const ok = await testV0Token(msg.apiKey);
+          reply({ type: 'v0-test-result', ok });
+        } catch (e: any) {
+          reply({ type: 'v0-test-result', ok: false, error: e?.message || 'network error' });
+        }
+      })();
+      break;
+    }
+
+    case 'add-v0-chat': {
+      (async () => {
+        const cfg = getV0Config();
+        if (!cfg) { reply({ type: 'error', error: 'v0 not configured' }); return; }
+        const chatId = parseChatUrl(msg.chatUrl);
+        if (!chatId) { reply({ type: 'error', error: 'Not a v0 chat URL' }); return; }
+        try {
+          const chat = await getV0Chat(cfg.apiKey, chatId);
+          const now = new Date().toISOString();
+          addV0Chat(msg.projectId, { chatId: chat.id, label: chat.name, lastUsedAt: now, addedAt: now });
+          const project = loadProject(msg.projectId);
+          const comments = loadComments(msg.projectId);
+          reply({ type: 'project-loaded', projectId: msg.projectId, project, comments });
+        } catch (e: any) {
+          const code = e instanceof V0Error ? e.code : 'unknown';
+          reply({ type: 'error', error: e?.message || 'failed', errorCode: code } as any);
+        }
+      })();
+      break;
+    }
+
+    case 'remove-v0-chat': {
+      removeV0Chat(msg.projectId, msg.chatId);
+      const project = loadProject(msg.projectId);
+      const comments = loadComments(msg.projectId);
+      reply({ type: 'project-loaded', projectId: msg.projectId, project, comments });
+      break;
+    }
+
+    case 'send-to-v0-chat': {
+      (async () => {
+        const cfg = getV0Config();
+        if (!cfg) { reply({ type: 'v0-send-result', ok: false, errorCode: 'no_token', errorMessage: 'v0 not configured' } as any); return; }
+        try {
+          const result = await sendV0Message(cfg.apiKey, msg.chatId, msg.message);
+          touchV0Chat(msg.projectId, msg.chatId);
+          // Log AI handoff so the timeline records the event. addAiInstruction expects projectId, feedbackIds, curationIds, instruction.
+          addAiInstruction(msg.projectId, msg.commentIds, [], msg.message);
+          // Re-broadcast so any open tab sees the updated lastUsedAt
+          const project = loadProject(msg.projectId);
+          const comments = loadComments(msg.projectId);
+          broadcast({ type: 'project-loaded', projectId: msg.projectId, project, comments } as any);
+          reply({ type: 'v0-send-result', ok: true, webUrl: result.webUrl } as any);
+        } catch (e: any) {
+          const code = e instanceof V0Error ? e.code : 'unknown';
+          reply({ type: 'v0-send-result', ok: false, errorCode: code, errorMessage: e?.message || 'failed' } as any);
         }
       })();
       break;
