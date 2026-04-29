@@ -34,3 +34,61 @@ export function parseChatUrl(input: string): string | null {
   const m = url.pathname.match(/^\/chat\/([A-Za-z0-9_-]+)/);
   return m ? m[1] : null;
 }
+
+export type V0ErrorCode = 'invalid_token' | 'chat_not_found' | 'rate_limit' | 'network' | 'unknown';
+
+export class V0Error extends Error {
+  code: V0ErrorCode;
+  constructor(code: V0ErrorCode, message: string) {
+    super(message);
+    this.code = code;
+    this.name = 'V0Error';
+  }
+}
+
+type Fetch = typeof fetch;
+
+function authHeaders(apiKey: string): Record<string, string> {
+  return { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
+}
+
+function mapStatus(status: number): V0ErrorCode {
+  if (status === 401 || status === 403) return 'invalid_token';
+  if (status === 404) return 'chat_not_found';
+  if (status === 429) return 'rate_limit';
+  return 'unknown';
+}
+
+/** Lightweight token validation. Hits /v1/user — cheap and read-only. */
+export async function testToken(apiKey: string, f: Fetch = fetch): Promise<boolean> {
+  let res: Response;
+  try {
+    res = await f(`${V0_API_BASE}/v1/user`, { headers: authHeaders(apiKey) });
+  } catch (e: any) {
+    throw new V0Error('network', e?.message || 'network error');
+  }
+  return res.ok;
+}
+
+export interface V0Chat {
+  id: string;
+  name: string;
+  webUrl: string;
+}
+
+/** Fetch chat metadata. Used to validate a pasted URL and pull the display name. */
+export async function getChat(apiKey: string, chatId: string, f: Fetch = fetch): Promise<V0Chat> {
+  let res: Response;
+  try {
+    res = await f(`${V0_API_BASE}/v1/chats/${encodeURIComponent(chatId)}`, { headers: authHeaders(apiKey) });
+  } catch (e: any) {
+    throw new V0Error('network', e?.message || 'network error');
+  }
+  if (!res.ok) throw new V0Error(mapStatus(res.status), `v0 returned ${res.status}`);
+  const body = await res.json() as { id: string; name?: string; webUrl?: string };
+  return {
+    id: body.id,
+    name: body.name || 'Untitled chat',
+    webUrl: body.webUrl || `https://v0.dev/chat/${chatId}`,
+  };
+}
