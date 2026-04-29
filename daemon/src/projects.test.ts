@@ -36,6 +36,9 @@ import {
   restoreProject,
   purgeExpiredTrash,
   TRASH_RETENTION_MS,
+  addV0Chat,
+  removeV0Chat,
+  touchV0Chat,
 } from './projects.js';
 
 beforeEach(() => {
@@ -487,5 +490,37 @@ describe('purgeExpiredTrash', () => {
     const purged = purgeExpiredTrash();
     expect(purged).not.toContain(projectId);
     expect(fs.existsSync(path.join(tmpDir, projectId))).toBe(true);
+  });
+});
+
+describe('v0 chat list', () => {
+  it('addV0Chat appends a new target', () => {
+    const id = createProject('v0-list', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'Header', lastUsedAt: '2026-04-29T00:00:00Z', addedAt: '2026-04-29T00:00:00Z' });
+    expect(loadProject(id).v0Chats).toEqual([
+      { chatId: 'c1', label: 'Header', lastUsedAt: '2026-04-29T00:00:00Z', addedAt: '2026-04-29T00:00:00Z' },
+    ]);
+  });
+  it('addV0Chat is idempotent on chatId — overwrites label/timestamps', () => {
+    const id = createProject('v0-idem', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'Old', lastUsedAt: 't1', addedAt: 't1' });
+    addV0Chat(id, { chatId: 'c1', label: 'New', lastUsedAt: 't2', addedAt: 't1' });
+    const list = loadProject(id).v0Chats!;
+    expect(list).toHaveLength(1);
+    expect(list[0].label).toBe('New');
+  });
+  it('removeV0Chat drops the entry', () => {
+    const id = createProject('v0-rm', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'A', lastUsedAt: 't', addedAt: 't' });
+    addV0Chat(id, { chatId: 'c2', label: 'B', lastUsedAt: 't', addedAt: 't' });
+    removeV0Chat(id, 'c1');
+    expect(loadProject(id).v0Chats!.map(c => c.chatId)).toEqual(['c2']);
+  });
+  it('touchV0Chat bumps lastUsedAt', () => {
+    const id = createProject('v0-touch', 'url', 'http://x').projectId;
+    addV0Chat(id, { chatId: 'c1', label: 'A', lastUsedAt: '2026-01-01T00:00:00Z', addedAt: '2026-01-01T00:00:00Z' });
+    touchV0Chat(id, 'c1');
+    const list = loadProject(id).v0Chats!;
+    expect(new Date(list[0].lastUsedAt).getTime()).toBeGreaterThan(new Date('2026-01-01T00:00:00Z').getTime());
   });
 });
