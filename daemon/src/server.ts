@@ -1079,6 +1079,10 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     }
 
     case 'test-v0-token': {
+      if (!msg.apiKey || typeof msg.apiKey !== 'string') {
+        reply({ type: 'v0-test-result', ok: false, error: 'apiKey required' });
+        break;
+      }
       (async () => {
         try {
           const ok = await testV0Token(msg.apiKey);
@@ -1105,7 +1109,7 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
           reply({ type: 'project-loaded', projectId: msg.projectId, project, comments });
         } catch (e: any) {
           const code = e instanceof V0Error ? e.code : 'unknown';
-          reply({ type: 'error', error: e?.message || 'failed', errorCode: code } as any);
+          reply({ type: 'error', error: e?.message || 'failed', errorCode: code });
         }
       })();
       break;
@@ -1122,20 +1126,20 @@ function handleMessage(ws: WebSocket, msg: AppMessage): void {
     case 'send-to-v0-chat': {
       (async () => {
         const cfg = getV0Config();
-        if (!cfg) { reply({ type: 'v0-send-result', ok: false, errorCode: 'no_token', errorMessage: 'v0 not configured' } as any); return; }
+        if (!cfg) { reply({ type: 'v0-send-result', ok: false, errorCode: 'no_token', errorMessage: 'v0 not configured' }); return; }
         try {
           const result = await sendV0Message(cfg.apiKey, msg.chatId, msg.message);
           touchV0Chat(msg.projectId, msg.chatId);
-          // Log AI handoff so the timeline records the event. addAiInstruction expects projectId, feedbackIds, curationIds, instruction.
+          // Log AI handoff so the timeline records the event.
           addAiInstruction(msg.projectId, msg.commentIds, [], msg.message);
           // Re-broadcast so any open tab sees the updated lastUsedAt
           const project = loadProject(msg.projectId);
           const comments = loadComments(msg.projectId);
           broadcast({ type: 'project-loaded', projectId: msg.projectId, project, comments } as any);
-          reply({ type: 'v0-send-result', ok: true, webUrl: result.webUrl } as any);
+          reply({ type: 'v0-send-result', ok: true, webUrl: result.webUrl });
         } catch (e: any) {
           const code = e instanceof V0Error ? e.code : 'unknown';
-          reply({ type: 'v0-send-result', ok: false, errorCode: code, errorMessage: e?.message || 'failed' } as any);
+          reply({ type: 'v0-send-result', ok: false, errorCode: code, errorMessage: e?.message || 'failed' });
         }
       })();
       break;

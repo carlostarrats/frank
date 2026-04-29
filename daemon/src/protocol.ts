@@ -372,8 +372,10 @@ export interface ProxyReadyMessage {
 
 export interface ErrorMessage {
   type: 'error';
-  requestId?: number;
   error: string;
+  /** Optional stable error code; some handlers (add-v0-chat) supply one for UI mapping. */
+  errorCode?: string;
+  requestId?: number;
 }
 
 export interface ShareUploadedMessage {
@@ -407,6 +409,13 @@ export interface V0ConfigResponse {
   type: 'v0-config';
   hasKey: boolean;
   configuredAt: string | null;
+  requestId?: number;
+}
+
+export interface V0TestResultResponse {
+  type: 'v0-test-result';
+  ok: boolean;
+  error?: string;
   requestId?: number;
 }
 
@@ -593,6 +602,7 @@ export type DaemonMessage =
   | McpWriteAckMessage
   | McpShareCreatedMessage
   | V0ConfigResponse
+  | V0TestResultResponse
   | V0SendResponse;
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
