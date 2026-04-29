@@ -103,22 +103,6 @@ export interface AddV0ChatRequest { type: 'add-v0-chat'; projectId: string; chat
 export interface RemoveV0ChatRequest { type: 'remove-v0-chat'; projectId: string; chatId: string; requestId?: number; }
 export interface SendToV0ChatRequest { type: 'send-to-v0-chat'; projectId: string; chatId: string; message: string; commentIds: string[]; requestId?: number; }
 
-export interface V0ConfigResponse {
-  type: 'v0-config';
-  hasKey: boolean;
-  configuredAt: string | null;
-  requestId?: number;
-}
-
-export interface V0SendResponse {
-  type: 'v0-send-result';
-  ok: boolean;
-  webUrl?: string;
-  errorCode?: 'no_token' | 'invalid_token' | 'chat_not_found' | 'rate_limit' | 'network' | 'unknown';
-  errorMessage?: string;
-  requestId?: number;
-}
-
 export interface ArchiveProjectRequest { type: 'archive-project'; projectId: string; requestId?: number; }
 export interface UnarchiveProjectRequest { type: 'unarchive-project'; projectId: string; requestId?: number; }
 export interface TrashProjectRequest { type: 'trash-project'; projectId: string; requestId?: number; }
@@ -418,6 +402,21 @@ export interface CloudTestResultMessage {
   requestId?: number;
   ok: boolean;
   error?: string;
+}
+export interface V0ConfigResponse {
+  type: 'v0-config';
+  hasKey: boolean;
+  configuredAt: string | null;
+  requestId?: number;
+}
+
+export interface V0SendResponse {
+  type: 'v0-send-result';
+  ok: boolean;
+  webUrl?: string;
+  errorCode?: 'no_token' | 'invalid_token' | 'chat_not_found' | 'rate_limit' | 'network' | 'unknown';
+  errorMessage?: string;
+  requestId?: number;
 }
 
 export interface SnapshotSavedMessage { type: 'snapshot-saved'; requestId?: number; snapshot: unknown; }
