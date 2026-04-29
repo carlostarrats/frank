@@ -22,6 +22,14 @@ describe('parseChatUrl', () => {
   it('accepts a bare chat ID (user pasted just the ID, no URL)', () => {
     expect(parseChatUrl('abc123XyZ')).toBe('abc123XyZ');
   });
+  it('strips title-slug prefix from canonical v0 URLs', () => {
+    // v0 URLs use the format /chat/<title-slug>-<id>; the API needs only the id.
+    expect(parseChatUrl('https://v0.app/chat/hello-v5OwxWmtD8F')).toBe('v5OwxWmtD8F');
+    expect(parseChatUrl('https://v0.dev/chat/redesign-the-checkout-flow-X9aZ12bC8d')).toBe('X9aZ12bC8d');
+  });
+  it('strips title-slug prefix from bare slug-id strings', () => {
+    expect(parseChatUrl('hello-v5OwxWmtD8F')).toBe('v5OwxWmtD8F');
+  });
 });
 
 describe('testToken', () => {

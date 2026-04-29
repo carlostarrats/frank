@@ -7,19 +7,30 @@ const V0_API_BASE = 'https://api.v0.dev';
 // Bare-ID heuristic — see parseChatUrl JSDoc for the length floor rationale.
 const CHAT_ID_RE = /^[A-Za-z0-9_-]{6,}$/;
 
+// v0 chat URLs use the format /chat/<title-slug>-<id>. The API needs only
+// the trailing <id>, not the slug prefix. v0's IDs are alphanumeric without
+// hyphens (e.g. "v5OwxWmtD8F"); the title slug is hyphen-separated words
+// (e.g. "hello"). Strip everything before the last hyphen.
+function stripSlug(segment: string): string {
+  const last = segment.lastIndexOf('-');
+  return last >= 0 ? segment.slice(last + 1) : segment;
+}
+
 /**
  * Extract a chat ID from a v0 chat URL or accept a bare ID.
  *
  * Accepts:
- *   - https://v0.dev/chat/<id>
- *   - https://v0.app/chat/<id>
+ *   - https://v0.dev/chat/<title-slug>-<id>  (canonical v0 URL format)
+ *   - https://v0.dev/chat/<id>              (no slug)
+ *   - https://v0.app/chat/<...>             (v0.app domain, same shapes)
  *   with optional trailing path segments (revisions like /r/v2) or query strings.
  *
- * Also accepts a bare chat ID for users who pasted just the ID instead of the
- * full URL. The bare-ID path requires ≥6 alphanumeric/_- chars to avoid false
- * positives on short common strings; the URL path has no length floor because
- * the `/chat/` prefix is already an unambiguous marker. If v0 ever issues IDs
- * shorter than 6 chars, paste the full URL instead.
+ * Also accepts a bare chat ID, with or without a slug prefix:
+ *   - "v5OwxWmtD8F"        → "v5OwxWmtD8F"
+ *   - "hello-v5OwxWmtD8F"  → "v5OwxWmtD8F"
+ *
+ * The bare-input path requires ≥6 alphanumeric/_- chars to avoid false
+ * positives on short common strings.
  *
  * Returns null if the input doesn't look like a chat reference at all. The
  * returned ID is not validated against v0's API — that happens in getChat().
@@ -27,12 +38,12 @@ const CHAT_ID_RE = /^[A-Za-z0-9_-]{6,}$/;
 export function parseChatUrl(input: string): string | null {
   if (!input) return null;
   const trimmed = input.trim();
-  if (CHAT_ID_RE.test(trimmed)) return trimmed;
+  if (CHAT_ID_RE.test(trimmed)) return stripSlug(trimmed);
   let url: URL;
   try { url = new URL(trimmed); } catch { return null; }
   if (!/(^|\.)v0\.(dev|app)$/.test(url.hostname)) return null;
   const m = url.pathname.match(/^\/chat\/([A-Za-z0-9_-]+)/);
-  return m ? m[1] : null;
+  return m ? stripSlug(m[1]) : null;
 }
 
 // Stable error codes the API client raises. Note: 'no_token' is *not* here —
