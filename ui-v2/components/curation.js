@@ -91,9 +91,17 @@ export function renderCuration(container, { screenId, onClose }) {
           // for an AI handoff). Delete only appears when the user has a
           // selection, mirroring the old batch behavior.
           const approvedCount = allComments.filter(c => c.status === 'approved').length;
+          const project = projectManager.get() || {};
+          // v0 is a component generator — only meaningful for URL projects
+          // (v0-built previews) or canvas projects (component sketches).
+          // PDFs and standalone images aren't UI to iterate on.
+          const v0Eligible = project.contentType === 'url' || project.contentType === 'canvas';
           return `
           <div class="curation-batch">
             <button class="btn-primary" id="batch-send" ${approvedCount === 0 ? 'disabled' : ''} title="${approvedCount === 0 ? 'Approve at least one comment to copy for AI' : `Copy ${approvedCount} approved comment${approvedCount === 1 ? '' : 's'} + project context for AI`}">Copy approved for AI${approvedCount > 0 ? ` (${approvedCount})` : ''}</button>
+            ${v0Eligible ? `
+              <button class="btn-secondary" id="batch-v0" ${approvedCount === 0 ? 'disabled' : ''} title="${approvedCount === 0 ? 'Approve at least one comment to send to v0' : `Send ${approvedCount} approved comment${approvedCount === 1 ? '' : 's'} to v0.dev as a component edit prompt`}">Send to v0${approvedCount > 0 ? ` (${approvedCount})` : ''}</button>
+            ` : ''}
             ${selectedIds.size > 0 ? `
               <button class="btn-ghost curation-batch-delete" id="batch-delete">Delete ${selectedIds.size}</button>
             ` : ''}
@@ -220,6 +228,14 @@ export function renderCuration(container, { screenId, onClose }) {
         .map(c => c.id);
       if (approvedIds.length === 0) return;
       copyCommentsForAi(approvedIds);
+    });
+    container.querySelector('#batch-v0')?.addEventListener('click', (e) => {
+      if (e.currentTarget.disabled) return;
+      const approvedIds = allComments
+        .filter(c => c.status === 'approved')
+        .map(c => c.id);
+      if (approvedIds.length === 0) return;
+      sendCommentsToV0(approvedIds);
     });
     container.querySelector('#batch-delete')?.addEventListener('click', async () => {
       const ids = [...selectedIds];
@@ -372,6 +388,82 @@ function copyCommentsForAi(commentIds) {
   } else {
     toastError('Clipboard copy failed — check browser permissions');
   }
+}
+
+// Format the given comments as a v0-flavored component edit prompt and hand
+// off to v0.dev. The framing differs from copyCommentsForAi:
+//   • Action-led ("Update the UI to apply…") — v0 expects a build/edit ask
+//   • Anchor-first (CSS selector or shape descriptor) — v0 acts on DOM/JSX
+//   • No Konva JSON dump — v0 generates React, can't ingest serialized canvas
+//   • Project intent included as short "Context" footer, not lead
+// Always copies to clipboard so the user has a paste fallback if the prefill
+// URL is blocked or v0 changes its query-param contract.
+function sendCommentsToV0(commentIds) {
+  const allComments = projectManager.getComments();
+  const comments = allComments.filter(c => commentIds.includes(c.id));
+  if (comments.length === 0) return;
+
+  const project = projectManager.get() || {};
+  const lines = [];
+
+  lines.push('Update the UI to apply this reviewer feedback:');
+  lines.push('');
+
+  let shapeIndex = null;
+  if (project.contentType === 'canvas' && cachedCanvasState) {
+    shapeIndex = buildShapeIndex(cachedCanvasState);
+  }
+
+  for (const c of comments) {
+    const pinIdx = allComments.findIndex(x => x.id === c.id);
+    const pinNum = pinIdx >= 0 ? pinIdx + 1 : '?';
+    const body = (c.remixedText || c.text || '').trim().replace(/\s+/g, ' ');
+    let anchor = '';
+    if (c.anchor?.type === 'shape') {
+      const target = shapeIndex?.get(c.anchor.shapeId);
+      anchor = target ? ` (on ${describeShape(target)})` : ` (on shape ${c.anchor.shapeId})`;
+    } else if (c.anchor?.cssSelector) {
+      anchor = ` (on \`${c.anchor.cssSelector}\`)`;
+    }
+    lines.push(`- Pin ${pinNum}${anchor}: ${body}`);
+  }
+
+  if (project.intent && project.intent.trim()) {
+    lines.push('');
+    lines.push(`Context: ${project.intent.trim()}`);
+  }
+
+  if (project.contentType === 'url' && project.url) {
+    lines.push('');
+    lines.push(`Source preview: ${project.url}`);
+  }
+
+  const prompt = lines.join('\n');
+
+  // Always seed the clipboard so the user has a fallback path. v0's URL
+  // prefill is best-effort — long prompts blow past browser URL limits and
+  // some v0 routes change over time.
+  copyTextToClipboard(prompt);
+
+  // 6000 chars leaves headroom under the ~8KB practical browser URL cap.
+  const PREFILL_LIMIT = 6000;
+  let url = 'https://v0.dev/';
+  let prefilled = false;
+  if (prompt.length <= PREFILL_LIMIT) {
+    url = `https://v0.dev/chat?q=${encodeURIComponent(prompt)}`;
+    prefilled = true;
+  }
+
+  const opened = window.open(url, '_blank', 'noopener,noreferrer');
+  sync.logAiInstruction(commentIds, [], prompt).catch(() => {});
+
+  if (!opened) {
+    toastError('Popup blocked — prompt is on your clipboard, paste into v0.dev');
+    return;
+  }
+  toastInfo(prefilled
+    ? `Sent ${comments.length} comment${comments.length === 1 ? '' : 's'} to v0 (also copied)`
+    : `Opened v0 — prompt is on your clipboard (too long to prefill)`);
 }
 
 // Robust clipboard copy that works even when called after an async gap that

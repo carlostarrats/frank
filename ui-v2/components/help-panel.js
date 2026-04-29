@@ -41,7 +41,7 @@ On URL / PDF / image projects comments use a triple-anchor strategy (CSS selecto
     title: 'Route feedback to AI',
     body: `Pipe curated feedback into the AI tool you already use — Claude, Cursor, ChatGPT, a local LLM, whatever.
 
-Three paths: click "Copy as prompt" on any approved comment for a structured prompt on your clipboard; export the whole project as JSON or Markdown/PDF to hand off everything at once; or let your AI connect directly via MCP — Settings → MCP Setup has the config snippet.
+Three paths: click "Copy as prompt" on any approved comment for a structured prompt on your clipboard; export the whole project as JSON or Markdown/PDF to hand off everything at once; or let your AI connect directly via MCP — Settings → MCP Setup has the config snippet. URL and canvas projects also get a "Send to v0" button that opens v0.dev with a component-edit prompt prefilled.
 
 Frank deliberately doesn't bundle an in-app AI chat — that would lock you into one provider and force API-key management. Use whichever AI you already trust.`,
   },
