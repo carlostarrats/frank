@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { parseChatUrl } from './v0.js';
-import { testToken, getChat, V0Error } from './v0.js';
+import { parseChatUrl, testToken, getChat, V0Error } from './v0.js';
 
 describe('parseChatUrl', () => {
   it('extracts chat ID from v0.dev URL', () => {
@@ -58,6 +57,10 @@ describe('getChat', () => {
   });
   it('throws invalid_token on 401', async () => {
     const fetchStub = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }));
+    await expect(getChat('v0_bad', 'abc', fetchStub as any)).rejects.toMatchObject({ code: 'invalid_token' });
+  });
+  it('throws invalid_token on 403 (auth-shape failure)', async () => {
+    const fetchStub = vi.fn().mockResolvedValue(new Response('{}', { status: 403 }));
     await expect(getChat('v0_bad', 'abc', fetchStub as any)).rejects.toMatchObject({ code: 'invalid_token' });
   });
 });

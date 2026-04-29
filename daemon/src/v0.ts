@@ -2,7 +2,7 @@
 // crosses the WS into the browser. Every error is mapped to a stable error
 // code the UI can switch on instead of parsing English strings.
 
-// Used by testToken, getChat, sendMessage in Tasks 4–5 (appended to this file).
+// Base URL for every v0 Platform API call. Live as of 2026-04 — see plan doc.
 const V0_API_BASE = 'https://api.v0.dev';
 // Bare-ID heuristic — see parseChatUrl JSDoc for the length floor rationale.
 const CHAT_ID_RE = /^[A-Za-z0-9_-]{6,}$/;
@@ -35,6 +35,11 @@ export function parseChatUrl(input: string): string | null {
   return m ? m[1] : null;
 }
 
+// Stable error codes the API client raises. Note: 'no_token' is *not* here —
+// that code is emitted only by daemon WS handlers (server.ts) when the user
+// has no v0 config saved, never by this client (which always receives a key
+// from its caller). The user-facing V0SendResponse.errorCode union in
+// protocol.ts is a superset that includes 'no_token'.
 export type V0ErrorCode = 'invalid_token' | 'chat_not_found' | 'rate_limit' | 'network' | 'unknown';
 
 export class V0Error extends Error {
@@ -48,6 +53,9 @@ export class V0Error extends Error {
 
 type Fetch = typeof fetch;
 
+// Shared by GET (testToken/getChat) and POST (sendMessage). Content-Type is
+// harmless on GET — servers ignore it when there's no body — and keeping the
+// helper unified is cheaper than splitting it.
 function authHeaders(apiKey: string): Record<string, string> {
   return { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
 }
