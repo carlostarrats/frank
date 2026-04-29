@@ -100,3 +100,38 @@ export async function getChat(apiKey: string, chatId: string, f: Fetch = fetch):
     webUrl: body.webUrl || `https://v0.dev/chat/${chatId}`,
   };
 }
+
+export interface V0SendResult {
+  id: string;
+  webUrl: string;
+}
+
+/**
+ * POST a follow-up message into an existing chat. Uses async responseMode so
+ * we return as soon as v0 acknowledges the message — model generation can
+ * take 30-60s, longer than the WS request timeout. The user follows the
+ * webUrl to see the response.
+ */
+export async function sendMessage(
+  apiKey: string,
+  chatId: string,
+  message: string,
+  f: Fetch = fetch,
+): Promise<V0SendResult> {
+  let res: Response;
+  try {
+    res = await f(`${V0_API_BASE}/v1/chats/${encodeURIComponent(chatId)}/messages`, {
+      method: 'POST',
+      headers: authHeaders(apiKey),
+      body: JSON.stringify({ message, responseMode: 'async' }),
+    });
+  } catch (e: any) {
+    throw new V0Error('network', e?.message || 'network error');
+  }
+  if (!res.ok) throw new V0Error(mapStatus(res.status), `v0 returned ${res.status}`);
+  const body = await res.json() as { id?: string; webUrl?: string };
+  return {
+    id: body.id || '',
+    webUrl: body.webUrl || `https://v0.dev/chat/${chatId}`,
+  };
+}

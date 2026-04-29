@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { parseChatUrl, testToken, getChat, V0Error } from './v0.js';
+import { parseChatUrl, testToken, getChat, sendMessage, V0Error } from './v0.js';
 
 describe('parseChatUrl', () => {
   it('extracts chat ID from v0.dev URL', () => {
@@ -62,5 +62,30 @@ describe('getChat', () => {
   it('throws invalid_token on 403 (auth-shape failure)', async () => {
     const fetchStub = vi.fn().mockResolvedValue(new Response('{}', { status: 403 }));
     await expect(getChat('v0_bad', 'abc', fetchStub as any)).rejects.toMatchObject({ code: 'invalid_token' });
+  });
+});
+
+describe('sendMessage', () => {
+  it('POSTs to the right URL with async responseMode', async () => {
+    const fetchStub = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      id: 'msg_1', webUrl: 'https://v0.dev/chat/abc',
+    }), { status: 200 }));
+    const r = await sendMessage('v0_good', 'abc', 'do the thing', fetchStub as any);
+    expect(r).toEqual({ id: 'msg_1', webUrl: 'https://v0.dev/chat/abc' });
+    const call = fetchStub.mock.calls[0];
+    expect(call[0]).toBe('https://api.v0.dev/v1/chats/abc/messages');
+    expect(call[1].method).toBe('POST');
+    const body = JSON.parse(call[1].body);
+    expect(body).toEqual({ message: 'do the thing', responseMode: 'async' });
+  });
+  it('maps 429 to rate_limit', async () => {
+    const fetchStub = vi.fn().mockResolvedValue(new Response('{}', { status: 429 }));
+    await expect(sendMessage('v0_good', 'abc', 'x', fetchStub as any))
+      .rejects.toMatchObject({ code: 'rate_limit' });
+  });
+  it('maps 404 to chat_not_found', async () => {
+    const fetchStub = vi.fn().mockResolvedValue(new Response('{}', { status: 404 }));
+    await expect(sendMessage('v0_good', 'abc', 'x', fetchStub as any))
+      .rejects.toMatchObject({ code: 'chat_not_found' });
   });
 });
