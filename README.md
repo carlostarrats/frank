@@ -83,12 +83,13 @@ Every comment, every curation decision, every bookmark, every AI handoff is capt
 - **Project brief ("Intent")** — set a short description of what you're building; Frank prepends it to every AI handoff so the AI sees your goal, not just the comments.
 - **Download** — one-click zip bundle: project JSON + Markdown report + PDF report + all bookmarked snapshots + source files + assets. Ready to hand off or archive.
 
-### Route feedback to AI — three paths
-- **MCP server** (new) — Frank exposes 15 tools over the Model Context Protocol so Claude, Cursor, or any MCP-capable AI can connect directly. Tools cover reads (projects, comments, canvas state, timeline, bundles) and curated writes (add shape, text, path, connector, comment — plus `create_share` for canvas). Setup lives under Settings → MCP Setup.
+### Route feedback to AI — four paths
+- **MCP server** — Frank exposes 15 tools over the Model Context Protocol so Claude, Cursor, or any MCP-capable AI can connect directly. Tools cover reads (projects, comments, canvas state, timeline, bundles) and curated writes (add shape, text, path, connector, comment — plus `create_share` for canvas). Setup lives under Settings → MCP Setup.
+- **Send to v0** (new) — on URL and canvas projects, "Send to v0" appends approved comments as a follow-up message in an existing v0 chat via the v0 Platform API. Save your key in Settings → v0 API, paste a v0 chat URL once per project, and every subsequent click goes to the most-recently-used chat in one tap. Without a key, the button falls back to opening v0.dev in a new tab with the prompt prefilled.
 - **Copy as prompt** — on any approved comment, click `↗ AI`. A structured prompt with the comment, its context, and the project brief lands on the clipboard. Paste into Claude, ChatGPT, a local LLM, whatever.
 - **Export** — JSON for machine input, Markdown / PDF for human-readable project reports. Everything comments + curations + bookmarks + AI decision trail.
 
-Frank deliberately does not bundle an in-app AI chat. That would lock you into one provider and force API-key management. Route feedback to whatever tool you already trust.
+Frank deliberately does not bundle an in-app AI chat. That would lock you into one provider and force API-key management for arbitrary chat surfaces. The v0 integration is the exception: it posts feedback into a chat that you own and read in v0 itself — Frank delivers the message, v0 owns the conversation.
 
 ### Self-hosted sharing
 - **Async share** — URL, PDF, image, or canvas: create a link, reviewer opens it, both sides comment asynchronously
@@ -153,7 +154,7 @@ Everything lives locally in `~/.frank/` unless you hit Share. The cloud is optio
 | Browser UI | Plain JS ES modules — no framework, no build step |
 | Canvas | [Konva](https://konvajs.org/) 9 (MIT), loaded via `<script>` tag |
 | Daemon | Node.js + TypeScript — HTTP + WebSocket server |
-| AI access | [MCP server](https://modelcontextprotocol.io) (stdio) + clipboard "Copy as prompt" + JSON / Markdown / PDF export. No bundled in-app chat. |
+| AI access | [MCP server](https://modelcontextprotocol.io) (stdio) + [v0 Platform API](https://v0.dev/docs/api/platform) (one-click append to existing chat, opt-in token) + clipboard "Copy as prompt" + JSON / Markdown / PDF export. No bundled in-app chat. |
 | Cloud sharing | Vercel serverless + Vercel Blob + Upstash Redis (self-hosted) |
 | Canvas export | Konva → SVG → [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) for vector PDF |
 | Report export | [pdfmake](http://pdfmake.org/) — vector PDF with Roboto |
@@ -208,6 +209,8 @@ When you're done, hit `Ctrl+C` in the terminal or run `frank stop`.
 ### Route feedback to AI
 
 **MCP (recommended).** Open Settings → **MCP Setup** for the config snippet and client-specific paths (Claude Desktop, Claude Code, Cursor). After adding the config, your AI can list projects, read comments + canvas state, and make curated writes to the canvas. Instructions + security notes are in the Settings panel.
+
+**Send to v0.** URL and canvas projects get a "Send to v0" button next to "Copy approved for AI". Configure your v0 API key once in Settings → **v0 API** (free `/v1/user` validation, never sent to the browser). On first send, paste the URL of an existing v0 chat — every send after that is one-click append to the most-recently-used chat. Each project keeps its own chat list, so switching projects switches targets automatically. No key configured? The button still works — it falls back to opening v0.dev in a new tab with the prompt prefilled.
 
 **Copy as prompt.** On any approved comment, click `↗ AI`. A structured prompt lands on your clipboard with the comment, its context, the project brief, and the decision chain. Paste anywhere.
 
@@ -279,7 +282,7 @@ Both paths write to `~/.frank/config.json` (mode 0600). Until a backend is confi
 
 - **Local by default** — project data, canvas state, uploaded files, image assets, and curation logs stay in `~/.frank/` on your machine
 - **No telemetry, no analytics, no accounts** — Frank never phones home
-- **No AI calls from Frank itself** — routing to AI happens via MCP (AI connects to you), clipboard (Copy as prompt), or export. You pick which AI, under whatever terms that tool provides.
+- **No AI calls from Frank itself except v0** — routing to AI happens via MCP (AI connects to you), clipboard (Copy as prompt), export, or "Send to v0" (Frank delivers a curated message into a v0 chat that you own — no chat surface inside Frank). You pick which AI, under whatever terms that tool provides.
 - **API keys stay local** — config at `~/.frank/config.json` with `0600` permissions; the daemon never logs secrets
 - **Sharing is opt-in** — when you share, a snapshot goes to YOUR Blob storage, and live-share state goes to YOUR Redis. Frank's infrastructure is not involved.
 - **Sensitive content detection** — Frank warns before sharing if it detects emails, API keys, or passwords in the page
