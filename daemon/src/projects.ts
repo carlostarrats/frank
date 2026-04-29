@@ -178,6 +178,11 @@ export function setProjectSourceDir(projectId: string, sourceDir: string): Proje
   return project;
 }
 
+/**
+ * Append a v0 chat target to the project's list, or update label/lastUsedAt
+ * in place if the chatId is already present. `addedAt` is always set by this
+ * function — the caller's value is ignored.
+ */
 export function addV0Chat(projectId: string, target: V0ChatTarget): void {
   const project = loadProject(projectId);
   const list = project.v0Chats ?? [];
@@ -186,7 +191,7 @@ export function addV0Chat(projectId: string, target: V0ChatTarget): void {
     // Preserve the original addedAt; overwrite the rest
     list[existing] = { ...target, addedAt: list[existing].addedAt };
   } else {
-    list.push(target);
+    list.push({ ...target, addedAt: new Date().toISOString() });
   }
   project.v0Chats = list;
   saveProject(projectId, project);
@@ -195,7 +200,9 @@ export function addV0Chat(projectId: string, target: V0ChatTarget): void {
 export function removeV0Chat(projectId: string, chatId: string): void {
   const project = loadProject(projectId);
   if (!project.v0Chats) return;
+  const before = project.v0Chats.length;
   project.v0Chats = project.v0Chats.filter(c => c.chatId !== chatId);
+  if (project.v0Chats.length === before) return;       // no-op when chatId wasn't present
   if (project.v0Chats.length === 0) delete project.v0Chats;
   saveProject(projectId, project);
 }
