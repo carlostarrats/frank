@@ -52,14 +52,17 @@ describe('zoneForElapsed', () => {
 });
 
 describe('createDeployment', () => {
-  it('POSTs to /v13/deployments with bearer auth, base64 files, and framework slug', async () => {
+  it('uploads files first, then POSTs referenced files to /v13/deployments', async () => {
     // Write one file on disk so readFile works
     const pkgPath = path.join(tmp, 'package.json');
     fs.writeFileSync(pkgPath, '{"name":"demo"}');
 
-    let captured: { url: string; init?: RequestInit } | null = null;
-    mockFetch((input, init) => {
-      captured = { url: String(input), init };
+    const captured: Array<{ url: string; init?: RequestInit }> = [];
+    mockFetch(async (input, init) => {
+      captured.push({ url: String(input), init });
+      if (String(input).includes('/v2/files')) {
+        return jsonRes({ urls: ['https://blob.example/uploaded'] });
+      }
       return jsonRes({ id: 'dpl_123', url: 'dpl_123.vercel.app', readyState: 'QUEUED' });
     });
 
@@ -73,26 +76,36 @@ describe('createDeployment', () => {
 
     expect(result.id).toBe('dpl_123');
     expect(result.url).toBe('dpl_123.vercel.app');
-    expect(captured?.url).toBe('https://api.vercel.com/v13/deployments');
-    const headers = (captured?.init?.headers ?? {}) as Record<string, string>;
+    expect(captured).toHaveLength(2);
+    expect(captured[0].url).toBe('https://api.vercel.com/v2/files');
+    const uploadHeaders = (captured[0].init?.headers ?? {}) as Record<string, string>;
+    expect(uploadHeaders.Authorization).toBe('Bearer tok_abc');
+    expect(uploadHeaders['Content-Type']).toBe('application/octet-stream');
+    expect(uploadHeaders['x-vercel-digest']).toMatch(/^[a-f0-9]{40}$/);
+    expect(captured[0].init?.body).toBeInstanceOf(Uint8Array);
+
+    expect(captured[1].url).toBe('https://api.vercel.com/v13/deployments');
+    const headers = (captured[1].init?.headers ?? {}) as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer tok_abc');
-    const body = JSON.parse(captured?.init?.body as string);
+    const body = JSON.parse(captured[1].init?.body as string);
     expect(body.name).toBe('myshare');
     expect(body.target).toBe('preview');
     expect(body.projectSettings.framework).toBe('nextjs');
     expect(body.files).toHaveLength(1);
     expect(body.files[0].file).toBe('package.json');
-    expect(body.files[0].encoding).toBe('base64');
-    expect(Buffer.from(body.files[0].data, 'base64').toString('utf-8')).toBe('{"name":"demo"}');
+    expect(body.files[0].sha).toBe(uploadHeaders['x-vercel-digest']);
     expect(body.env.NEXT_PUBLIC_FRANK_SHARE).toBe('1');
   });
 
   it('includes teamId query param when provided', async () => {
     const pkgPath = path.join(tmp, 'p.json');
     fs.writeFileSync(pkgPath, '{}');
-    let capturedUrl = '';
+    const capturedUrls: string[] = [];
     mockFetch((input) => {
-      capturedUrl = String(input);
+      capturedUrls.push(String(input));
+      if (String(input).includes('/v2/files')) {
+        return jsonRes({ urls: ['https://blob.example/uploaded'] });
+      }
       return jsonRes({ id: 'd', url: 'd.vercel.app', readyState: 'QUEUED' });
     });
     await createDeployment({
@@ -102,14 +115,19 @@ describe('createDeployment', () => {
       files: [{ relPath: 'p.json', absPath: pkgPath }],
       teamId: 'team_xyz',
     });
-    expect(capturedUrl).toContain('teamId=team_xyz');
+    expect(capturedUrls).toHaveLength(2);
+    expect(capturedUrls[0]).toContain('teamId=team_xyz');
+    expect(capturedUrls[1]).toContain('teamId=team_xyz');
   });
 
   it('maps framework ids to Vercel slugs', async () => {
     const pkgPath = path.join(tmp, 'p.json');
     fs.writeFileSync(pkgPath, '{}');
     const capturedBodies: any[] = [];
-    mockFetch((_input, init) => {
+    mockFetch((input, init) => {
+      if (String(input).includes('/v2/files')) {
+        return jsonRes({ urls: ['https://blob.example/uploaded'] });
+      }
       capturedBodies.push(JSON.parse(init!.body as string));
       return jsonRes({ id: 'd', url: 'd.vercel.app', readyState: 'QUEUED' });
     });
@@ -137,8 +155,14 @@ describe('createDeployment', () => {
   it('adds python deployment metadata for fastapi-jinja without altering env names', async () => {
     const mainPyPath = path.join(tmp, 'app-main.py');
     fs.writeFileSync(mainPyPath, 'from fastapi import FastAPI\napp = FastAPI()\n');
+    const uploadDigests: string[] = [];
     let capturedBody: any = null;
-    mockFetch((_input, init) => {
+    mockFetch((input, init) => {
+      if (String(input).includes('/v2/files')) {
+        const headers = init!.headers as Record<string, string>;
+        uploadDigests.push(headers['x-vercel-digest']);
+        return jsonRes({ urls: ['https://blob.example/uploaded'] });
+      }
       capturedBody = JSON.parse(init!.body as string);
       return jsonRes({ id: 'd', url: 'd.vercel.app', readyState: 'QUEUED' });
     });
@@ -165,17 +189,51 @@ describe('createDeployment', () => {
     });
     expect(capturedBody.files.some((f: any) => f.file === 'vercel.json')).toBe(true);
     const vercelConfig = capturedBody.files.find((f: any) => f.file === 'vercel.json');
-    expect(vercelConfig.encoding).toBe('utf8');
-    expect(JSON.parse(vercelConfig.data)).toEqual({
-      version: 2,
-      routes: [{ src: '/(.*)', dest: '/app/main.py' }],
+    expect(vercelConfig.sha).toMatch(/^[a-f0-9]{40}$/);
+    expect(uploadDigests).toContain(vercelConfig.sha);
+  });
+
+  it('uploads duplicate-content files once and reuses the referenced sha', async () => {
+    const onePath = path.join(tmp, 'one.txt');
+    const twoPath = path.join(tmp, 'two.txt');
+    fs.writeFileSync(onePath, 'same');
+    fs.writeFileSync(twoPath, 'same');
+
+    let uploadCalls = 0;
+    let capturedBody: any = null;
+    mockFetch((input, init) => {
+      if (String(input).includes('/v2/files')) {
+        uploadCalls++;
+        return jsonRes({ urls: ['https://blob.example/uploaded'] });
+      }
+      capturedBody = JSON.parse(init!.body as string);
+      return jsonRes({ id: 'd', url: 'd.vercel.app', readyState: 'QUEUED' });
     });
+
+    await createDeployment({
+      token: 't',
+      projectName: 'p',
+      framework: 'static-html',
+      files: [
+        { relPath: 'one.txt', absPath: onePath },
+        { relPath: 'two.txt', absPath: twoPath },
+      ],
+    });
+
+    expect(uploadCalls).toBe(1);
+    expect(capturedBody.files).toHaveLength(2);
+    expect(capturedBody.files[0].sha).toBe(capturedBody.files[1].sha);
   });
 
   it('throws on non-OK response with status + body preview', async () => {
     const pkgPath = path.join(tmp, 'p.json');
     fs.writeFileSync(pkgPath, '{}');
-    mockFetch(() => new Response('bad token', { status: 401 }));
+    mockFetch((input) => {
+      if (String(input).includes('/v2/files')) {
+        return new Response('bad token', { status: 401 });
+      }
+      return new Response('bad token', { status: 401 });
+    });
     await expect(
       createDeployment({
         token: 'nope',
@@ -183,7 +241,7 @@ describe('createDeployment', () => {
         framework: 'next-app',
         files: [{ relPath: 'p.json', absPath: pkgPath }],
       }),
-    ).rejects.toThrow(/401/);
+    ).rejects.toThrow(/Vercel uploadFile 401/);
   });
 });
 

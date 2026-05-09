@@ -5,7 +5,7 @@ A local-first collaboration layer. Point it at any URL — localhost, staging, p
 
 PolyForm Shield 1.0.0 license (source-available; prohibits competing products — see `LICENSE` + `THIRD-PARTY-LICENSES.md`). Mac-first. Browser-based (no native app).
 
-Latest tagged release: `v3.0`. Current branch: `dev-v3.13`. Per-version shipping log lives in `PROGRESS.md` and `git log` — not here.
+Latest tagged release: `v3.1`. Current branch: `dev-v3.21`. Per-version shipping log lives in `PROGRESS.md` and `git log` — not here.
 
 ## Scope
 

@@ -1,10 +1,28 @@
 # Frank — Progress
 
-Last updated: 2026-03-31
+Last updated: 2026-05-09
 
 ---
 
 ## Timeline
+
+### v3.1 — URL-share expansion + deployment upload fix (May 2026)
+
+Shipped two share-path improvements that changed what Frank can publish from source.
+
+What changed:
+- Added strict Python URL-share support for LoCA-style `FastAPI + Jinja` apps
+- Added Python preflight with isolated temp virtualenv install + `uvicorn` smoke boot
+- Added Jinja base-template overlay injection on the copied share build
+- Added Vercel Python routing generation for deployed FastAPI apps
+- Replaced oversized inline Vercel deployment bodies with uploaded-file references, fixing the 10 MB request-body failure on larger share bundles
+
+Verified against a real LoCA app:
+- source detection passed
+- copied-build injection passed
+- Python preflight passed
+- Vercel deployment passed
+- frank-cloud share creation passed
 
 ### v0 — Wireframe renderer (Feb-Mar 2026)
 
