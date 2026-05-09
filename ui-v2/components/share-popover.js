@@ -558,6 +558,26 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
             <code class="share-url-source-path" id="share-url-source-path"></code>
             <button type="button" class="btn-ghost btn-sm share-url-source-change" id="share-url-source-change">Change</button>
           </div>
+          <label class="share-expiry-label">Expires after</label>
+          <div class="share-expiry-wrapper">
+            <button type="button" class="share-expiry-btn" id="share-url-expiry-btn"
+              aria-haspopup="menu" aria-expanded="false"
+              data-value="7">
+              <span class="share-expiry-btn-label">7 days (default)</span>
+              <svg class="share-expiry-caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <div class="share-expiry-menu" id="share-url-expiry-menu" role="menu" hidden>
+              ${[
+                { v: '1',   l: '1 day' },
+                { v: '7',   l: '7 days (default)' },
+                { v: '30',  l: '30 days' },
+                { v: '90',  l: '90 days' },
+                { v: '365', l: '1 year' },
+              ].map(o => `<button type="button" role="menuitemradio" class="share-expiry-item${o.v === '7' ? ' active' : ''}" data-value="${o.v}" aria-checked="${o.v === '7'}">${o.l}</button>`).join('')}
+            </div>
+          </div>
           <div class="share-url-actions">
             <button type="button" class="btn-primary" id="share-url-create">Create share</button>
           </div>
@@ -578,12 +598,16 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
   const resultEl = modal.querySelector('#share-url-result');
   const existingEl = modal.querySelector('#share-url-existing');
   const pendingRevokesEl = modal.querySelector('#share-url-pending-revokes');
+  const expiryBtn = modal.querySelector('#share-url-expiry-btn');
+  const expiryMenu = modal.querySelector('#share-url-expiry-menu');
+  const expiryLabelEl = modal.querySelector('#share-url-ready .share-expiry-btn-label');
 
   let vercelConfigured = false;
   let sourceDir = project.sourceDir || '';
 
   const close = () => {
     document.removeEventListener('keydown', onEscape, true);
+    document.removeEventListener('click', onExpiryOutsideClick, true);
     overlay.remove();
     onClose?.();
   };
@@ -802,8 +826,38 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
     }
   });
 
+  const closeExpiryMenu = () => {
+    expiryMenu?.setAttribute('hidden', '');
+    expiryBtn?.setAttribute('aria-expanded', 'false');
+  };
+  const onExpiryOutsideClick = (e) => {
+    if (!overlay.isConnected || expiryMenu?.hasAttribute('hidden')) return;
+    if (e.target.closest('.share-expiry-wrapper')) return;
+    closeExpiryMenu();
+  };
+  expiryBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!expiryMenu?.hasAttribute('hidden')) { closeExpiryMenu(); return; }
+    expiryMenu?.removeAttribute('hidden');
+    expiryBtn?.setAttribute('aria-expanded', 'true');
+  });
+  expiryMenu?.querySelectorAll('.share-expiry-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const value = item.dataset.value || '7';
+      expiryBtn.dataset.value = value;
+      expiryLabelEl.textContent = item.textContent.trim();
+      expiryMenu.querySelectorAll('.share-expiry-item').forEach(i => {
+        i.classList.toggle('active', i === item);
+        i.setAttribute('aria-checked', i === item ? 'true' : 'false');
+      });
+      closeExpiryMenu();
+    });
+  });
+  document.addEventListener('click', onExpiryOutsideClick, true);
+
   modal.querySelector('#share-url-create').addEventListener('click', async () => {
     const createBtn = modal.querySelector('#share-url-create');
+    const expiryDays = Number(expiryBtn?.dataset.value) || 7;
     createBtn.disabled = true;
     resultEl.innerHTML = '';
 
@@ -821,7 +875,7 @@ export function showUrlSharePopover(anchorEl, { onClose }) {
     try {
       // Pass projectId so the daemon can persist a share-record — Item 3:
       // enables the "active shares" list + revoke-after-session.
-      const reply = await sync.shareCreate(sourceDir, undefined, undefined, projectId);
+      const reply = await sync.shareCreate(sourceDir, undefined, expiryDays, projectId);
       cleanup();
       buildBlock.stopTimer();
       progressEl.innerHTML = '';

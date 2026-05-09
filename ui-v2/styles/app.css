@@ -1805,7 +1805,13 @@ a.home-icon-btn { text-decoration: none; }
 .share-url-ready {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-4);
+}
+.share-url-ready .share-expiry-label {
+  margin-bottom: 0;
+}
+.share-url-ready .share-expiry-wrapper {
+  margin-bottom: 0;
 }
 .share-url-actions { display: flex; justify-content: flex-end; }
 

@@ -330,6 +330,8 @@ describe('prepareBundle', () => {
       );
       expect(injected).toContain('{% block body %}{% endblock %}');
       expect(injected).toMatch(/data-frank-share-overlay[\s\S]*<\/script>\s*<\/body>/);
+      expect(injected).toContain('src="/static/frank-overlay.js"');
+      expect(fs.existsSync(path.join(workingDir, 'app/web/static/frank-overlay.js'))).toBe(true);
     } finally {
       fs.rmSync(workingDir, { recursive: true, force: true });
     }

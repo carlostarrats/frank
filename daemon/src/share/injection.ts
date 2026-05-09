@@ -42,6 +42,7 @@ export interface LayoutDetectionFailure {
 export interface InjectionOptions {
   shareId: string;
   cloudUrl: string;
+  overlayScriptSrc?: string;
 }
 
 export interface InjectionResult {
@@ -353,9 +354,9 @@ function detectStaticHtmlIndex(
 const INJECTION_MARKER_ATTR = 'data-frank-share-overlay';
 
 export function renderOverlayScriptTag(opts: InjectionOptions): string {
-  const { shareId, cloudUrl } = opts;
+  const { shareId, cloudUrl, overlayScriptSrc = '/frank-overlay.js' } = opts;
   return (
-    `<script ${INJECTION_MARKER_ATTR} src="/frank-overlay.js"` +
+    `<script ${INJECTION_MARKER_ATTR} src="${escapeAttr(overlayScriptSrc)}"` +
     ` data-share-id="${escapeAttr(shareId)}"` +
     ` data-cloud-url="${escapeAttr(cloudUrl)}"` +
     ` async></script>`
@@ -466,8 +467,12 @@ export async function prepareBundle(opts: PrepareBundleOptions): Promise<Prepare
   // project root verbatim so the overlay lives at the root too.
   const overlayRelPath =
     framework === 'sveltekit' ? 'static/frank-overlay.js'
+    : framework === 'fastapi-jinja' ? 'app/web/static/frank-overlay.js'
     : framework === 'static-html' ? 'frank-overlay.js'
     : 'public/frank-overlay.js';
+  const overlayScriptSrc =
+    framework === 'fastapi-jinja' ? '/static/frank-overlay.js'
+    : '/frank-overlay.js';
   const overlayDestPath = path.join(workingDir, overlayRelPath);
   await fs.promises.mkdir(path.dirname(overlayDestPath), { recursive: true });
   await fs.promises.writeFile(overlayDestPath, overlaySource, 'utf-8');
@@ -480,7 +485,11 @@ export async function prepareBundle(opts: PrepareBundleOptions): Promise<Prepare
 
   // Read, inject, write back
   const original = await fs.promises.readFile(layout.path, 'utf-8');
-  const { next, preview, changed } = injectOverlayScript(original, { shareId, cloudUrl });
+  const { next, preview, changed } = injectOverlayScript(original, {
+    shareId,
+    cloudUrl,
+    overlayScriptSrc,
+  });
   if (changed) {
     await fs.promises.writeFile(layout.path, next, 'utf-8');
   }
