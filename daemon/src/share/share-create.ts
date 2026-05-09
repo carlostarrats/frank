@@ -116,6 +116,7 @@ export async function createShare(opts: ShareCreateOptions): Promise<ShareCreate
     ...encoderEnv,
     ...envShare,
     NEXT_PUBLIC_FRANK_SHARE: '1',
+    ...(framework === 'fastapi-jinja' ? { FRANK_SHARE: '1' } : {}),
   };
 
   let preflight: PreflightResult | null = null;

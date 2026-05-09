@@ -29,6 +29,12 @@ interface PackageJson {
   workspaces?: string[] | { packages?: string[] };
 }
 
+interface PythonEnvelopeDetection {
+  detected: boolean;
+  framework?: DetectedFramework;
+  failures: EnvelopeFailure[];
+}
+
 /**
  * 100 MB cap on source per §1.3. "Source" here means what the bundler would
  * actually ship — not a naive walk of the whole repo. Measuring against the
@@ -73,6 +79,34 @@ export async function checkEnvelope(projectDir: string): Promise<EnvelopeResult>
       framework,
       detectedSdks: [],
       failures,
+      warnings,
+    };
+  }
+
+  const python = detectPythonEnvelope(projectDir, !!pkg);
+  if (python.detected) {
+    if (python.framework) {
+      const bundle = await buildBundle(projectDir, { framework: python.framework.id });
+      if (bundle.totalSize > SOURCE_SIZE_CAP) {
+        python.failures.push({
+          code: 'source-too-large',
+          message: `Bundle would be ${formatBytes(bundle.totalSize)}, over the 100 MB cap.`,
+          hint: 'Large assets in app/ are the usual cause. Move heavy media to a CDN or trim before Share.',
+          detail: { bytes: bundle.totalSize, cap: SOURCE_SIZE_CAP },
+        });
+      }
+      for (const failure of bundle.failures) {
+        if (!python.failures.some((existing) => existing.code === failure.code)) {
+          python.failures.push(failure);
+        }
+      }
+    }
+    return {
+      status: python.failures.length === 0 ? 'pass' : 'fail',
+      projectDir,
+      framework: python.failures.length === 0 ? python.framework : undefined,
+      detectedSdks: [],
+      failures: python.failures,
       warnings,
     };
   }
@@ -206,6 +240,122 @@ function hasStaticHtmlEntry(projectDir: string): boolean {
   } catch {
     return false;
   }
+}
+
+function detectPythonEnvelope(projectDir: string, hasPackageJson: boolean): PythonEnvelopeDetection {
+  if (hasPackageJson) return { detected: false, failures: [] };
+
+  const requirementsPath = path.join(projectDir, 'requirements.txt');
+  const pyprojectPath = path.join(projectDir, 'pyproject.toml');
+  const appMainPath = path.join(projectDir, 'app', 'main.py');
+  const templatesDir = path.join(projectDir, 'app', 'web', 'templates');
+  const staticDir = path.join(projectDir, 'app', 'web', 'static');
+  const baseTemplatePath = path.join(templatesDir, 'partials', 'base.html');
+
+  const hasRequirements = pathExists(requirementsPath);
+  const hasPyproject = pathExists(pyprojectPath);
+  const hasDependencyManifest = hasRequirements || hasPyproject;
+  const hasAppMain = pathExists(appMainPath);
+  const hasTemplatesDir = pathExists(templatesDir);
+  const hasStaticDir = pathExists(staticDir);
+  const hasBaseTemplate = pathExists(baseTemplatePath);
+  const requirementsContents = hasRequirements ? safeReadFile(requirementsPath) : '';
+  const pyprojectContents = hasPyproject ? safeReadFile(pyprojectPath) : '';
+  const appMainContents = hasAppMain ? safeReadFile(appMainPath) : '';
+  const manifestIndicatesFastApiJinja = pythonManifestIndicatesFastApiJinja(
+    requirementsContents,
+    pyprojectContents,
+  );
+  const appMainIndicatesFastApiJinja = pythonEntrypointIndicatesFastApiJinja(appMainContents);
+  const explicitFrameworkSignal = manifestIndicatesFastApiJinja || appMainIndicatesFastApiJinja;
+
+  const rootEntries = safeReadDirNames(projectDir);
+  const hasPythonFileAtRoot = rootEntries.some((name) => name.endsWith('.py'));
+  const hasRootTemplates = pathExists(path.join(projectDir, 'templates'));
+  const hasRootStatic = pathExists(path.join(projectDir, 'static'));
+  const hasAppDir = pathExists(path.join(projectDir, 'app'));
+  const hasPythonMarkers =
+    hasDependencyManifest ||
+    hasAppDir ||
+    hasPythonFileAtRoot;
+
+  if (!hasPythonMarkers) return { detected: false, failures: [] };
+
+  const supportedShapeMarkers = hasAppMain || hasTemplatesDir || hasStaticDir || hasBaseTemplate;
+  const rootWebLayoutMarkers = hasRootTemplates || hasRootStatic;
+  const rootLayoutWithPythonSignal = rootWebLayoutMarkers && (hasDependencyManifest || hasPythonFileAtRoot);
+  if (!supportedShapeMarkers && !rootWebLayoutMarkers) {
+    return { detected: false, failures: [] };
+  }
+
+  if (!supportedShapeMarkers && !rootLayoutWithPythonSignal) {
+    return { detected: false, failures: [] };
+  }
+
+  if (rootLayoutWithPythonSignal && !supportedShapeMarkers) {
+    return {
+      detected: true,
+      failures: [
+        {
+          code: 'python-unsupported-layout',
+          message: 'Frank only supports the FastAPI + Jinja app/web layout for Python URL share right now.',
+          hint: 'Expected a LoCA-style tree with app/main.py, app/web/templates, app/web/static, and app/web/templates/partials/base.html.',
+          detail: {
+            foundRootPythonFiles: rootEntries.filter((name) => name.endsWith('.py')).slice(0, 10),
+            hasRootTemplates,
+            hasRootStatic,
+          },
+        },
+      ],
+    };
+  }
+
+  if (supportedShapeMarkers && !explicitFrameworkSignal) {
+    return {
+      detected: true,
+      failures: [
+        {
+          code: 'python-unsupported-layout',
+          message: 'Frank only supports Python URL share for FastAPI + Jinja projects with explicit framework signals.',
+          hint: 'Expected FastAPI/Jinja in requirements.txt or pyproject.toml, or FastAPI/Jinja imports in app/main.py, in addition to the LoCA-style app/web layout.',
+        },
+      ],
+    };
+  }
+
+  const failures: EnvelopeFailure[] = [];
+  if (!hasDependencyManifest) {
+    failures.push({
+      code: 'python-deps-missing',
+      message: 'Python URL share needs requirements.txt or pyproject.toml at the project root.',
+      hint: 'Add one of those files so Frank can classify the project as a supported FastAPI + Jinja app.',
+    });
+  }
+  if (!hasAppMain) {
+    failures.push({
+      code: 'python-entrypoint-missing',
+      message: 'Expected FastAPI entrypoint at app/main.py.',
+      hint: 'Move the app entrypoint to app/main.py or point Frank at the supported LoCA-style project root.',
+    });
+  }
+  const missingTemplatePaths: string[] = [];
+  if (!hasTemplatesDir) missingTemplatePaths.push('app/web/templates');
+  if (!hasStaticDir) missingTemplatePaths.push('app/web/static');
+  if (!hasBaseTemplate) missingTemplatePaths.push('app/web/templates/partials/base.html');
+  if (missingTemplatePaths.length > 0) {
+    failures.push({
+      code: 'python-template-missing',
+      message: 'Expected the FastAPI + Jinja template/static scaffold under app/web.',
+      hint: 'Create app/web/templates, app/web/static, and app/web/templates/partials/base.html so Frank can inject the overlay safely.',
+      detail: { missing: missingTemplatePaths },
+    });
+  }
+
+  return {
+    detected: true,
+    framework: { id: 'fastapi-jinja', versionSpec: hasRequirements ? 'requirements.txt' : 'pyproject.toml' },
+    failures,
+  };
 }
 
 function detectFramework(pkg: PackageJson, projectDir: string): DetectedFramework | null {
@@ -448,4 +598,45 @@ function formatBytes(bytes: number): string {
   if (bytes > 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes > 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
+}
+
+function pathExists(targetPath: string): boolean {
+  try {
+    return fs.existsSync(targetPath);
+  } catch {
+    return false;
+  }
+}
+
+function safeReadDirNames(dirPath: string): string[] {
+  try {
+    return fs.readdirSync(dirPath);
+  } catch {
+    return [];
+  }
+}
+
+function safeReadFile(filePath: string): string {
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return '';
+  }
+}
+
+function pythonManifestIndicatesFastApiJinja(requirementsContents: string, pyprojectContents: string): boolean {
+  const requirements = requirementsContents.toLowerCase();
+  const pyproject = pyprojectContents.toLowerCase();
+  return (
+    (requirements.includes('fastapi') && requirements.includes('jinja2')) ||
+    (pyproject.includes('fastapi') && pyproject.includes('jinja'))
+  );
+}
+
+function pythonEntrypointIndicatesFastApiJinja(contents: string): boolean {
+  const lower = contents.toLowerCase();
+  return (
+    lower.includes('fastapi') &&
+    (lower.includes('jinja2templates') || lower.includes('templating'))
+  );
 }

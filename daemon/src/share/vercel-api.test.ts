@@ -134,6 +134,44 @@ describe('createDeployment', () => {
     }
   });
 
+  it('adds python deployment metadata for fastapi-jinja without altering env names', async () => {
+    const mainPyPath = path.join(tmp, 'app-main.py');
+    fs.writeFileSync(mainPyPath, 'from fastapi import FastAPI\napp = FastAPI()\n');
+    let capturedBody: any = null;
+    mockFetch((_input, init) => {
+      capturedBody = JSON.parse(init!.body as string);
+      return jsonRes({ id: 'd', url: 'd.vercel.app', readyState: 'QUEUED' });
+    });
+
+    await createDeployment({
+      token: 't',
+      projectName: 'p',
+      framework: 'fastapi-jinja',
+      files: [{ relPath: 'app/main.py', absPath: mainPyPath }],
+      env: {
+        FRANK_SHARE: '1',
+        NEXT_PUBLIC_FRANK_SHARE: '1',
+      },
+    });
+
+    expect(capturedBody.projectSettings.framework).toBe(null);
+    expect(capturedBody.env).toEqual({
+      FRANK_SHARE: '1',
+      NEXT_PUBLIC_FRANK_SHARE: '1',
+    });
+    expect(capturedBody.build.env).toEqual({
+      FRANK_SHARE: '1',
+      NEXT_PUBLIC_FRANK_SHARE: '1',
+    });
+    expect(capturedBody.files.some((f: any) => f.file === 'vercel.json')).toBe(true);
+    const vercelConfig = capturedBody.files.find((f: any) => f.file === 'vercel.json');
+    expect(vercelConfig.encoding).toBe('utf8');
+    expect(JSON.parse(vercelConfig.data)).toEqual({
+      version: 2,
+      routes: [{ src: '/(.*)', dest: '/app/main.py' }],
+    });
+  });
+
   it('throws on non-OK response with status + body preview', async () => {
     const pkgPath = path.join(tmp, 'p.json');
     fs.writeFileSync(pkgPath, '{}');

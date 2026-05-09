@@ -61,6 +61,7 @@ Direction doc: [`docs/frank-v3-direction.md`](docs/frank-v3-direction.md).
 - **Revoke is two-step.** Cloud flag flips synchronously (link 404s within ms), Vercel DELETE fires after with a retry queue (`share/revoke-queue.ts` + `share/revoke-worker.ts`, 1m/5m/30m/1h/6h/24h backoff, drained on daemon startup + re-armed on enqueue).
 - For paste-ready encoder outputs per SDK, read the `project_frank_calibration_sweep` memory — don't reverse-engineer from tests.
 - Static-HTML projects supported (no framework needed — denylist bundler, skip preflight, inject overlay at root).
+- FastAPI/Jinja URL-share support is additive and strict. Supported v1 shape is LoCA-style: `requirements.txt` or `pyproject.toml`, `app/main.py`, Python source under `app/`, base template at `app/web/templates/partials/base.html`, and static assets under `app/web/static/`. Preflight creates an isolated temp venv, installs Python deps there, boots `uvicorn app.main:app`, and smoke-probes the copied share build before upload. Vercel upload appends a generated `vercel.json` that routes `/(.*)` to `app/main.py`.
 
 ### Plain JS Frontend
 - **No build step.** `ui-v2/` is served as-is by the daemon's HTTP server.

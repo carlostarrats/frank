@@ -134,6 +134,37 @@ describe('detectLayoutFile — Remix', () => {
   });
 });
 
+describe('detectLayoutFile — FastAPI/Jinja', () => {
+  it('detects app/web/templates/partials/base.html when it has html/body', () => {
+    write(
+      'app/web/templates/partials/base.html',
+      '<!doctype html><html><body>{% block body %}{% endblock %}</body></html>',
+    );
+    const result = detectLayoutFile(tmp, 'fastapi-jinja');
+    if ('path' in result) {
+      expect(result.relPath).toBe('app/web/templates/partials/base.html');
+    } else throw new Error('expected detection');
+  });
+
+  it('fails when the LoCA-style base template is missing', () => {
+    const result = detectLayoutFile(tmp, 'fastapi-jinja');
+    if ('code' in result) {
+      expect(result.code).toBe('layout-not-found');
+    } else throw new Error('expected refusal');
+  });
+
+  it('fails when the base template lacks html/body', () => {
+    write(
+      'app/web/templates/partials/base.html',
+      '{% block body %}{% endblock %}',
+    );
+    const result = detectLayoutFile(tmp, 'fastapi-jinja');
+    if ('code' in result) {
+      expect(result.code).toBe('layout-missing-html-body');
+    } else throw new Error('expected refusal');
+  });
+});
+
 // ─── Injection transform ─────────────────────────────────────────────────
 
 describe('injectOverlayScript', () => {
@@ -178,6 +209,7 @@ describe('injectOverlayScript', () => {
     expect(changed).toBe(true);
     expect(next).toContain('data-frank-share-overlay');
   });
+
 });
 
 describe('renderOverlayScriptTag', () => {
@@ -257,6 +289,47 @@ describe('prepareBundle', () => {
       });
       expect(r.overlayDestPath.endsWith(path.join('static', 'frank-overlay.js'))).toBe(true);
       expect(fs.existsSync(r.overlayDestPath)).toBe(true);
+    } finally {
+      fs.rmSync(workingDir, { recursive: true, force: true });
+    }
+  });
+
+  it('injects the overlay before </body> in a FastAPI/Jinja base template copy', async () => {
+    write(
+      'app/web/templates/partials/base.html',
+      `<!doctype html>
+<html lang="en">
+  <body>
+    {% block body %}{% endblock %}
+  </body>
+</html>`,
+    );
+    write('app/main.py', 'from fastapi import FastAPI\napp = FastAPI()\n');
+    write('requirements.txt', 'fastapi==0.115.0\njinja2==3.1.4\n');
+
+    const workingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'frank-bundle-fastapi-'));
+    try {
+      await prepareBundle({
+        projectDir: tmp,
+        framework: 'fastapi-jinja',
+        shareId: 'py-share',
+        cloudUrl: 'https://cloud.test',
+        files: [
+          {
+            relPath: 'app/web/templates/partials/base.html',
+            absPath: path.join(tmp, 'app/web/templates/partials/base.html'),
+          },
+          { relPath: 'app/main.py', absPath: path.join(tmp, 'app/main.py') },
+          { relPath: 'requirements.txt', absPath: path.join(tmp, 'requirements.txt') },
+        ],
+        workingDir,
+      });
+      const injected = fs.readFileSync(
+        path.join(workingDir, 'app/web/templates/partials/base.html'),
+        'utf-8',
+      );
+      expect(injected).toContain('{% block body %}{% endblock %}');
+      expect(injected).toMatch(/data-frank-share-overlay[\s\S]*<\/script>\s*<\/body>/);
     } finally {
       fs.rmSync(workingDir, { recursive: true, force: true });
     }

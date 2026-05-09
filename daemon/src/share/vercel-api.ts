@@ -85,6 +85,7 @@ const FRAMEWORK_SLUGS: Record<FrameworkId, string | null> = {
   'sveltekit': 'sveltekit',
   'astro': 'astro',
   'remix': 'remix',
+  'fastapi-jinja': null,
   'static-html': null,
 };
 
@@ -103,10 +104,11 @@ export async function createDeployment(
       };
     }),
   );
+  const generatedFiles = buildGeneratedFiles(opts.framework);
 
   const body = {
     name: opts.projectName,
-    files: filesPayload,
+    files: [...filesPayload, ...generatedFiles],
     target: opts.target ?? 'preview',
     projectSettings: {
       framework: FRAMEWORK_SLUGS[opts.framework] ?? null,
@@ -136,6 +138,24 @@ export async function createDeployment(
     url: data.url,
     readyState: data.readyState,
   };
+}
+
+function buildGeneratedFiles(framework: FrameworkId): Array<{
+  file: string;
+  data: string;
+  encoding: 'utf8';
+}> {
+  if (framework !== 'fastapi-jinja') return [];
+  return [
+    {
+      file: 'vercel.json',
+      data: JSON.stringify({
+        version: 2,
+        routes: [{ src: '/(.*)', dest: '/app/main.py' }],
+      }),
+      encoding: 'utf8',
+    },
+  ];
 }
 
 export async function pollDeployment(

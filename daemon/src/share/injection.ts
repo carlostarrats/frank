@@ -82,6 +82,8 @@ export function detectLayoutFile(
       return detectAstroLayout(projectDir);
     case 'remix':
       return detectRemixRoot(projectDir);
+    case 'fastapi-jinja':
+      return detectFastapiJinjaBaseTemplate(projectDir);
     case 'vite-react':
     case 'vite-svelte':
     case 'vite-vue':
@@ -256,6 +258,38 @@ function detectRemixRoot(
   return {
     code: 'layout-not-found',
     message: `Remix app/root not found. Looked at: ${candidates.join(', ')}.`,
+    considered,
+  };
+}
+
+// FastAPI/Jinja (LoCA-style only) — inject into the shared base template.
+function detectFastapiJinjaBaseTemplate(
+  projectDir: string,
+): LayoutDetectionResult | LayoutDetectionFailure {
+  const candidates = getFastapiJinjaBaseTemplateCandidates();
+  const considered: string[] = [];
+  for (const rel of candidates) {
+    const abs = path.join(projectDir, rel);
+    considered.push(rel);
+    if (!fs.existsSync(abs)) continue;
+    const content = safeRead(abs) ?? '';
+    if (!containsHtmlAndBody(content)) {
+      return {
+        code: 'layout-missing-html-body',
+        message: `${rel} found but doesn't contain <html> and <body>. Frank injects the overlay into the Jinja base template and requires both tags.`,
+        considered,
+      };
+    }
+    return {
+      path: abs,
+      relPath: rel,
+      framework: 'fastapi-jinja',
+      reason: 'LoCA-style Jinja base template with <html> and <body>.',
+    };
+  }
+  return {
+    code: 'layout-not-found',
+    message: `FastAPI/Jinja base template not found. Looked at: ${candidates.join(', ')}.`,
     considered,
   };
 }
@@ -472,6 +506,10 @@ function safeRead(p: string): string | null {
 
 function containsHtmlAndBody(content: string): boolean {
   return /<html\b[^>]*>/i.test(content) && /<body\b[^>]*>/i.test(content);
+}
+
+function getFastapiJinjaBaseTemplateCandidates(): string[] {
+  return ['app/web/templates/partials/base.html'];
 }
 
 function escapeAttr(s: string): string {

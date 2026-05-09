@@ -1,10 +1,10 @@
 // Allowlist bundler for URL share. Implements §1.1 from
 // docs/url-share-auto-deploy-design.md.
 //
-// Positive list of what ships to Vercel: framework source dirs, package.json,
-// one lockfile, public/, known configs, middleware/proxy/instrumentation,
-// and exactly one env file (.env.share). Everything else is refused,
-// hardcoded — including explicit user request to ship .env.local.
+// Positive list of what ships to Vercel: framework-specific source dirs,
+// framework-specific root files, and exactly one env file (.env.share).
+// Everything else is refused, hardcoded — including explicit user request to
+// ship .env.local.
 //
 // This module produces the file list + rejection list. Archiving for upload
 // happens in step 6 per §9.
@@ -55,7 +55,9 @@ const ALLOWED_LOCKFILES = new Set([
   'bun.lock',
 ]);
 
-const ALLOWED_ROOT_FILE_PATTERNS: RegExp[] = [
+const NO_ALLOWED_LOCKFILES = new Set<string>();
+
+const JS_ALLOWED_ROOT_FILE_PATTERNS: RegExp[] = [
   /^package\.json$/,
   /^next\.config\.(?:js|ts|mjs|cjs)$/,
   /^vite\.config\.(?:js|ts|mjs|cjs)$/,
@@ -79,23 +81,79 @@ const ALLOWED_ROOT_FILE_PATTERNS: RegExp[] = [
   /^vercel\.json$/,
 ];
 
+const FRAMEWORK_ALLOWED_ROOT_FILE_PATTERNS: Record<FrameworkId, RegExp[]> = {
+  'next-app': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'next-pages': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'next-hybrid': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'vite-react': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'vite-svelte': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'vite-vue': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'sveltekit': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'astro': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'remix': JS_ALLOWED_ROOT_FILE_PATTERNS,
+  'fastapi-jinja': [
+    /^requirements\.txt$/,
+    /^pyproject\.toml$/,
+    /^uv\.lock$/,
+    /^poetry\.lock$/,
+  ],
+  'static-html': [],
+};
+
+const FRAMEWORK_ALLOWED_LOCKFILES: Record<FrameworkId, ReadonlySet<string>> = {
+  'next-app': ALLOWED_LOCKFILES,
+  'next-pages': ALLOWED_LOCKFILES,
+  'next-hybrid': ALLOWED_LOCKFILES,
+  'vite-react': ALLOWED_LOCKFILES,
+  'vite-svelte': ALLOWED_LOCKFILES,
+  'vite-vue': ALLOWED_LOCKFILES,
+  'sveltekit': ALLOWED_LOCKFILES,
+  'astro': ALLOWED_LOCKFILES,
+  'remix': ALLOWED_LOCKFILES,
+  'fastapi-jinja': NO_ALLOWED_LOCKFILES,
+  'static-html': NO_ALLOWED_LOCKFILES,
+};
+
 const FRAMEWORK_SOURCE_DIRS: Record<FrameworkId, string[]> = {
-  'next-app': ['app', 'pages', 'src', 'components', 'lib', 'hooks', 'contexts', 'utils', 'styles'],
-  'next-pages': ['pages', 'src', 'components', 'lib', 'hooks', 'contexts', 'utils', 'styles'],
-  'next-hybrid': ['app', 'pages', 'src', 'components', 'lib', 'hooks', 'contexts', 'utils', 'styles'],
-  'vite-react': ['src'],
-  'vite-svelte': ['src'],
-  'vite-vue': ['src'],
-  'sveltekit': ['src', 'static'],
-  'astro': ['src'],
-  'remix': ['app'],
+  'next-app': ['app', 'pages', 'src', 'components', 'lib', 'hooks', 'contexts', 'utils', 'styles', 'public'],
+  'next-pages': ['pages', 'src', 'components', 'lib', 'hooks', 'contexts', 'utils', 'styles', 'public'],
+  'next-hybrid': ['app', 'pages', 'src', 'components', 'lib', 'hooks', 'contexts', 'utils', 'styles', 'public'],
+  'vite-react': ['src', 'public'],
+  'vite-svelte': ['src', 'public'],
+  'vite-vue': ['src', 'public'],
+  'sveltekit': ['src', 'static', 'public'],
+  'astro': ['src', 'public'],
+  'remix': ['app', 'public'],
+  'fastapi-jinja': ['app'],
   // Static HTML uses a different (denylist) bundler path — this entry is
   // a placeholder so the type's exhaustiveness stays happy.
   'static-html': [],
 };
 
-/** public/ ships for all frameworks. */
-const COMMON_SOURCE_DIRS = ['public'];
+// The Python path is intentionally strict: only the LoCA-style FastAPI source
+// tree, Jinja templates, and static subtree are shipped.
+const FASTAPI_ALLOWED_FILE_PATTERNS: RegExp[] = [
+  /^app\/(?:__init__|config|fake_db|main)\.py$/,
+  /^app\/api\/.+\.py$/,
+  /^app\/models\/.+\.py$/,
+  /^app\/services\/.+\.py$/,
+  /^app\/web\/(?:__init__|generate|router)\.py$/,
+  /^app\/web\/routes\/.+\.py$/,
+  /^app\/web\/templates\/.+$/,
+  /^app\/web\/static\/.+$/,
+];
+
+const FASTAPI_ALLOWED_DIR_PREFIXES = [
+  'app',
+  'app/api',
+  'app/api/routes',
+  'app/models',
+  'app/services',
+  'app/web',
+  'app/web/routes',
+  'app/web/templates',
+  'app/web/static',
+];
 
 export interface BundleOptions {
   framework: FrameworkId;
@@ -110,10 +168,9 @@ export async function buildBundle(
     return buildStaticHtmlBundle(projectDir);
   }
 
-  const allowedDirs = new Set([
-    ...FRAMEWORK_SOURCE_DIRS[opts.framework],
-    ...COMMON_SOURCE_DIRS,
-  ]);
+  const allowedDirs = new Set(FRAMEWORK_SOURCE_DIRS[opts.framework]);
+  const allowedRootFilePatterns = FRAMEWORK_ALLOWED_ROOT_FILE_PATTERNS[opts.framework];
+  const allowedLockfiles = FRAMEWORK_ALLOWED_LOCKFILES[opts.framework];
 
   const files: BundleFile[] = [];
   const rejected: BundleRejection[] = [];
@@ -157,7 +214,9 @@ export async function buildBundle(
         continue;
       }
       // Recurse
-      const walked = await walkDirectory(absPath, relPath);
+      const walked = opts.framework === 'fastapi-jinja'
+        ? await walkFastapiJinjaDirectory(absPath, relPath)
+        : await walkDirectory(absPath, relPath);
       for (const w of walked.files) {
         if (w.size > FILE_SIZE_CAP) {
           rejected.push({
@@ -193,7 +252,7 @@ export async function buildBundle(
     }
 
     // Lockfile — exactly one
-    if (ALLOWED_LOCKFILES.has(entry.name)) {
+    if (allowedLockfiles.has(entry.name)) {
       if (lockfileSeen) {
         rejected.push({
           relPath,
@@ -205,7 +264,7 @@ export async function buildBundle(
       // fall through to admit
     } else if (entry.name === '.env.share') {
       // explicit allow
-    } else if (!ALLOWED_ROOT_FILE_PATTERNS.some((re) => re.test(entry.name))) {
+    } else if (!allowedRootFilePatterns.some((re) => re.test(entry.name))) {
       rejected.push({ relPath, reason: 'not-in-allowlist' });
       continue;
     }
@@ -287,6 +346,70 @@ async function walkDirectory(absDir: string, relDir: string): Promise<WalkResult
       // Secret-extensions outside public/ are refused
       if (!childRel.startsWith('public/') && (SECRET_EXT_PATTERN.test(entry.name) || ID_RSA_PATTERN.test(entry.name))) {
         rejected.push({ relPath: childRel, reason: 'secret-extension' });
+        continue;
+      }
+
+      let size: number;
+      try {
+        const stat = await fs.promises.stat(childAbs);
+        size = stat.size;
+      } catch {
+        continue;
+      }
+      files.push({ relPath: childRel, absPath: childAbs, size });
+    }
+  }
+
+  await recurse(absDir, relDir);
+  return { files, rejected };
+}
+
+async function walkFastapiJinjaDirectory(absDir: string, relDir: string): Promise<WalkResult> {
+  const files: BundleFile[] = [];
+  const rejected: BundleRejection[] = [];
+
+  async function recurse(currentAbs: string, currentRel: string): Promise<void> {
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(currentAbs, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const childAbs = path.join(currentAbs, entry.name);
+      const childRel = currentRel ? `${currentRel}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory()) {
+        if (DENYLIST_DIRS.has(entry.name)) {
+          rejected.push({ relPath: childRel, reason: 'denylist-dir' });
+          continue;
+        }
+        const allowedDir = FASTAPI_ALLOWED_DIR_PREFIXES.includes(childRel)
+          || childRel.startsWith('app/web/templates/')
+          || childRel.startsWith('app/web/static/');
+        if (!allowedDir) {
+          rejected.push({ relPath: childRel, reason: 'not-in-allowlist' });
+          continue;
+        }
+        await recurse(childAbs, childRel);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      // FastAPI/Jinja keeps the global policy: only the single root
+      // .env.share may ship. Nested env files in app/ stay forbidden.
+      if (ENV_FILE_PATTERN.test(entry.name)) {
+        rejected.push({ relPath: childRel, reason: 'env-file-forbidden' });
+        continue;
+      }
+
+      if (SECRET_EXT_PATTERN.test(entry.name) || ID_RSA_PATTERN.test(entry.name)) {
+        rejected.push({ relPath: childRel, reason: 'secret-extension' });
+        continue;
+      }
+
+      if (!FASTAPI_ALLOWED_FILE_PATTERNS.some((re) => re.test(childRel))) {
+        rejected.push({ relPath: childRel, reason: 'not-in-allowlist' });
         continue;
       }
 

@@ -6,6 +6,7 @@ import { checkEnvelope, isEnginesNodeCompatible, parseMajorVersion } from './env
 import { parseEnvFile } from './env-share.js';
 
 let tmp: string;
+const FIXTURES_DIR = path.join(__dirname, 'test-fixtures');
 
 function writeJson(p: string, obj: unknown) {
   fs.writeFileSync(p, JSON.stringify(obj, null, 2));
@@ -14,6 +15,25 @@ function writeJson(p: string, obj: unknown) {
 function writeFile(p: string, contents: string) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, contents);
+}
+
+function copyFixture(name: string, dest: string) {
+  fs.cpSync(path.join(FIXTURES_DIR, name), dest, { recursive: true });
+}
+
+function materializeFastApiJinjaContract(dest: string) {
+  copyFixture('fastapi-jinja', dest);
+  writeFile(
+    path.join(dest, 'app', 'web', 'templates', 'partials', 'base.html'),
+    '<!doctype html><html><body>{% block body %}{% endblock %}</body></html>',
+  );
+  fs.mkdirSync(path.join(dest, 'app', 'web', 'templates', 'pages'), { recursive: true });
+  writeFile(
+    path.join(dest, 'app', 'web', 'templates', 'pages', 'index.html'),
+    '{% extends "partials/base.html" %}{% block body %}Hello{% endblock %}',
+  );
+  fs.mkdirSync(path.join(dest, 'app', 'web', 'static'), { recursive: true });
+  writeFile(path.join(dest, 'app', 'web', 'static', 'app.css'), 'body { color: black; }');
 }
 
 beforeEach(() => {
@@ -58,6 +78,88 @@ describe('checkEnvelope — package.json', () => {
     const result = await checkEnvelope(tmp);
     expect(result.status).toBe('fail');
     expect(result.failures.map((f) => f.code)).toContain('no-package-json');
+  });
+});
+
+describe('checkEnvelope — python', () => {
+  it('accepts a FastAPI + Jinja project with requirements, entrypoint, templates, and static assets', async () => {
+    materializeFastApiJinjaContract(tmp);
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('pass');
+    expect(result.framework?.id).toBe('fastapi-jinja');
+    expect(result.failures).toEqual([]);
+  });
+
+  it('fails when a Python repo lacks the injectable base template', async () => {
+    materializeFastApiJinjaContract(tmp);
+    fs.rmSync(path.join(tmp, 'app', 'web', 'templates', 'partials', 'base.html'));
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('fail');
+    expect(result.framework).toBeUndefined();
+    expect(result.failures.map((f) => f.code)).toContain('python-template-missing');
+  });
+
+  it('fails when a FastAPI + Jinja repo is missing app/main.py', async () => {
+    materializeFastApiJinjaContract(tmp);
+    fs.rmSync(path.join(tmp, 'app', 'main.py'));
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('fail');
+    expect(result.failures.map((f) => f.code)).toContain('python-entrypoint-missing');
+  });
+
+  it('does not classify a non-web Python repo as shareable', async () => {
+    writeFile(path.join(tmp, 'requirements.txt'), 'requests==2.32.3\n');
+    writeFile(path.join(tmp, 'main.py'), 'print("hello")\n');
+
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('fail');
+    expect(result.framework).toBeUndefined();
+    expect(result.failures.map((f) => f.code)).toContain('no-package-json');
+    expect(result.failures.map((f) => f.code)).not.toContain('python-unsupported-layout');
+  });
+
+  it('fails a shape-matching repo when neither the manifest nor app/main.py indicates FastAPI + Jinja', async () => {
+    writeFile(path.join(tmp, 'requirements.txt'), 'requests==2.32.3\n');
+    writeFile(path.join(tmp, 'app', 'main.py'), 'print("not a web app")\n');
+    fs.mkdirSync(path.join(tmp, 'app', 'web', 'templates', 'partials'), { recursive: true });
+    writeFile(
+      path.join(tmp, 'app', 'web', 'templates', 'partials', 'base.html'),
+      '<!doctype html><html><body>{% block body %}{% endblock %}</body></html>',
+    );
+    fs.mkdirSync(path.join(tmp, 'app', 'web', 'static'), { recursive: true });
+    writeFile(path.join(tmp, 'app', 'web', 'static', 'app.css'), 'body { color: black; }');
+
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('fail');
+    expect(result.framework).toBeUndefined();
+    expect(result.failures.map((f) => f.code)).toContain('python-unsupported-layout');
+  });
+
+  it('fails an arbitrary Python web repo that does not match the supported FastAPI/Jinja layout', async () => {
+    writeFile(path.join(tmp, 'requirements.txt'), 'flask==3.0.0\njinja2==3.1.4\n');
+    writeFile(path.join(tmp, 'app.py'), 'from flask import Flask\napp = Flask(__name__)\n');
+    fs.mkdirSync(path.join(tmp, 'templates'), { recursive: true });
+    writeFile(path.join(tmp, 'templates', 'base.html'), '<html><body>{% block body %}{% endblock %}</body></html>');
+    fs.mkdirSync(path.join(tmp, 'static'), { recursive: true });
+    writeFile(path.join(tmp, 'static', 'app.css'), 'body { color: black; }');
+
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('fail');
+    expect(result.framework).toBeUndefined();
+    expect(result.failures.map((f) => f.code)).toContain('python-unsupported-layout');
+  });
+
+  it('does not classify bare root templates/static without a Python signal', async () => {
+    fs.mkdirSync(path.join(tmp, 'templates'), { recursive: true });
+    writeFile(path.join(tmp, 'templates', 'base.html'), '<html><body></body></html>');
+    fs.mkdirSync(path.join(tmp, 'static'), { recursive: true });
+    writeFile(path.join(tmp, 'static', 'app.css'), 'body { color: black; }');
+
+    const result = await checkEnvelope(tmp);
+    expect(result.status).toBe('fail');
+    expect(result.framework).toBeUndefined();
+    expect(result.failures.map((f) => f.code)).toContain('no-package-json');
+    expect(result.failures.map((f) => f.code)).not.toContain('python-unsupported-layout');
   });
 });
 
@@ -143,6 +245,21 @@ describe('checkEnvelope — framework detection', () => {
     });
     const result = await checkEnvelope(tmp);
     expect(result.framework?.id).toBe('sveltekit');
+  });
+
+  it('keeps package.json repos with root static/ on the JS path', async () => {
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'test',
+      engines: { node: '>=20.0.0' },
+      scripts: { build: 'vite build' },
+      dependencies: { '@sveltejs/kit': '^2.0.0', svelte: '^4.0.0' },
+      devDependencies: { vite: '^5.0.0' },
+    });
+    fs.mkdirSync(path.join(tmp, 'static'), { recursive: true });
+    writeFile(path.join(tmp, 'static', 'app.css'), 'body { color: black; }');
+    const result = await checkEnvelope(tmp);
+    expect(result.framework?.id).toBe('sveltekit');
+    expect(result.failures.map((f) => f.code)).not.toContain('python-unsupported-layout');
   });
 
   it('fails with framework-unsupported when no known framework detected', async () => {

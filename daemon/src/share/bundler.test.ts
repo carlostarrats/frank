@@ -112,9 +112,9 @@ describe('buildBundle — Next.js App Router', () => {
     touch('next.config.js', '');
     touch('app/page.tsx', '');
     touch('secrets/private.pem', '-----BEGIN-----\n-----END-----');
-    touch('public/cert.pem', '-----BEGIN-----\n-----END-----');  // public/cert.pem is refused because secrets/ isn't in allowlist anyway; see comment
+    touch('public/cert.pem', '-----BEGIN-----\n-----END-----');
     const result = await buildBundle(tmp, { framework: 'next-app' });
-    // secrets/ is refused because it's not in the allowlist at all
+    // secrets/ is refused because it's not in the allowlist at all.
     expect(result.rejected.find((r) => r.relPath === 'secrets')).toBeDefined();
   });
 
@@ -185,6 +185,169 @@ describe('buildBundle — Vite + React', () => {
     expect(admitted.has('index.html')).toBe(true);
     expect(admitted.has('public/favicon.svg')).toBe(true);
     expect(admitted.has('app/ignored.tsx')).toBe(false);
+  });
+});
+
+describe('buildBundle — FastAPI + Jinja', () => {
+  it('admits FastAPI/Jinja source, templates, static assets, and dependency files', async () => {
+    touch('requirements.txt', 'fastapi==0.115.0\njinja2==3.1.4\n');
+    touch('pyproject.toml', '[project]\nname = "loca"\nversion = "0.1.0"\n');
+    touch('uv.lock', 'version = 1\n');
+    touch('poetry.lock', '[[package]]\nname = "fastapi"\n');
+    touch('app/__init__.py', '');
+    touch('app/config.py', 'DEBUG = False\n');
+    touch('app/fake_db.py', 'rows = []\n');
+    touch('app/main.py', 'from fastapi import FastAPI\napp = FastAPI()\n');
+    touch('app/api/__init__.py', '');
+    touch('app/api/router.py', 'from fastapi import APIRouter\nrouter = APIRouter()\n');
+    touch('app/api/routes/auth.py', 'from fastapi import APIRouter\nrouter = APIRouter()\n');
+    touch('app/models/__init__.py', '');
+    touch('app/models/user.py', 'class User: pass\n');
+    touch('app/services/__init__.py', '');
+    touch('app/services/customer_service.py', 'def get_customer():\n    return None\n');
+    touch('app/web/__init__.py', '');
+    touch('app/web/router.py', 'from fastapi import APIRouter\nrouter = APIRouter()\n');
+    touch('app/web/generate.py', 'def build():\n    return None\n');
+    touch('app/web/routes/public.py', 'from fastapi import APIRouter\nrouter = APIRouter()\n');
+    touch('app/web/templates/partials/base.html', '<html></html>');
+    touch('app/web/templates/home.html', '<div>home</div>');
+    touch('app/web/static/app.css', 'body {}');
+    touch('app/web/static/app.js', 'console.log("hi")');
+
+    const result = await buildBundle(tmp, { framework: 'fastapi-jinja' });
+    expect(result.status).toBe('ok');
+    expect(relPaths(result.files)).toEqual([
+      'app/__init__.py',
+      'app/api/__init__.py',
+      'app/api/router.py',
+      'app/api/routes/auth.py',
+      'app/config.py',
+      'app/fake_db.py',
+      'app/main.py',
+      'app/models/__init__.py',
+      'app/models/user.py',
+      'app/services/__init__.py',
+      'app/services/customer_service.py',
+      'app/web/__init__.py',
+      'app/web/generate.py',
+      'app/web/router.py',
+      'app/web/routes/public.py',
+      'app/web/static/app.css',
+      'app/web/static/app.js',
+      'app/web/templates/home.html',
+      'app/web/templates/partials/base.html',
+      'poetry.lock',
+      'pyproject.toml',
+      'requirements.txt',
+      'uv.lock',
+    ]);
+  });
+
+  it('refuses .env.local for fastapi-jinja', async () => {
+    touch('requirements.txt', 'fastapi==0.115.0\n');
+    touch('app/main.py', 'from fastapi import FastAPI\napp = FastAPI()\n');
+    touch('app/web/templates/partials/base.html', '<html></html>');
+    touch('app/web/static/app.css', 'body {}');
+    touch('.env.local', 'SECRET=value');
+
+    const result = await buildBundle(tmp, { framework: 'fastapi-jinja' });
+    const envRejections = result.rejected.filter((r) => r.relPath === '.env.local');
+    expect(envRejections).toHaveLength(1);
+    expect(envRejections[0].reason).toBe('env-file-forbidden');
+    expect(result.files.find((f) => f.relPath === '.env.local')).toBeUndefined();
+  });
+
+  it('refuses nested .env.share files in fastapi-jinja templates', async () => {
+    touch('requirements.txt', 'fastapi==0.115.0\n');
+    touch('app/main.py', 'from fastapi import FastAPI\napp = FastAPI()\n');
+    touch('app/web/templates/partials/base.html', '<html></html>');
+    touch('app/web/templates/.env.share', 'SHOULD_NOT_SHIP=1');
+    touch('app/web/static/app.css', 'body {}');
+    touch('.env.share', 'ROOT_ALLOWED=1');
+
+    const result = await buildBundle(tmp, { framework: 'fastapi-jinja' });
+    const admitted = new Set(result.files.map((f) => f.relPath));
+    expect(admitted.has('.env.share')).toBe(true);
+    expect(admitted.has('app/web/templates/.env.share')).toBe(false);
+    expect(result.rejected).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relPath: 'app/web/templates/.env.share', reason: 'env-file-forbidden' }),
+    ]));
+  });
+
+  it('refuses JS-era root files and public/ for fastapi-jinja', async () => {
+    touch('requirements.txt', 'fastapi==0.115.0\n');
+    touch('app/main.py', 'from fastapi import FastAPI\napp = FastAPI()\n');
+    touch('app/web/templates/partials/base.html', '<html></html>');
+    touch('app/web/static/app.css', 'body {}');
+    touch('package.json', '{}');
+    touch('vite.config.ts', 'export default {};');
+    touch('public/logo.svg', '<svg></svg>');
+
+    const result = await buildBundle(tmp, { framework: 'fastapi-jinja' });
+    const admitted = new Set(result.files.map((f) => f.relPath));
+    expect(admitted.has('package.json')).toBe(false);
+    expect(admitted.has('vite.config.ts')).toBe(false);
+    expect([...admitted].some((p) => p.startsWith('public/'))).toBe(false);
+    expect(result.rejected).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relPath: 'package.json', reason: 'not-in-allowlist' }),
+      expect.objectContaining({ relPath: 'vite.config.ts', reason: 'not-in-allowlist' }),
+      expect.objectContaining({ relPath: 'public', reason: 'not-in-allowlist' }),
+    ]));
+  });
+
+  it('refuses JS lockfiles for fastapi-jinja', async () => {
+    touch('requirements.txt', 'fastapi==0.115.0\n');
+    touch('app/main.py', 'from fastapi import FastAPI\napp = FastAPI()\n');
+    touch('app/web/templates/partials/base.html', '<html></html>');
+    touch('app/web/static/app.css', 'body {}');
+    for (const lockfile of ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock']) {
+      touch(lockfile, '');
+    }
+
+    const result = await buildBundle(tmp, { framework: 'fastapi-jinja' });
+    const admitted = new Set(result.files.map((f) => f.relPath));
+    for (const lockfile of ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock']) {
+      expect(admitted.has(lockfile)).toBe(false);
+      expect(result.rejected).toEqual(expect.arrayContaining([
+        expect.objectContaining({ relPath: lockfile, reason: 'not-in-allowlist' }),
+      ]));
+    }
+  });
+
+  it('refuses nested secret-extension files in fastapi-jinja static subtree', async () => {
+    touch('requirements.txt', 'fastapi==0.115.0\n');
+    touch('app/main.py', 'from fastapi import FastAPI\napp = FastAPI()\n');
+    touch('app/web/templates/partials/base.html', '<html></html>');
+    touch('app/web/static/app.css', 'body {}');
+    touch('app/web/static/keys/private.pem', '-----BEGIN-----\n-----END-----');
+
+    const result = await buildBundle(tmp, { framework: 'fastapi-jinja' });
+    const admitted = new Set(result.files.map((f) => f.relPath));
+    expect(admitted.has('app/web/static/keys/private.pem')).toBe(false);
+    expect(result.rejected).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relPath: 'app/web/static/keys/private.pem', reason: 'secret-extension' }),
+    ]));
+  });
+
+  it('refuses unwanted descendants under app/ for fastapi-jinja', async () => {
+    touch('requirements.txt', 'fastapi==0.115.0\n');
+    touch('app/main.py', 'from fastapi import FastAPI\napp = FastAPI()\n');
+    touch('app/web/templates/partials/base.html', '<html></html>');
+    touch('app/web/static/app.css', 'body {}');
+    touch('app/dev.db', 'sqlite');
+    touch('app/__pycache__/x.pyc', 'compiled');
+    touch('app/tmp/note.txt', 'scratch');
+
+    const result = await buildBundle(tmp, { framework: 'fastapi-jinja' });
+    const admitted = new Set(result.files.map((f) => f.relPath));
+    expect(admitted.has('app/dev.db')).toBe(false);
+    expect(admitted.has('app/__pycache__/x.pyc')).toBe(false);
+    expect(admitted.has('app/tmp/note.txt')).toBe(false);
+    expect(result.rejected).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relPath: 'app/dev.db', reason: 'not-in-allowlist' }),
+      expect.objectContaining({ relPath: 'app/__pycache__', reason: 'not-in-allowlist' }),
+      expect.objectContaining({ relPath: 'app/tmp', reason: 'not-in-allowlist' }),
+    ]));
   });
 });
 

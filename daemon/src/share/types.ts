@@ -14,11 +14,12 @@ export type FrameworkId =
   | 'sveltekit'
   | 'astro'
   | 'remix'
+  | 'fastapi-jinja'
   | 'static-html'; // Plain HTML/CSS/JS directory — no build, no package.json required
 
 export interface DetectedFramework {
   id: FrameworkId;
-  /** Raw version spec from package.json (e.g. "^16.0.7"). */
+  /** Raw framework version marker (e.g. a package version spec or "static"). */
   versionSpec: string;
 }
 
@@ -49,6 +50,10 @@ export type EnvelopeFailureCode =
   | 'private-registry-dep'
   | 'git-protocol-dep'
   | 'source-too-large'
+  | 'python-template-missing'
+  | 'python-entrypoint-missing'
+  | 'python-deps-missing'
+  | 'python-unsupported-layout'
   // refuse-to-guess (§1.4)
   | 'sdk-missing-encoder-and-env-share';
 

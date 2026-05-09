@@ -2,17 +2,22 @@
 // from docs/url-share-auto-deploy-design.md.
 //
 // Protocol (deterministic, never random):
-//   1. npm run build with generated env + FRANK_SHARE=1.
-//   2. If build passes, npm run start / preview on an ephemeral port.
+//   1. Build/install with generated env + FRANK_SHARE=1.
+//      JS: npm run build.
+//      Python: create an isolated temp venv, then install there.
+//   2. If build passes, start on an ephemeral port.
+//      JS: npm run start / preview.
+//      Python: isolated-venv python -m uvicorn app.main:app.
 //   3. curl / with redirect-follow → parse links → curl first 2 same-origin
 //      routes (doc order). Fallback: Next.js routes-manifest alphabetical.
 //   4. Keep server running 30s after last curl; tail stderr.
 //   5. Count error-indicator lines (ECONNREFUSED/ENOTFOUND/getaddrinfo/fetch
 //      failed/Invalid/not valid/Error:). Classify 🟢/🟡/🔴 per §2.3.
 
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
 import * as net from 'net';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import type { EnvelopeFailure, FrameworkId } from './types.js';
 
@@ -129,60 +134,87 @@ export async function runPreflight(opts: PreflightOptions): Promise<PreflightRes
     };
   }
 
-  const build = await runBuild(opts);
-  if (build.status === 'fail') {
+  const pythonContext = opts.framework === 'fastapi-jinja'
+    ? createPythonPreflightContext()
+    : null;
+
+  try {
+    const build = await runBuild(opts, pythonContext);
+    if (build.status === 'fail') {
+      return {
+        status: 'fail',
+        projectDir: opts.projectDir,
+        framework: opts.framework,
+        build,
+        smoke: null,
+        failures: [
+          {
+            code: 'source-too-large', // misleading; we want a specific build-failed code
+            message: `Pre-flight build failed (exit ${build.exitCode}).`,
+            hint: `Check the build output — Frank can't deploy an app that doesn't build locally.`,
+          },
+        ],
+      };
+    }
+    const smoke = await runSmoke(opts, pythonContext);
+    const status: 'pass' | 'fail' = smoke.readiness === 'red' ? 'fail' : 'pass';
     return {
-      status: 'fail',
+      status,
       projectDir: opts.projectDir,
       framework: opts.framework,
       build,
-      smoke: null,
-      failures: [
-        {
-          code: 'source-too-large', // misleading; we want a specific build-failed code
-          message: `Pre-flight build failed (exit ${build.exitCode}).`,
-          hint: `Check the build output — Frank can't deploy an app that doesn't build locally.`,
-        },
-      ],
+      smoke,
+      failures: [],
     };
+  } finally {
+    cleanupPythonPreflightContext(pythonContext);
   }
-  const smoke = await runSmoke(opts);
-  const status: 'pass' | 'fail' = smoke.readiness === 'red' ? 'fail' : 'pass';
-  return {
-    status,
-    projectDir: opts.projectDir,
-    framework: opts.framework,
-    build,
-    smoke,
-    failures: [],
-  };
 }
 
 // ─── Build stage (§2.1) ───────────────────────────────────────────────────
 
-async function runBuild(opts: PreflightOptions): Promise<BuildStage> {
+async function runBuild(
+  opts: PreflightOptions,
+  pythonContext: PythonPreflightContext | null,
+): Promise<BuildStage> {
   const start = Date.now();
   const env = mergeEnv(opts.env);
-  const result = await runChild({
-    cmd: 'npm',
-    args: ['run', 'build'],
-    cwd: opts.projectDir,
-    env,
-    timeoutMs: opts.buildTimeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS,
-  });
+  const buildSpecs = opts.framework === 'fastapi-jinja' && pythonContext
+    ? buildPythonBuildCommands(opts.projectDir, pythonContext.venvDir)
+    : [buildBuildCommand(opts.framework)];
+  let stdout = '';
+  let stderr = '';
+  let exitCode: number | null = 0;
+
+  for (const buildSpec of buildSpecs) {
+    const result = await runChild({
+      cmd: buildSpec.cmd,
+      args: buildSpec.args,
+      cwd: opts.projectDir,
+      env,
+      timeoutMs: opts.buildTimeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS,
+    });
+    stdout += result.stdout;
+    stderr += result.stderr;
+    exitCode = result.exitCode;
+    if (result.exitCode !== 0) break;
+  }
   const durationMs = Date.now() - start;
   return {
-    status: result.exitCode === 0 ? 'pass' : 'fail',
+    status: exitCode === 0 ? 'pass' : 'fail',
     durationMs,
-    exitCode: result.exitCode,
-    stdoutTail: tail(result.stdout, STDOUT_TAIL_CHARS),
-    stderrTail: tail(result.stderr, STDERR_TAIL_CHARS),
+    exitCode,
+    stdoutTail: tail(stdout, STDOUT_TAIL_CHARS),
+    stderrTail: tail(stderr, STDERR_TAIL_CHARS),
   };
 }
 
 // ─── Smoke stage (§2.2) ───────────────────────────────────────────────────
 
-async function runSmoke(opts: PreflightOptions): Promise<SmokeStage> {
+async function runSmoke(
+  opts: PreflightOptions,
+  pythonContext: PythonPreflightContext | null,
+): Promise<SmokeStage> {
   const port = await findFreePort();
   const env = {
     ...mergeEnv(opts.env),
@@ -193,8 +225,8 @@ async function runSmoke(opts: PreflightOptions): Promise<SmokeStage> {
   const startupTimeoutMs = opts.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS;
   const tailMs = (opts.tailSeconds ?? DEFAULT_TAIL_SECONDS) * 1000;
 
-  const startSpec = buildStartCommand(opts.framework, port);
-  const child = spawn('npm', ['run', startSpec.script, ...startSpec.extraArgs], {
+  const startSpec = buildStartCommand(opts.framework, port, pythonContext?.pythonCmd);
+  const child = spawn(startSpec.cmd, startSpec.args, {
     cwd: opts.projectDir,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -211,6 +243,7 @@ async function runSmoke(opts: PreflightOptions): Promise<SmokeStage> {
   // this, a dead server yields a blank error and the user has no signal.
   let preReadyStdout = '';
   let preReadyStderr = '';
+  let spawnError: Error | null = null;
 
   const attachStderrCounter = (): void => {
     child.stderr?.on('data', (chunk: Buffer) => {
@@ -235,18 +268,23 @@ async function runSmoke(opts: PreflightOptions): Promise<SmokeStage> {
     });
   };
   attachStderrCounter();
+  const spawnFailure = new Promise<never>((_, reject) => {
+    child.once('error', (err) => {
+      spawnError = err;
+      reject(err);
+    });
+  });
 
   const startupStart = Date.now();
   try {
-    await waitForServerReady(port, startupTimeoutMs);
-  } catch (err) {
-    child.kill('SIGTERM');
+    await Promise.race([waitForServerReady(port, startupTimeoutMs), spawnFailure]);
+  } catch {
+    if (!spawnError) child.kill('SIGTERM');
     // Surface pre-ready output so the user can see why startup failed. A
     // blank readiness:red verdict without context is useless.
-    const combined = [preReadyStdout, preReadyStderr].filter(Boolean).join('\n').trim();
-    const samples = combined
-      ? tail(combined, 2000).split('\n').filter(Boolean).slice(-10)
-      : [];
+    const samples = spawnError
+      ? [formatSpawnError(startSpec, spawnError)]
+      : extractStartupFailureSamples(preReadyStdout, preReadyStderr);
     return {
       status: 'fail',
       readiness: 'red',
@@ -332,6 +370,12 @@ interface ChildRunSpec {
   timeoutMs: number;
 }
 
+interface PythonPreflightContext {
+  scratchDir: string;
+  venvDir: string;
+  pythonCmd: string;
+}
+
 function runChild(spec: ChildRunSpec): Promise<ChildRunResult> {
   return new Promise((resolve) => {
     const child = spawn(spec.cmd, spec.args, {
@@ -360,22 +404,51 @@ function runChild(spec: ChildRunSpec): Promise<ChildRunResult> {
   });
 }
 
-// ─── Framework-aware start command ────────────────────────────────────────
+// ─── Framework-aware commands ─────────────────────────────────────────────
 
-interface StartSpec {
-  script: string;
-  extraArgs: string[];
+interface CommandSpec {
+  cmd: string;
+  args: string[];
 }
 
-export function buildStartCommand(framework: FrameworkId, port: number): StartSpec {
+export function buildBuildCommand(framework: FrameworkId): CommandSpec {
+  void framework;
+  return { cmd: 'npm', args: ['run', 'build'] };
+}
+
+export function buildPythonBuildCommands(
+  projectDir: string,
+  venvDir: string,
+  hasRequirements = fs.existsSync(path.join(projectDir, 'requirements.txt')),
+): CommandSpec[] {
+  const pythonCmd = getPythonVenvPythonCmd(venvDir);
+  return [
+    { cmd: 'python3', args: ['-m', 'venv', venvDir] },
+    hasRequirements
+      ? { cmd: pythonCmd, args: ['-m', 'pip', 'install', '-r', 'requirements.txt'] }
+      : { cmd: pythonCmd, args: ['-m', 'pip', 'install', '.'] },
+  ];
+}
+
+export function buildStartCommand(
+  framework: FrameworkId,
+  port: number,
+  pythonCmd = 'python3',
+): CommandSpec {
+  if (framework === 'fastapi-jinja') {
+    return {
+      cmd: pythonCmd,
+      args: ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', String(port)],
+    };
+  }
   // Next.js and Remix use PORT env; Vite-based frameworks take --port as CLI.
   if (framework.startsWith('next-') || framework === 'remix') {
-    return { script: 'start', extraArgs: [] };
+    return { cmd: 'npm', args: ['run', 'start'] };
   }
   // Vite + SvelteKit + Astro all expose `preview` with a --port flag.
   return {
-    script: 'preview',
-    extraArgs: ['--', '--port', String(port), '--host', '127.0.0.1'],
+    cmd: 'npm',
+    args: ['run', 'preview', '--', '--port', String(port), '--host', '127.0.0.1'],
   };
 }
 
@@ -516,8 +589,28 @@ function mergeEnv(extra: Record<string, string> | undefined): NodeJS.ProcessEnv 
   return {
     ...process.env,
     NODE_ENV: 'production',
+    FRANK_SHARE: '1',
     ...(extra ?? {}),
   };
+}
+
+function createPythonPreflightContext(): PythonPreflightContext {
+  const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'frank-python-preflight-'));
+  const venvDir = path.join(scratchDir, 'venv');
+  return {
+    scratchDir,
+    venvDir,
+    pythonCmd: getPythonVenvPythonCmd(venvDir),
+  };
+}
+
+function cleanupPythonPreflightContext(context: PythonPreflightContext | null): void {
+  if (!context) return;
+  fs.rmSync(context.scratchDir, { recursive: true, force: true });
+}
+
+function getPythonVenvPythonCmd(venvDir: string): string {
+  return path.join(venvDir, 'bin', 'python');
 }
 
 function delay(ms: number): Promise<void> {
@@ -548,4 +641,16 @@ export function countErrorLines(stderr: string): { count: number; samples: strin
     }
   }
   return { count, samples };
+}
+
+function extractStartupFailureSamples(stdout: string, stderr: string): string[] {
+  const combined = [stdout, stderr].filter(Boolean).join('\n').trim();
+  return combined
+    ? tail(combined, 2000).split('\n').filter(Boolean).slice(-10)
+    : [];
+}
+
+export function formatSpawnError(command: CommandSpec, err: Error): string {
+  const rendered = [command.cmd, ...command.args].join(' ');
+  return `[spawn error] ${rendered}: ${err.message}`;
 }
