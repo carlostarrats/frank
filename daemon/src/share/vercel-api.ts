@@ -11,6 +11,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import type { FrameworkId } from './types.js';
 
 // ─── Public types ──────────────────────────────────────────────────────────
@@ -20,6 +21,11 @@ export interface VercelFile {
   absPath: string;
   /** Path inside the deployment (forward slashes). */
   relPath: string;
+}
+
+interface UploadedDeploymentFile {
+  file: string;
+  sha: string;
 }
 
 export interface CreateDeploymentOptions {
@@ -94,21 +100,20 @@ const FRAMEWORK_SLUGS: Record<FrameworkId, string | null> = {
 export async function createDeployment(
   opts: CreateDeploymentOptions,
 ): Promise<CreateDeploymentResult> {
-  const filesPayload = await Promise.all(
-    opts.files.map(async (f) => {
-      const data = await fs.promises.readFile(f.absPath);
-      return {
-        file: f.relPath,
-        data: data.toString('base64'),
-        encoding: 'base64' as const,
-      };
-    }),
+  const uploadedFiles = await uploadDeploymentFiles(
+    [
+      ...opts.files,
+      ...buildGeneratedFiles(opts.framework).map((f) => ({
+        relPath: f.file,
+        contents: Buffer.from(f.data, 'utf8'),
+      })),
+    ],
+    opts,
   );
-  const generatedFiles = buildGeneratedFiles(opts.framework);
 
   const body = {
     name: opts.projectName,
-    files: [...filesPayload, ...generatedFiles],
+    files: uploadedFiles,
     target: opts.target ?? 'preview',
     projectSettings: {
       framework: FRAMEWORK_SLUGS[opts.framework] ?? null,
@@ -143,7 +148,6 @@ export async function createDeployment(
 function buildGeneratedFiles(framework: FrameworkId): Array<{
   file: string;
   data: string;
-  encoding: 'utf8';
 }> {
   if (framework !== 'fastapi-jinja') return [];
   return [
@@ -153,9 +157,71 @@ function buildGeneratedFiles(framework: FrameworkId): Array<{
         version: 2,
         routes: [{ src: '/(.*)', dest: '/app/main.py' }],
       }),
-      encoding: 'utf8',
     },
   ];
+}
+
+interface UploadableDeploymentFileFromDisk extends VercelFile {
+  contents?: never;
+}
+
+interface UploadableDeploymentInlineFile {
+  relPath: string;
+  contents: Buffer;
+  absPath?: never;
+}
+
+type UploadableDeploymentFile = UploadableDeploymentFileFromDisk | UploadableDeploymentInlineFile;
+
+async function uploadDeploymentFiles(
+  files: UploadableDeploymentFile[],
+  opts: Pick<CreateDeploymentOptions, 'token' | 'teamId'>,
+): Promise<UploadedDeploymentFile[]> {
+  const uploadsBySha = new Map<string, Promise<void>>();
+  const uploadedFiles: UploadedDeploymentFile[] = [];
+
+  for (const file of files) {
+    const contents = await readUploadableDeploymentFile(file);
+    const sha = sha1Hex(contents);
+    let upload = uploadsBySha.get(sha);
+    if (!upload) {
+      upload = uploadDeploymentFile(contents, sha, opts);
+      uploadsBySha.set(sha, upload);
+    }
+    await upload;
+    uploadedFiles.push({ file: file.relPath, sha });
+  }
+
+  return uploadedFiles;
+}
+
+async function readUploadableDeploymentFile(file: UploadableDeploymentFile): Promise<Buffer> {
+  if ('contents' in file && file.contents) {
+    return file.contents;
+  }
+  return fs.promises.readFile(file.absPath);
+}
+
+async function uploadDeploymentFile(
+  contents: Buffer,
+  sha: string,
+  opts: Pick<CreateDeploymentOptions, 'token' | 'teamId'>,
+): Promise<void> {
+  const url = appendTeam(`${VERCEL_API_BASE}/v2/files`, opts.teamId);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${opts.token}`,
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': String(contents.byteLength),
+      'x-vercel-digest': sha,
+    },
+    body: new Uint8Array(contents),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Vercel uploadFile ${res.status}: ${text.slice(0, 500)}`);
+  }
 }
 
 export async function pollDeployment(
@@ -376,6 +442,10 @@ function appendTeam(url: string, teamId: string | undefined): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function sha1Hex(contents: Buffer): string {
+  return crypto.createHash('sha1').update(contents).digest('hex');
 }
 
 export interface DisableProtectionOptions {

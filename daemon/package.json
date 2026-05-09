@@ -1,6 +1,6 @@
 {
   "name": "frank-daemon",
-  "version": "1.0.0",
+  "version": "3.1.0",
   "description": "Frank daemon — Claude Code hooks integration and panel server",
   "license": "SEE LICENSE IN ../LICENSE",
   "type": "module",
