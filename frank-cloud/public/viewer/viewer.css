@@ -339,6 +339,7 @@ body {
   .frank-updates-disabled {
     left: var(--space-2);
     right: var(--space-2);
+    bottom: var(--space-2);
     text-align: center;
   }
 
@@ -394,14 +395,28 @@ body {
 .frank-updates-disabled {
   position: fixed;
   bottom: var(--space-3);
-  right: var(--space-3);
+  left: var(--space-3);
+  max-width: min(28rem, calc(100vw - (var(--space-3) * 2)));
   padding: var(--space-2) var(--space-3);
-  background: color-mix(in oklch, var(--destructive), transparent 20%);
-  color: var(--destructive-foreground);
   border-radius: var(--radius-md);
   font-family: inherit;
   font-size: var(--text-xs);
   line-height: 1.2;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.frank-reconnect {
+  background: color-mix(in oklch, var(--destructive), transparent 20%);
+  color: var(--destructive-foreground);
+}
+
+.frank-updates-disabled {
+  background: color-mix(in oklch, var(--card), transparent 8%);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
 }
 
 .frank-ended-revoked::before,

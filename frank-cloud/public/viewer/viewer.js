@@ -14,12 +14,14 @@ async function init() {
     const data = await res.json();
 
     if (data.error) {
+      window.__frankShareUsesOuterLiveStream = false;
       const title = data.error === 'expired' ? 'Link Expired' : 'Not Found';
       const msg = data.message || "This link doesn't exist.";
       app.innerHTML = `<div class="v-error" role="alert"><h2>${title}</h2><p>${esc(msg)}</p></div>`;
       return;
     }
 
+    window.__frankShareUsesOuterLiveStream = !(data.metadata?.contentType === 'url-share' || data.deployment?.url);
     renderViewer(app, data);
   } catch (e) {
     app.innerHTML = '<div class="v-error" role="alert"><h2>Unable to load</h2><p>Check your connection and refresh.</p></div>';
@@ -458,7 +460,7 @@ function timeAgo(iso) {
   return Math.floor(h / 24) + 'd ago';
 }
 
-init();
+const viewerReady = init();
 
 // ─── v3 live-share client ───────────────────────────────────────────────────
 // Subscribes to /api/share/:id/stream, dispatches events via CustomEvent
@@ -563,13 +565,16 @@ init();
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && !es && !fallbackPollTimer) {
+    if (document.visibilityState === 'visible' && window.__frankShareUsesOuterLiveStream !== false && !es && !fallbackPollTimer) {
       openStream();
     }
   });
 
-  openStream();
-  startHeartbeat();
+  viewerReady.finally(() => {
+    if (window.__frankShareUsesOuterLiveStream === false) return;
+    openStream();
+    startHeartbeat();
+  });
 })();
 
 // ─── v3 Phase 2: canvas live-render ─────────────────────────────────────────
