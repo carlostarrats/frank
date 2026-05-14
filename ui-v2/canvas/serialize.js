@@ -8,6 +8,7 @@
 import { rebindAll as rebindConnectors } from './connectors.js';
 import { CONNECTOR_HIT_STROKE } from './shapes.js';
 import { rehydrateImages } from './image.js';
+import { bindEditableTextNode } from './text-edit.js';
 
 export function serializeContent(contentLayer) {
   // Only persist the content layer's children. The stage size, UI layer, and
@@ -18,7 +19,7 @@ export function serializeContent(contentLayer) {
   });
 }
 
-export function deserializeInto(contentLayer, json) {
+export function deserializeInto(contentLayer, json, options = {}) {
   const Konva = window.Konva;
   const parsed = typeof json === 'string' ? JSON.parse(json) : json;
   if (!parsed || !Array.isArray(parsed.children)) return;
@@ -38,6 +39,10 @@ export function deserializeInto(contentLayer, json) {
     if ((node.name() || '').includes('connector') && typeof node.hitStrokeWidth === 'function') {
       node.hitStrokeWidth(CONNECTOR_HIT_STROKE);
     }
+    bindEditableTextNode(node, {
+      onCommit: options.onTextEditCommit,
+      shouldEdit: options.shouldEditText,
+    });
   }
 
   // Follow-shape connectors store sourceId/targetId on their attrs, which

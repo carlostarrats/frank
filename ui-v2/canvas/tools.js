@@ -14,6 +14,7 @@ import {
 import { bindConnector, _ensureId } from './connectors.js';
 import { TOOL_CURSORS } from './cursors.js';
 import { createAnchorOverlay, nearestAnchor, nearestSnapTarget, isSnappableShape } from './anchors.js';
+import { attachTextEdit } from './text-edit.js';
 
 export function createToolController({ stage, contentLayer, uiLayer, isPanning, onCommit, onShapeClick }) {
   let currentTool = 'select';
@@ -79,14 +80,14 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
       sticky: bindClickShape((pos) => {
         const g = createSticky({ x: pos.x, y: pos.y });
         contentLayer.add(g);
-        attachTextEdit(g, g._stickyText);
+        attachTextEdit(g, g._stickyText, textEditOptions());
         onCommit();
         return null; // already added
       }),
       text: bindClickShape((pos) => {
         const t = createText({ x: pos.x, y: pos.y, text: 'Text' });
         contentLayer.add(t);
-        attachTextEdit(t, t);
+        attachTextEdit(t, t, textEditOptions());
         onCommit();
         return null;
       }),
@@ -102,6 +103,13 @@ export function createToolController({ stage, contentLayer, uiLayer, isPanning, 
   }
 
   function getTool() { return currentTool; }
+
+  function textEditOptions() {
+    return {
+      onCommit,
+      shouldEdit: () => currentTool === 'select',
+    };
+  }
 
   // Shared "maybe intercept this mousedown as a selection" check. Creation
   // tools call this first; if the mousedown landed on an existing shape, we
@@ -440,42 +448,3 @@ function stageToContent(stage) {
   const pos = stage.getRelativePointerPosition();
   return pos || { x: 0, y: 0 };
 }
-
-// Double-click on a text node opens a DOM textarea overlaid on the canvas.
-function attachTextEdit(anchor, textNode) {
-  anchor.on('dblclick', () => {
-    const stage = textNode.getStage();
-    if (!stage) return;
-    const abs = textNode.getAbsolutePosition();
-    const scale = stage.scaleX();
-
-    const ta = document.createElement('textarea');
-    ta.value = textNode.text();
-    ta.className = 'canvas-text-editor';
-    ta.style.position = 'absolute';
-    ta.style.left = abs.x + 'px';
-    ta.style.top = abs.y + 'px';
-    ta.style.width = Math.max(80, (textNode.width() || 160) * scale) + 'px';
-    ta.style.fontSize = textNode.fontSize() * scale + 'px';
-    ta.style.fontFamily = textNode.fontFamily();
-    ta.style.color = textNode.fill();
-    stage.container().appendChild(ta);
-    ta.focus();
-    ta.select();
-
-    const commit = () => {
-      textNode.text(ta.value);
-      ta.remove();
-    };
-    ta.addEventListener('blur', commit);
-    ta.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
-        e.preventDefault();
-        commit();
-      }
-    });
-  });
-}
-
-// Exported so canvas.js can re-attach edit handlers on restored text nodes.
-export { attachTextEdit };

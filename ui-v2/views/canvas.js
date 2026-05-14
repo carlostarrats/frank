@@ -29,6 +29,7 @@ import { showSharePopover, updateSharePopover } from '../components/share-popove
 import { attachShortcuts } from '../canvas/shortcuts.js';
 import { createHistory } from '../canvas/history.js';
 import { exportPng, exportPdf, exportSvg, exportJson } from '../canvas/export.js';
+import { bindEditableTextNode } from '../canvas/text-edit.js';
 import { toastError, toastInfo } from '../components/toast.js';
 import { iconCommentPlus, iconCamera, iconLink, iconDownload, iconUndo, iconTimeline, syncToolbarLiveBadge } from '../components/toolbar.js';
 import { mountIntentButton } from '../components/intent-button.js';
@@ -137,7 +138,7 @@ export function renderCanvas(container, { onBack }) {
   // Undo/redo stack. Fed by commitChange; suspended during restore.
   const history = createHistory({
     serialize: () => serializeContent(contentLayer),
-    deserialize: (json) => deserializeInto(contentLayer, json),
+    deserialize: (json) => deserializeInto(contentLayer, json, textEditRestoreOptions()),
   });
 
   // Undo button reflects history.canUndo() — disabled (greyed out) when the
@@ -176,6 +177,13 @@ export function renderCanvas(container, { onBack }) {
       });
     }, SAVE_DEBOUNCE_MS);
   };
+
+  function textEditRestoreOptions() {
+    return {
+      onTextEditCommit: commitChange,
+      shouldEditText: () => tools.getTool() === 'select' && (!commentsRef || commentsRef.getMode() !== 'on'),
+    };
+  }
 
   const inspector = createInspector({
     host: inspectorHost,
@@ -468,7 +476,7 @@ export function renderCanvas(container, { onBack }) {
   sync.loadCanvasState().then((msg) => {
     if (msg && msg.state) {
       try {
-        deserializeInto(contentLayer, msg.state);
+        deserializeInto(contentLayer, msg.state, textEditRestoreOptions());
       } catch (err) {
         console.warn('[canvas] could not restore state:', err);
       }
@@ -491,7 +499,7 @@ export function renderCanvas(container, { onBack }) {
     const detail = e.detail;
     if (!detail || detail.projectId !== projectManager.getId()) return;
     try {
-      deserializeInto(contentLayer, detail.state);
+      deserializeInto(contentLayer, detail.state, textEditRestoreOptions());
       comments.render();
       history.reset();
       syncUndoBtn();
@@ -564,6 +572,10 @@ export function renderCanvas(container, { onBack }) {
         clone.y((clone.y() || 0) + dy);
         clone.draggable(true);
         contentLayer.add(clone);
+        bindEditableTextNode(clone, {
+          onCommit: commitChange,
+          shouldEdit: () => tools.getTool() === 'select' && (!commentsRef || commentsRef.getMode() !== 'on'),
+        });
         newNodes.push(clone);
       } catch (err) {
         console.warn('[canvas] paste failed', err);

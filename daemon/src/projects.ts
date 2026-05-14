@@ -170,12 +170,24 @@ export function setProjectIntent(projectId: string, intent: string): ProjectV2 {
 // deploy time. Only URL projects use this today, but no contentType gate so
 // future content types (e.g. local-served PDF) can reuse the field.
 export function setProjectSourceDir(projectId: string, sourceDir: string): ProjectV2 {
-  const trimmed = (sourceDir || '').trim();
+  const trimmed = normalizeSourceDir(sourceDir);
   const project = loadProject(projectId);
   if (trimmed) project.sourceDir = trimmed;
   else delete project.sourceDir;
   saveProject(projectId, project);
   return project;
+}
+
+function normalizeSourceDir(sourceDir: string): string {
+  const trimmed = (sourceDir || '').trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if ((first === "'" && last === "'") || (first === '"' && last === '"')) {
+      return trimmed.slice(1, -1).trim();
+    }
+  }
+  return trimmed;
 }
 
 /**

@@ -389,6 +389,12 @@ describe('setProjectSourceDir', () => {
     expect(updated.sourceDir).toBe('/Users/test/app');
   });
 
+  it('strips matching shell-style quotes around pasted paths', () => {
+    const { projectId } = createProject('quoted', 'url', 'http://localhost:3000');
+    const updated = setProjectSourceDir(projectId, " '/Users/test/My App' ");
+    expect(updated.sourceDir).toBe('/Users/test/My App');
+  });
+
   it('empty string clears the field', () => {
     const { projectId } = createProject('clear', 'url', 'http://localhost:3000');
     setProjectSourceDir(projectId, '/Users/test/app');
